@@ -43,21 +43,21 @@ struct Conditions: Equatable {
     }
 }
 
-/// A place to escape to. Coastal places add ocean; cold ones add a fire.
+/// A place to escape to, with the sounds that make it that place.
+/// Fire only joins in when it's actually cold there.
 struct Escape {
     let name: String
     let latitude: Double
     let longitude: Double
-    let coastal: Bool
-    let cozy: Bool
+    let signature: [(SoundKind, Double)]
 
     static let all: [Escape] = [
-        Escape(name: "Lanzarote", latitude: 28.96, longitude: -13.55, coastal: true, cozy: false),
-        Escape(name: "Lofoten", latitude: 68.23, longitude: 14.56, coastal: true, cozy: true),
-        Escape(name: "Kyoto", latitude: 35.01, longitude: 135.77, coastal: false, cozy: false),
-        Escape(name: "Big Sur", latitude: 36.27, longitude: -121.81, coastal: true, cozy: false),
-        Escape(name: "Manaus", latitude: -3.12, longitude: -60.02, coastal: false, cozy: false),
-        Escape(name: "the Highlands", latitude: 57.12, longitude: -4.71, coastal: false, cozy: true),
+        Escape(name: "Lanzarote", latitude: 28.96, longitude: -13.55, signature: [(.ocean, 0.6)]),
+        Escape(name: "Lofoten", latitude: 68.23, longitude: 14.56, signature: [(.ocean, 0.5), (.fire, 0.45)]),
+        Escape(name: "Kyoto", latitude: 35.01, longitude: 135.77, signature: [(.green, 0.4), (.birds, 0.25)]),
+        Escape(name: "Big Sur", latitude: 36.27, longitude: -121.81, signature: [(.ocean, 0.65), (.birds, 0.15)]),
+        Escape(name: "Manaus", latitude: -3.12, longitude: -60.02, signature: [(.green, 0.45), (.birds, 0.4)]),
+        Escape(name: "the Highlands", latitude: 57.12, longitude: -4.71, signature: [(.fire, 0.5)]),
     ]
 }
 
@@ -153,9 +153,13 @@ enum WeatherMix {
         if c.isDay && !c.isRaining && c.code <= 3 {
             mix.append((.birds, 0.2))
         }
-        if let escape {
-            if escape.coastal { mix.append((.ocean, 0.55)) }
-            if escape.cozy && c.temperatureC < 12 { mix.append((.fire, 0.45)) }
+        for (kind, level) in escape?.signature ?? [] {
+            if kind == .fire && c.temperatureC >= 12 { continue }
+            if let i = mix.firstIndex(where: { $0.0 == kind }) {
+                mix[i].1 = max(mix[i].1, level)
+            } else {
+                mix.append((kind, level))
+            }
         }
         return mix
     }
