@@ -32,3 +32,7 @@ Weather comes from [Open-Meteo](https://open-meteo.com) (free, no API key).
   - `NowPlayingView.swift`, `MixerView.swift`, `LibraryView.swift` the three screens
 - `design/icon/` icon source and render scripts
 - `archive/pentagon/` an earlier UI direction, kept for reference
+
+## License
+
+MIT. See [LICENSE](LICENSE).

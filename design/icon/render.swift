@@ -36,7 +36,7 @@ func makeContext() -> CGContext {
 // In the app each light sits (1 - v) * 70 pt from center at angle i * 2.1 + 0.4,
 // with diameter 90 + v * 200 pt and an 18 pt blur. k scales those points to the icon.
 let orbs: [(hue: Double, v: CGFloat)] = [(55, 0.72), (235, 0.57), (175, 0.37), (290, 0.12)]
-let k: CGFloat = 2.9
+let k: CGFloat = 2.3
 // Center the halo's bounding box on the icon (the app centers its origin point instead).
 let center: CGPoint = {
     var minX = CGFloat.infinity, maxX = -CGFloat.infinity, minY = CGFloat.infinity, maxY = -CGFloat.infinity

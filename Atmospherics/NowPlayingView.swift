@@ -51,19 +51,30 @@ struct NowPlayingView: View {
 
             Spacer(minLength: 16)
 
-            HStack {
+            VStack(spacing: 14) {
+                HStack {
+                    Button { showLibrary = true } label: {
+                        Text("Library ↑")   // opens as a sheet, so it points up
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+
+                    PlayButton()
+
+                    NavigationLink(value: Route.mixer) {
+                        Text("Mixer →")
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
+                            .contentShape(Rectangle())
+                    }
+                }
+
                 Button { mixer.cycleTimer() } label: {
-                    Text("Timer · \(mixer.timer.label)")
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(mixer.timer == .off ? "Timer off" : "Timer · \(mixer.timer.label)")
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 12)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityLabel("Sleep timer, \(mixer.timer.label). Tap to change.")
-
-                PlayButton()
-
-                NavigationLink(value: Route.mixer) {
-                    Text("Mixer →")
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                }
             }
             .font(Theme.mono(12))
             .foregroundStyle(Theme.mono)

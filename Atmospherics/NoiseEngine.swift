@@ -205,17 +205,49 @@ private final class Voice {
         }
     }
 
-    /// Bright hiss for the downpour, plus scattered droplet ticks.
+    /// Four layers: a band-passed hiss that swells and eases, a dense spray of fine
+    /// droplets, bigger drops that "plip" at a pitch as they hit surfaces, and a low bed.
     private func rain(_ w: Float) -> Float {
-        let p = pink(w)
-        lp1 += 0.03 * (p - lp1)
-        let bed = (p - lp1) * 1.6
-        if random01() < 380 / sr { envA = 0.3 + 0.7 * random01() }
-        envA *= 0.993
-        let drop = w * envA
-        let tick = drop - prev
-        prev = drop
-        return bed + tick * 0.22
+        // Intensity drifts slowly so the rain feels alive rather than static.
+        countdown -= 1
+        if countdown <= 0 {
+            gustTarget = 0.65 + 0.35 * random01()
+            countdown = seconds(2 + 4 * random01())
+        }
+        gust += (gustTarget - gust) * 0.00002
+
+        // Hiss: band-pass around 2.5 kHz.
+        let f = 2 * sinf(.pi * 2500 / sr)
+        let high = w - svfLow - 0.9 * svfBand
+        svfBand += f * high
+        svfLow += f * svfBand
+        let hiss = svfBand * 0.75 * gust
+
+        // Fine droplets: very short clicks, high-passed so they read as spray.
+        if random01() < 1500 * gust / sr { envA = 0.2 + 0.8 * random01() }
+        envA *= 0.93
+        let spray = w * envA
+        let fine = spray - prev
+        prev = spray
+
+        // Bigger drops: a damped, slightly falling tone at a random pitch.
+        if random01() < 20 * gust / sr {
+            envB = 0.5 + 0.5 * random01()
+            freqStart = 700 + 1500 * random01()
+            phase2 = 0
+        }
+        if envB > 0.0005 {
+            freqStart *= 0.99996
+            phase2 += 2 * .pi * freqStart / sr
+            if phase2 > 2 * .pi { phase2 -= 2 * .pi }
+            envB *= 0.9975
+        }
+        let plip = sinf(phase2) * envB
+
+        // Low bed for weight.
+        lp1 += 0.01 * (brown(w) - lp1)
+
+        return hiss + fine * 0.18 + plip * 0.14 + lp1 * 0.5
     }
 
     /// Brown noise breathing in slow swells, with a little foam on each crest.

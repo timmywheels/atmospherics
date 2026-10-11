@@ -23,7 +23,8 @@ targets:
       properties:
         CFBundleDisplayName: Atmospherics
         UIBackgroundModes: [audio]
-        UILaunchScreen: {}
+        UILaunchScreen:
+          UIColorName: LaunchBackground
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIUserInterfaceStyle: Dark
         NSLocationWhenInUseUsageDescription: Atmospherics uses your approximate location to match its sounds to the weather outside.
