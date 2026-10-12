@@ -91,7 +91,7 @@ private struct PlaybackCommands: View {
             navigation.saving = true
         }
         .keyboardShortcut("s")
-        Button("Reset \(mixer.currentPlaceName.capitalizedFirst) to Default") {
+        Button(mixer.mode == .atmosphere ? "Reset Scene to Default" : "Reset \(mixer.currentPlaceName.capitalizedFirst) to Default") {
             withAnimation(.smooth) { mixer.resetCurrentPlace() }
         }
         .disabled(!mixer.currentPlaceIsTweaked)
