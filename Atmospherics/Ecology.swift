@@ -259,9 +259,18 @@ enum Ecology {
             return (0.35 + 0.65 * ramp(14 - temp, 0, 12)) * by(0.8, 0.55, 1, 1)
 
         // People keep hours.
-        case .cityHum, .rainyStreet:
+        case .rainyStreet:
             let curve: [Double] = [0.45, 0.4, 0.35, 0.35, 0.4, 0.55, 0.75, 1.05, 1.1, 0.95, 0.9, 0.9,
                                    0.9, 0.9, 0.9, 0.9, 0.95, 1.1, 1.05, 0.95, 0.85, 0.75, 0.65, 0.55]
+            return curve[t.hour]
+        // The day's hum thins out late, and the city at night (distant traffic, no bustle) takes over.
+        case .cityHum:
+            let curve: [Double] = [0.25, 0.2, 0.15, 0.15, 0.2, 0.45, 0.75, 1.05, 1.1, 0.95, 0.9, 0.9,
+                                   0.9, 0.9, 0.9, 0.9, 0.95, 1.1, 1.05, 0.95, 0.8, 0.65, 0.5, 0.35]
+            return curve[t.hour]
+        case .cityNight:
+            let curve: [Double] = [0.9, 0.95, 1, 1, 0.9, 0.6, 0.25, 0, 0, 0, 0, 0,
+                                   0, 0, 0, 0, 0, 0, 0, 0.15, 0.35, 0.55, 0.75, 0.85]
             return curve[t.hour]
         case .cafe:
             switch t.hour {
@@ -333,8 +342,11 @@ enum Ecology {
             return t.minute < 2 ? 0.8 : 0
 
         // Wind makes some places what they are, and rings the chimes.
-        case .wind:
+        case .wind, .treeWind, .gusts, .howl:
             return min(1.2, max(0.25, (c.windKMH - 8) / 25))
+        // A breeze in the leaves, from the lightest air up to a fresh wind.
+        case .breeze:
+            return c.windKMH < 3 ? 0.3 : min(1, 0.45 + c.windKMH / 30)
         case .chimes:
             return c.windKMH < 4 ? 0.35 : c.windKMH < 20 ? 1 : 1.2
 
@@ -358,7 +370,7 @@ enum Ecology {
         case _ where steady:
             (depth, rests) = (0.15, false)
         case .ocean, .rain, .lightRain, .heavyRain, .tinRoof, .tentRain, .rainyStreet, .cityHum, .stream, .waterfall,
-             .lake, .lapping, .rocks, .fountain, .wind, .highway, .cabin, .fan, .caveDrips, .drone, .brown, .pink, .white, .green, .grey, .blue, .violet:
+             .lake, .lapping, .rocks, .fountain, .wind, .treeWind, .gusts, .howl, .breeze, .highway, .cityNight, .cabin, .fan, .caveDrips, .drone, .brown, .pink, .white, .green, .grey, .blue, .violet:
             (depth, rests) = (0.15, false)
         default:
             (depth, rests) = (0.5, true)
@@ -400,13 +412,16 @@ enum Ecology {
             if c.isFog { return 0.6 }
             return snowCover ? 0.5 : 1
         // Night animals call less in rain.
-        case .owls, .wolves, .loons:
+        // Night animals call less in rain, and not at all in a thunderstorm (loons keep on).
+        case .owls, .wolves:
+            return c.isThunder ? 0 : heavy ? 0.3 : c.isRaining ? 0.6 : 1
+        case .loons:
             return heavy ? 0.3 : c.isRaining ? 0.6 : 1
         // Winter birds don't mind the cold, but shelter from rain.
         case .winterBirds:
             return heavy ? 0 : c.isRaining ? 0.3 : c.isFog ? 0.6 : 1
         case .gulls:
-            return heavy ? 0.4 : c.isRaining ? 0.7 : 1
+            return c.isThunder ? 0 : heavy ? 0.4 : c.isRaining ? 0.7 : 1
         // Geese keep flying in weather, and honk more in fog.
         case .geese:
             return heavy ? 0.3 : c.isRaining ? 0.7 : 1
@@ -426,7 +441,7 @@ enum Ecology {
             let breeze = c.windKMH < 5 ? 0.4 : c.windKMH < 15 ? 0.7 : c.windKMH > 30 ? 1.4 : 1
             return c.isSnow ? breeze * 0.5 : breeze
         // Snow muffles a city; rain empties café terraces; wet roads hiss.
-        case .cityHum, .rainyStreet, .train:
+        case .cityHum, .cityNight, .rainyStreet, .train:
             return snowCover ? 0.65 : 1
         case .traffic:
             return snowCover ? 0.6 : 1
@@ -472,7 +487,7 @@ enum Soundscape {
     /// weather is `muffle`d by the walls.
     static func compose(_ c: Conditions, place: Place?, now: Date = Date(), playableOnly: Bool = true,
                         core: Set<SoundKind> = [], rainOn surface: SoundKind? = nil,
-                        muffle: Double = 1) -> [(SoundKind, Double)] {
+                        muffle: Double = 1, wind windKind: SoundKind = .wind) -> [(SoundKind, Double)] {
         var levels: [SoundKind: Double] = [:]
         func add(_ kind: SoundKind, _ level: Double) {
             guard level >= 0.05 else { return }
@@ -493,9 +508,11 @@ enum Soundscape {
             add(.thunder, 0.45)
             add(.lightning, 0.4)
         }
-        // A breeze is heard through what it moves (leaves, water); real wind past about 18 km/h.
+        // A breeze is heard through what it moves (leaves, water); real wind past about 18 km/h, of
+        // the place's own kind (in the trees, at the window), and in gusts when it snows outdoors.
         if c.windKMH > 18 {
-            add(.wind, min(0.8, (c.windKMH - 15) / 35) * (c.isSnow ? 0.7 : 1))
+            let kind: SoundKind = c.isSnow && windKind != .howl ? .gusts : windKind
+            add(kind, min(0.8, (c.windKMH - 15) / 35) * (c.isSnow ? 0.7 : 1))
         }
 
         // The place itself, in season and at this hour.
@@ -510,6 +527,8 @@ enum Soundscape {
             add(kind, level(kind, base))
             // Where there are seasons, a place's birds include the few that stay for winter.
             if kind == .birds && seasonal { add(.winterBirds, level(.winterBirds, base)) }
+            // A city's hum gives way to the city at night.
+            if kind == .cityHum { add(.cityNight, level(.cityNight, base)) }
         }
         if c.isFog && cast.contains(where: { [.ocean, .rocks, .gulls, .buoy].contains($0.0) }) {
             add(.foghorn, 0.4)
@@ -518,6 +537,7 @@ enum Soundscape {
         // Rain lands on what's there: a wet street in a city, a tin roof in a tropical town.
         if c.isRaining && !c.isSnow {
             if let city = levels.removeValue(forKey: .cityHum) { add(.rainyStreet, city) }
+            if let night = levels.removeValue(forKey: .cityNight) { add(.rainyStreet, night) }
             if let cars = levels.removeValue(forKey: .traffic) { add(.rainyStreet, cars) }
             let isCity = cast.contains { $0.0 == .cityHum && $0.1 >= 0.3 }
             let isForest = cast.contains { $0.0 == .canopy }
@@ -535,7 +555,8 @@ enum Soundscape {
             for kind in [SoundKind.rain, .lightRain, .heavyRain] {
                 if let level = levels[kind] { levels[kind] = level * muffle }
             }
-            for kind in [SoundKind.wind, .thunder, .lightning] {
+            // (A howl is what's heard inside already.)
+            for kind in [SoundKind.wind, .treeWind, .gusts, .breeze, .thunder, .lightning] {
                 if let level = levels[kind] { levels[kind] = level * muffle.squareRoot() }
             }
         }

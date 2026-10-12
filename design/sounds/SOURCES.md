@@ -28,7 +28,12 @@ Thunder and lightning are strikes rather than loops: each clip is made with `pre
 | clock | https://freesound.org/s/171043/ | ST303 | CC0 | 10 s |
 
 Freesound files were taken from their public HQ previews (about 128 kbps MP3).
-| cityHum (city street) | https://commons.wikimedia.org/wiki/File:Sunday_in_the_city_street_noise1.ogg | cori | Public domain | 20 s (90 s loop) |
+| cityHum (city street) | https://freesound.org/s/371250/ | risto_alcinov | CC0 | 8 s (100 s loop; distant evening traffic from a 5th-floor balcony, replacing a seaside town that had gulls in it) |
+| cityNight | https://freesound.org/s/330427/ | janbezouska | CC0 | 30 s (120 s loop; downtown LA late at night) |
+| breeze | https://freesound.org/s/579250/ | Danjocross | CC0 | 8 s (110 s loop) |
+| treeWind | https://freesound.org/s/577335/ | TRP | CC0 | 6 s (100 s loop) |
+| gusts | https://freesound.org/s/574565/ | TRP | CC0 | 80 s (130 s loop) |
+| howl | https://freesound.org/s/117610/ | swiftoid | CC0 | 2 s (52 s loop; wind howling at a window) |
 | rainyStreet | https://commons.wikimedia.org/wiki/File:Urban_Street_on_a_Rainy_Afternoon.flac | Extemporalist | CC0 | 300 s (90 s loop) |
 | rain | https://freesound.org/s/349488/ | zavoronok | CC0 | 15 s (80 s loop) |
 | thunder1 | https://freesound.org/s/683421/ | SholeColtis | CC0 | 0 s (6.7 s strike) |

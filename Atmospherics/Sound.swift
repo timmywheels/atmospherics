@@ -13,6 +13,10 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
     case traffic, highway, planes
     case lapping, palms, rocks, buoy, halyards
     case tram, motorbikes, fountain, templeBell, bazaar
+    // Wind of different kinds: a breeze in the leaves, wind in the trees, winter gusts, a howl at the window
+    case breeze, treeWind, gusts, howl
+    // The city late at night, after the day's hum
+    case cityNight
     // Synthesized focus tones
     case betaBeats, gammaBeats, betaPulse
 
@@ -24,7 +28,8 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
              .cafe, .library, .cabin, .bells, .typing, .clock, .cityHum, .rainyStreet,
              .rain, .lightRain, .heavyRain, .thunder, .lightning, .fire, .crickets, .ocean, .birds, .stream, .train, .wind, .cicadas, .frogs,
              .winterBirds, .gulls, .foghorn, .peepers, .geese, .traffic, .highway, .planes,
-             .lapping, .palms, .rocks, .buoy, .halyards, .tram, .motorbikes, .fountain, .templeBell, .bazaar: true
+             .lapping, .palms, .rocks, .buoy, .halyards, .tram, .motorbikes, .fountain, .templeBell, .bazaar,
+             .breeze, .treeWind, .gusts, .howl, .cityNight: true
         default: false
         }
     }
@@ -68,6 +73,8 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .templeBell: return .bells
         case .bells: return .chimes
         case .cabin: return .fan
+        case .breeze, .treeWind, .gusts, .howl: return .wind
+        case .cityNight: return .cityHum
         // Better silent than wrong: no stand-in for these (a spring chorus is no winter bird).
         default: return nil   // howlers, owls, loons, wolves, library, typing, clock, winter birds, gulls, foghorn, geese, planes, buoy, rigging, tram
         }
@@ -90,7 +97,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .brown, .pink, .white, .green, .grey, .blue, .violet: .noise
         case .rain, .lightRain, .heavyRain, .ocean, .stream, .wind, .thunder, .lightning: .water
         case .birds, .crickets, .cicadas, .frogs, .fire: .nature
-        case .cityHum, .train, .fan: .city
+        case .cityHum, .cityNight, .train, .fan: .city
         case .chimes, .drone, .bells: .calm
         case .howlers, .jungleBirds, .parrots, .canopy, .treeFrogs: .jungle
         case .owls, .loons, .wolves, .leaves: .night
@@ -103,6 +110,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .palms: .nature
         case .tram, .motorbikes, .bazaar: .city
         case .fountain: .water
+        case .breeze, .treeWind, .gusts, .howl: .water
         case .templeBell: .calm
         case .betaBeats, .gammaBeats, .betaPulse: .tones
         }
@@ -112,6 +120,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .brown, .pink, .white, .green, .grey, .blue, .violet: "\(short) noise"
         case .cityHum: "City street"
+        case .cityNight: "City at night"
         case .jungleBirds: "Jungle birds"
         case .treeFrogs: "Tree frogs"
         case .caveDrips: "Cave drips"
@@ -130,6 +139,8 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .buoy: "Bell buoy"
         case .halyards: "Sailboat rigging"
         case .templeBell: "Temple bell"
+        case .treeWind: "Wind in the trees"
+        case .howl: "Howling wind"
         case .betaBeats: "Beta beats, 16 Hz"
         case .gammaBeats: "Gamma beats, 40 Hz"
         case .betaPulse: "Beta pulse, 16 Hz"
@@ -140,6 +151,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
     var short: String {
         switch self {
         case .cityHum: "City"
+        case .cityNight: "City night"
         case .howlers: "Howlers"
         case .jungleBirds: "Jungle birds"
         case .treeFrogs: "Tree frogs"
@@ -154,6 +166,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .lapping: "Lapping"
         case .halyards: "Rigging"
         case .templeBell: "Temple bell"
+        case .treeWind: "Tree wind"
         case .betaBeats: "Beta beats"
         case .gammaBeats: "Gamma beats"
         case .betaPulse: "Beta pulse"
@@ -182,6 +195,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .frogs: 150
         case .stream: 195
         case .cityHum: 325
+        case .cityNight: 295
         case .train: 245
         case .fan: 220
         case .chimes: 345
@@ -232,6 +246,10 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .rainyStreet: 235
         case .lightRain: 215
         case .heavyRain: 250
+        case .breeze: 165
+        case .treeWind: 155
+        case .gusts: 195
+        case .howl: 270
         }
     }
 
