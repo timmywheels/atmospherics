@@ -8,12 +8,12 @@ import Foundation
 
 let W: CGFloat = 1320, H: CGFloat = 2868
 let shots: [(file: String, title: String, sub: String, glow: NSColor)] = [
-    ("1-newport", "Travel by sound", "Newport now: surf, rigging, a bell buoy.", NSColor(srgbRed: 0.25, green: 0.6, blue: 0.7, alpha: 1)),
-    ("2-aruba", "Every place\nsounds like itself", "Aruba now: a warm drizzle on the palms.", NSColor(srgbRed: 0.35, green: 0.65, blue: 0.45, alpha: 1)),
-    ("3-globe", "Travel the world’s\nweather", "44 places, live. Or search any town.", NSColor(srgbRed: 0.3, green: 0.5, blue: 0.75, alpha: 1)),
-    ("4-fog", "Swipe down\nfor fog", "And the foghorn sounds in Newport.", NSColor(srgbRed: 0.4, green: 0.6, blue: 0.7, alpha: 1)),
-    ("5-layers", "A landscape of\nwhat you hear", "Drag a sound closer to hear more.", NSColor(srgbRed: 0.45, green: 0.5, blue: 0.65, alpha: 1)),
-    ("6-library", "Mixes for sleep,\nfocus and calm", "With a sleep timer up to 8 hours.", NSColor(srgbRed: 0.6, green: 0.45, blue: 0.85, alpha: 1)),
+    ("1-cabin", "Teleport\nby sound", "A log cabin in a snowstorm, the fire going.", NSColor(srgbRed: 0.85, green: 0.45, blue: 0.3, alpha: 1)),
+    ("2-teleport", "Take me\nanywhere", "Build a scene in a sentence, or say it.", NSColor(srgbRed: 0.75, green: 0.38, blue: 0.3, alpha: 1)),
+    ("3-live", "Real weather,\nsomewhere real", "Raining in Seoul right now? You'll hear it.", NSColor(srgbRed: 0.25, green: 0.55, blue: 0.85, alpha: 1)),
+    ("4-storm", "Any weather,\nany hour", "A tent in a thunderstorm, the woods close by.", NSColor(srgbRed: 0.25, green: 0.6, blue: 0.75, alpha: 1)),
+    ("5-layers", "A landscape of\nwhat you hear", "Drag a sound closer to hear more.", NSColor(srgbRed: 0.3, green: 0.65, blue: 0.55, alpha: 1)),
+    ("6-library", "Mixes for sleep,\nfocus and calm", "With a sleep timer up to 8 hours.", NSColor(srgbRed: 0.5, green: 0.45, blue: 0.85, alpha: 1)),
 ]
 
 try? FileManager.default.createDirectory(atPath: "framed", withIntermediateDirectories: true)
@@ -67,11 +67,16 @@ for shot in shots {
         .foregroundColor: NSColor(srgbRed: 0.925, green: 0.933, blue: 0.95, alpha: 1),
         .kern: -2.5, .paragraphStyle: para,
     ])
-    let sub = NSAttributedString(string: shot.sub, attributes: [
-        .font: NSFont.systemFont(ofSize: 44, weight: .regular),
-        .foregroundColor: NSColor(srgbRed: 0.725, green: 0.745, blue: 0.784, alpha: 1),
-    ])
     let left = screen.minX
+    // The subline at 44 pt, smaller if it would run past the screen's width.
+    func subline(_ size: CGFloat) -> NSAttributedString {
+        NSAttributedString(string: shot.sub, attributes: [
+            .font: NSFont.systemFont(ofSize: size, weight: .regular),
+            .foregroundColor: NSColor(srgbRed: 0.725, green: 0.745, blue: 0.784, alpha: 1),
+        ])
+    }
+    var sub = subline(44)
+    if sub.size().width > W - left * 2 { sub = subline(44 * (W - left * 2) / sub.size().width) }
     let titleRect = CGRect(x: left, y: H - 160 - 260, width: W - left * 2, height: 260)
     title.draw(with: titleRect, options: [.usesLineFragmentOrigin])
     sub.draw(at: CGPoint(x: left, y: titleRect.minY - 110))

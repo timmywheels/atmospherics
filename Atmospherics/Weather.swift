@@ -181,6 +181,9 @@ final class LocationProvider: NSObject, CLLocationManagerDelegate {
     var isDenied: Bool { status == .denied || status == .restricted }
 
     func current() async throws -> (CLLocationCoordinate2D, String) {
+        #if DEBUG
+        if let standIn = Self.standIn { return standIn }
+        #endif
         let location: CLLocation = try await withCheckedThrowingContinuation { continuation in
             self.continuation = continuation
             // Without a status yet, wait for the delegate's first report (but not forever).
@@ -190,6 +193,18 @@ final class LocationProvider: NSObject, CLLocationManagerDelegate {
         let name = placemark?.locality ?? placemark?.administrativeArea ?? "Here"
         return (location.coordinate, name)
     }
+
+    #if DEBUG
+    /// For screenshots that shouldn't show where you are: launching with
+    /// `-screenshotLocation 45.52,-122.68,Portland` stands in for your location.
+    private static let standIn: (CLLocationCoordinate2D, String)? = {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-screenshotLocation"), i + 1 < args.count else { return nil }
+        let parts = args[i + 1].split(separator: ",", maxSplits: 2).map(String.init)
+        guard parts.count == 3, let latitude = Double(parts[0]), let longitude = Double(parts[1]) else { return nil }
+        return (CLLocationCoordinate2D(latitude: latitude, longitude: longitude), parts[2])
+    }()
+    #endif
 
     private func proceed(_ status: CLAuthorizationStatus) {
         switch status {

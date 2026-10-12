@@ -34,7 +34,7 @@ xcodebuild -project Atmospherics.xcodeproj -scheme Atmospherics -configuration R
 xcodebuild -exportArchive -archivePath build/Atmospherics.xcarchive -exportOptionsPlist ExportOptions.plist -exportPath build/export -allowProvisioningUpdates
 ```
 
-App Store screenshots: `design/screenshots/make-upload.sh`.
+App Store screenshots: `design/screenshots/make-upload.sh` frames the iPhone captures in `raw/` (6.9", from the simulator with a 9:41 status bar) and exports the 6.9", 6.5" and 6.3" sets. The Mac set is `design/screenshots/mac/`: capture the window at 2x into `raw/`, then `swift compose.swift` there for 2880x1800 frames. Debug builds take `-screenshotLocation 45.52,-122.68,Portland` so the corner shows a stand-in town rather than yours (Mac: `open … --args -screenshotLocation …`; simulator: `xcrun simctl launch booted com.timwheeler.atmospherics -screenshotLocation …`). App Store copy is in `design/appstore/`.
 
 The Mac app has its own build number (`CURRENT_PROJECT_VERSION` under `AtmosphericsMac`) and uploads to the same App Store Connect app, once macOS has been added there as a platform:
 
