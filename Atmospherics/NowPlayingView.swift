@@ -265,44 +265,44 @@ private struct PlayButton: View {
     }
 }
 
-/// A slim live waveform of what's playing, tinted with the halo's colors. Flat and dim when paused.
+/// A slim, calm wave under the readout. Its height follows how loud the mix is (smoothed over
+/// about half a second) and it drifts slowly sideways, so it feels alive without twitching.
 private struct Waveform: View {
     @Environment(Mixer.self) private var mixer
-    @State private var smoothed = [Float](repeating: 0, count: Scope.bins)
+    @State private var level: Double = 0
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: !mixer.isPlaying)) { timeline in
+        // Keep animating after pause until the wave has settled flat.
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: !mixer.isPlaying && level < 0.001)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 10_000)
             Canvas { ctx, size in
-                let levels = smoothed
                 let mid = size.height / 2
-                let step = size.width / CGFloat(levels.count - 1)
-                // Taper toward the ends so the line fades in and out of the edges.
-                let points = levels.enumerated().map { i, v in
-                    let edge = sin(Double(i) / Double(levels.count - 1) * .pi)
-                    return CGPoint(x: CGFloat(i) * step, y: mid - CGFloat(v) * mid * 2.2 * CGFloat(edge))
-                }
-                // Curves through the midpoints, so it reads as a wave rather than a jagged graph.
+                let amplitude = mid * 0.85 * min(1, level * 4)
                 var path = Path()
-                path.move(to: points[0])
-                for i in 1..<points.count {
-                    let m = CGPoint(x: (points[i - 1].x + points[i].x) / 2, y: (points[i - 1].y + points[i].y) / 2)
-                    path.addQuadCurve(to: m, control: points[i - 1])
+                let samples = 90
+                for i in 0...samples {
+                    let x = Double(i) / Double(samples)
+                    let edge = sin(x * .pi)   // taper into the edges
+                    // Two slow waves at different speeds give a soft, organic shape.
+                    let y = 0.65 * sin(x * 2 * .pi * 2.2 - t * 1.1) + 0.35 * sin(x * 2 * .pi * 3.7 + t * 0.7)
+                    let p = CGPoint(x: x * size.width, y: mid - y * amplitude * edge)
+                    i == 0 ? path.move(to: p) : path.addLine(to: p)
                 }
-                path.addLine(to: points[points.count - 1])
                 let colors = mixer.byVolume.prefix(3).map(\.kind.orb)
                 let shading = GraphicsContext.Shading.linearGradient(
                     Gradient(colors: colors.isEmpty ? [Theme.mono] : colors + [colors[0]]),
                     startPoint: .zero, endPoint: CGPoint(x: size.width, y: 0))
-                ctx.opacity = mixer.isPlaying ? 0.9 : 0.25
+                ctx.opacity = mixer.isPlaying ? 0.85 : 0.25
                 ctx.drawLayer { glow in
-                    glow.addFilter(.blur(radius: 4))
+                    glow.addFilter(.blur(radius: 5))
                     glow.stroke(path, with: shading, lineWidth: 3)
                 }
-                ctx.stroke(path, with: shading, style: StrokeStyle(lineWidth: 1.2, lineCap: .round, lineJoin: .round))
+                ctx.stroke(path, with: shading, style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
             }
             .onChange(of: timeline.date) { _, _ in
-                let fresh = mixer.isPlaying ? mixer.scope.snapshot() : [Float](repeating: 0, count: Scope.bins)
-                for i in smoothed.indices { smoothed[i] += (fresh[i] - smoothed[i]) * 0.35 }
+                let peaks = mixer.isPlaying ? mixer.scope.snapshot() : []
+                let rms = peaks.isEmpty ? 0 : sqrt(peaks.map { Double($0 * $0) }.reduce(0, +) / Double(peaks.count))
+                level += (rms - level) * 0.06
             }
         }
         .accessibilityHidden(true)
