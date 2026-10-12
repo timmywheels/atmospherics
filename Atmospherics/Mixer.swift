@@ -65,6 +65,9 @@ final class Mixer {
     private(set) var customPlaces: [Place] = []
     var allPlaces: [Place] { customPlaces + Place.all }
 
+    /// Set while moving between places, for a quicker crossfade than weather drift.
+    @ObservationIgnored private var traveling = false
+
     /// Bumps on every random jump, so views can animate and play a haptic.
     private(set) var shuffleCount = 0
     /// Whether each mode's field is following the weather, or the user has taken over.
@@ -418,6 +421,7 @@ final class Mixer {
         }
         pinnedPlace = place
         defaults.set(place.name, forKey: "pinnedPlace")
+        traveling = true
         chooseEscape()
         if mode != .escape {
             transition?.cancel()
@@ -450,6 +454,7 @@ final class Mixer {
 
     /// Comes back from a place to the local weather.
     func goHome() {
+        traveling = true
         if mode != .match {
             transition?.cancel()
             mode = .match
@@ -512,51 +517,57 @@ final class Mixer {
         setTitle(name, for: mode)
         let orbs = Preset.layout(target)
         if animated && mode == self.mode {
-            glide(to: orbs)
+            glide(to: orbs, duration: traveling ? 3 : 6)
+            traveling = false
         } else {
             fields[mode] = orbs
             apply()
         }
     }
 
-    /// Moves the current field to `target` over a few seconds so the sound drifts rather than jumps.
-    /// New sounds rise in from the rim; sounds that leave sink out to it.
-    private func glide(to target: [Orb]) {
+    /// Moves the current field to `target` with an equal-power crossfade: leaving sounds fade out
+    /// as arriving ones fade in, so loudness stays even. Each light keeps its direction and only
+    /// moves in or out, so position and volume change together.
+    private func glide(to target: [Orb], duration: Double = 6) {
         transition?.cancel()
         let start = orbs
-        func rim(_ o: Orb) -> (Double, Double) {
-            let dx = o.x - 0.5, dy = o.y - 0.5
-            let d = max(hypot(dx, dy), 0.0001)
-            return (0.5 + dx / d * 0.5, 0.5 + dy / d * 0.5)
-        }
-        // (kind, from, to, keep)
-        var paths: [(Orb, (Double, Double), (Double, Double), Bool)] = []
+        struct Path { var orb: Orb; let angle: Double; let from: Double; let to: Double; let curve: Int }  // curve: 0 out, 1 in, 2 shared
+        func angle(_ o: Orb) -> Double { atan2(o.y - 0.5, o.x - 0.5) }
+        var paths: [Path] = []
         for t in target {
             if let s = start.first(where: { $0.kind == t.kind }) {
-                paths.append((Orb(id: s.id, kind: t.kind, x: s.x, y: s.y), (s.x, s.y), (t.x, t.y), true))
+                paths.append(Path(orb: Orb(id: s.id, kind: t.kind, x: s.x, y: s.y), angle: angle(t),
+                                  from: s.volume, to: t.volume, curve: 2))
             } else {
-                paths.append((t, rim(t), (t.x, t.y), true))
+                paths.append(Path(orb: t, angle: angle(t), from: 0, to: t.volume, curve: 1))
             }
         }
         for s in start where !target.contains(where: { $0.kind == s.kind }) {
-            paths.append((s, (s.x, s.y), rim(s), false))
+            paths.append(Path(orb: s, angle: angle(s), from: s.volume, to: 0, curve: 0))
         }
 
-        let steps = 120   // 6 s at 20 Hz
+        let steps = max(1, Int(duration * 30))
         transition = Task { @MainActor [weak self] in
             for step in 1...steps {
                 guard let self, !Task.isCancelled else { return }
                 let t = Double(step) / Double(steps)
                 let eased = t * t * (3 - 2 * t)
-                self.fields[self.mode] = paths.compactMap { orb, from, to, keep in
-                    if step == steps && !keep { return nil }
-                    var o = orb
-                    o.x = from.0 + (to.0 - from.0) * eased
-                    o.y = from.1 + (to.1 - from.1) * eased
+                self.fields[self.mode] = paths.compactMap { p in
+                    let v: Double
+                    switch p.curve {
+                    case 0: v = p.from * cos(t * .pi / 2)
+                    case 1: v = p.to * sin(t * .pi / 2)
+                    default: v = p.from + (p.to - p.from) * eased
+                    }
+                    if step == steps && p.curve == 0 { return nil }
+                    var o = p.orb
+                    let r = (1 - v) * 0.5
+                    o.x = 0.5 + cos(p.angle) * r
+                    o.y = 0.5 + sin(p.angle) * r
                     return o
                 }
                 self.apply()
-                try? await Task.sleep(for: .milliseconds(50))
+                try? await Task.sleep(for: .milliseconds(33))
             }
         }
     }

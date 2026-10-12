@@ -33,8 +33,10 @@ struct NowPlayingView: View {
 
             Halo(orbs: mixer.byVolume)
                 .frame(minHeight: 300, maxHeight: .infinity)
+                // Leans with the finger (with resistance) and softens, rather than flying away.
                 .offset(x: swipe)
-                .opacity(1 - Double(min(abs(swipe), 160) / 320))
+                .scaleEffect(1 - min(abs(swipe), 60) / 600)
+                .blur(radius: min(abs(swipe), 60) / 12)
                 .contentShape(Rectangle())
                 .gesture(travelSwipe)
                 .overlay(alignment: .bottom) {
@@ -155,24 +157,19 @@ struct NowPlayingView: View {
         DragGesture(minimumDistance: 12)
             .onChanged { g in
                 guard abs(g.translation.width) > abs(g.translation.height) else { return }
-                swipe = g.translation.width * 0.6
-                pastThreshold = abs(g.translation.width) > swipeThreshold
+                // Rubber-band: follows the finger at first, then resists.
+                let x = g.translation.width
+                swipe = 60 * tanh(x / 160)
+                pastThreshold = abs(x) > swipeThreshold
             }
             .onEnded { g in
                 let travel = abs(g.translation.width) > swipeThreshold && abs(g.translation.width) > abs(g.translation.height)
                 if travel {
-                    // Slide out the way it was swiped, change place, slide back in from the other side.
-                    let direction: CGFloat = g.translation.width > 0 ? 1 : -1
-                    withAnimation(.easeIn(duration: 0.18)) { swipe = direction * 220 }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-                        mixer.shuffle()
-                        swipe = -direction * 220
-                        withAnimation(.spring(duration: 0.5, bounce: 0.2)) { swipe = 0 }
-                        withAnimation { hasSwiped = true }
-                    }
-                } else {
-                    withAnimation(.spring(duration: 0.4, bounce: 0.3)) { swipe = 0 }
+                    mixer.shuffle()
+                    withAnimation { hasSwiped = true }
                 }
+                // Settle back gently; the colors melt into the new place as the sound crossfades.
+                withAnimation(.smooth(duration: 0.9)) { swipe = 0 }
                 pastThreshold = false
             }
     }
@@ -197,12 +194,14 @@ struct Halo: View {
                 let drift = CGPoint(x: sin(t * 0.07) * 12, y: sin(t * 0.11) * 8)
                 ZStack {
                     ForEach(Array(orbs.enumerated()), id: \.element.id) { i, orb in
-                        let angle = Double(i) * 2.1 + 0.4
+                        // A fixed spot per sound, so lights grow and shrink instead of swapping places.
+                        let slot = Double(SoundKind.allCases.firstIndex(of: orb.kind) ?? i)
+                        let angle = slot * 2.399 + 0.4
                         let distance = (1 - orb.volume) * 70
                         // Slightly smaller and softer than the CSS values: SwiftUI's blur
                         // spreads less, so the same numbers render bigger and harsher.
                         let size = (90 + orb.volume * 200) * 0.85
-                        let phase = Double(i) * 1.9
+                        let phase = slot * 1.9
                         let wander = CGPoint(x: sin(t * 0.13 + phase) * 16, y: cos(t * 0.1 + phase * 1.3) * 14)
                         Breathing(period: 7 + Double(i) * 1.7) {
                             Circle()
@@ -210,10 +209,11 @@ struct Halo: View {
                                 .frame(width: size, height: size)
                                 .blur(radius: 22)
                         }
+                        // Fade with volume, so arriving and leaving sounds melt in and out.
+                        .opacity(min(1, orb.volume * 3))
                         .blendMode(.screen)
                         .position(x: center.x + cos(angle) * distance + wander.x + drift.x,
                                   y: center.y + sin(angle) * distance + wander.y + drift.y)
-                        .animation(.smooth(duration: 0.6), value: orb.volume)
                     }
                 }
                 .compositingGroup()
