@@ -15,7 +15,8 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .howlers, .jungleBirds, .parrots, .canopy, .treeFrogs, .owls, .loons, .wolves, .leaves,
              .waterfall, .caveDrips, .tentRain, .tinRoof, .whales, .lake,
-             .cafe, .library, .cabin, .bells, .typing, .clock, .cityHum, .rainyStreet: true
+             .cafe, .library, .cabin, .bells, .typing, .clock, .cityHum, .rainyStreet,
+             .rain, .thunder, .fire, .crickets, .ocean, .birds, .stream, .train, .wind, .cicadas, .frogs: true
         default: false
         }
     }

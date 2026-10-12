@@ -30,3 +30,14 @@ Loops are made with `prepare.py` (60 s from the given start, seam crossfaded, lo
 Freesound files were taken from their public HQ previews (about 128 kbps MP3).
 | cityHum (city street) | https://commons.wikimedia.org/wiki/File:Sunday_in_the_city_street_noise1.ogg | cori | Public domain | 20 s (90 s loop) |
 | rainyStreet | https://commons.wikimedia.org/wiki/File:Urban_Street_on_a_Rainy_Afternoon.flac | Extemporalist | CC0 | 300 s (90 s loop) |
+| rain | https://freesound.org/s/349488/ | zavoronok | CC0 | 15 s (80 s loop) |
+| thunder | https://freesound.org/s/635153/ | skinoku | CC0 | 10 s (90 s loop) |
+| fire | https://freesound.org/s/729395/ | HECKFRICKER | CC0 | 10 s (90 s loop) |
+| crickets | https://freesound.org/s/453861/ | kyles | CC0 | 5 s (80 s loop) |
+| ocean | https://freesound.org/s/623052/ | goochiano | CC0 | 20 s (90 s loop) |
+| birds | https://freesound.org/s/466242/ | richwise | CC0 | 20 s (100 s loop) |
+| stream | https://freesound.org/s/454155/ | kyles | CC0 | 3 s (60 s loop) |
+| train | https://freesound.org/s/150875/ | worldfire | CC0 | 30 s (100 s loop) |
+| wind | https://freesound.org/s/521736/ | Fission9 | CC0 | 2 s (55 s loop) |
+| cicadas | https://freesound.org/s/396810/ | Jedo | CC0 | 30 s (90 s loop) |
+| frogs | https://freesound.org/s/135561/ | felix.blume | CC0 | 2 s (55 s loop) |
