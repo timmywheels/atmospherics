@@ -156,6 +156,16 @@ struct NowPlayingView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Outside. \(mixer.outsideLabel)")
                 .accessibilityHint("Plays the weather outside your window")
+                // Your library, quietly in the corner.
+                Button { showLibrary = true } label: {
+                    Image(systemName: "books.vertical")
+                        .font(.system(size: 13))
+                        .padding(.vertical, 6)
+                        .padding(.leading, 16)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Library")
             }
             .font(Theme.caps(11))
             .tracking(1.3)
@@ -184,10 +194,9 @@ struct NowPlayingView: View {
                 .frame(height: 40)
                 .padding(.top, 2)
 
-            // Where to go next, your library, and play, in reach of a thumb.
+            // Where to go next, and play, in reach of a thumb.
             HStack(spacing: 12) {
                 TakeMeBar { showTeleport = true }
-                LibraryButton { showLibrary = true }
                 PlayButton()
             }
             .padding(.top, 10)
@@ -641,25 +650,6 @@ private struct TakeMeBar: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Teleport")
         .accessibilityHint("Build a scene, or say where to go")
-    }
-}
-
-/// Your library, beside the way to Teleport.
-private struct LibraryButton: View {
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: "books.vertical")
-                .font(.system(size: 17))
-                .foregroundStyle(Theme.secondary)
-                .frame(width: 48, height: 48)
-                .background(Circle().fill(Color.white.opacity(0.06)))
-                .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Library")
     }
 }
 
