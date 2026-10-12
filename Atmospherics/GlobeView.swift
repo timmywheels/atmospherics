@@ -271,7 +271,7 @@ private struct GlobeCanvas: View {
             .map { ($0, project(lat: $0.latitude, lon: $0.longitude, center: center, radius: radius)) }
             .filter { $0.1.1 > 0.75 }
             .sorted { a, b in (a.0 == focused ? 2 : a.1.1) > (b.0 == focused ? 2 : b.1.1) }
-        for (place, (p, _)) in byDepth where !labeled.contains(where: { abs($0.x - p.x) < 90 && abs($0.y - p.y) < 22 }) {
+        for (place, (p, _)) in byDepth where !labeled.contains(where: { abs($0.x - p.x) < 110 && abs($0.y - p.y) < 28 }) {
             labeled.append(p)
             showLabel.insert(place.name)
         }
@@ -295,12 +295,18 @@ private struct GlobeCanvas: View {
                 ctx.stroke(Path(ellipseIn: CGRect(x: p.x - 10, y: p.y - 10, width: 20, height: 20)),
                            with: .color(.white.opacity(0.7 * z)), lineWidth: 1)
             }
-            if showLabel.contains(place.name) {
-                ctx.draw(Text(place.title)
+        }
+
+        // Labels last, so no city's glow or dot covers them; a dark shadow keeps them legible over land.
+        var labels = ctx
+        labels.addFilter(.shadow(color: .black.opacity(0.9), radius: 3))
+        for place in Place.all where showLabel.contains(place.name) {
+            let (p, z) = project(lat: place.latitude, lon: place.longitude, center: center, radius: radius)
+            let isFocused = place == focused
+            labels.draw(Text(place.title)
                             .font(Theme.mono(isFocused ? 12 : 10, isFocused ? .semibold : .regular))
-                            .foregroundStyle(.white.opacity(isFocused ? 0.95 : 0.45 * z)),
-                         at: CGPoint(x: p.x, y: p.y + (isFocused ? 22 : 15)))
-            }
+                            .foregroundStyle(.white.opacity(isFocused ? 0.95 : 0.55 * z)),
+                        at: CGPoint(x: p.x, y: p.y + (isFocused ? 22 : 15)))
         }
     }
 
