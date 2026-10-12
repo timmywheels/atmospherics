@@ -10,6 +10,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
     case waterfall, caveDrips, tentRain, tinRoof, whales, lake
     case cafe, library, cabin, bells, typing, clock, rainyStreet, lightRain, heavyRain
     case winterBirds, gulls, foghorn, peepers, geese
+    case traffic, highway, planes
 
     /// Recorded sounds play from `Sounds/<rawValue>.m4a` instead of being synthesized.
     var isRecorded: Bool {
@@ -18,10 +19,14 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
              .waterfall, .caveDrips, .tentRain, .tinRoof, .whales, .lake,
              .cafe, .library, .cabin, .bells, .typing, .clock, .cityHum, .rainyStreet,
              .rain, .lightRain, .heavyRain, .thunder, .fire, .crickets, .ocean, .birds, .stream, .train, .wind, .cicadas, .frogs,
-             .winterBirds, .gulls, .foghorn, .peepers, .geese: true
+             .winterBirds, .gulls, .foghorn, .peepers, .geese, .traffic, .highway, .planes: true
         default: false
         }
     }
+
+    /// One-off events (a plane passing over, geese flying by) play through once from the start
+    /// when they come on, instead of looping.
+    var isEvent: Bool { self == .planes || self == .geese }
 
     /// This sound if the app has it, otherwise the closest synthesized one (or nothing).
     var playable: SoundKind? {
@@ -34,11 +39,11 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .waterfall, .caveDrips: return .stream
         case .lake, .whales: return .ocean
         case .leaves: return .wind
-        case .cafe, .rainyStreet: return .cityHum
+        case .cafe, .rainyStreet, .traffic, .highway: return .cityHum
         case .bells: return .chimes
         case .cabin: return .fan
         // Better silent than wrong: no stand-in for these (a spring chorus is no winter bird).
-        default: return nil   // howlers, owls, loons, wolves, library, typing, clock, winter birds, gulls, foghorn, geese
+        default: return nil   // howlers, owls, loons, wolves, library, typing, clock, winter birds, gulls, foghorn, geese, planes
         }
     }
 
@@ -67,6 +72,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .cafe, .library, .cabin, .typing, .clock, .rainyStreet: .city
         case .winterBirds, .geese, .peepers: .nature
         case .gulls, .foghorn: .water
+        case .traffic, .highway, .planes: .city
         }
     }
 
@@ -151,6 +157,9 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .foghorn: 250
         case .peepers: 135
         case .geese: 60
+        case .traffic: 20
+        case .highway: 335
+        case .planes: 185
         case .tinRoof: 240
         case .whales: 250
         case .lake: 210

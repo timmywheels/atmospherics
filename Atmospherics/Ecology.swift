@@ -274,6 +274,30 @@ enum Ecology {
             case 23: return 0.6
             default: return 1
             }
+        // Traffic swells at the rush hours and thins out after midnight; weekend mornings sleep in.
+        case .traffic:
+            let curve: [Double] = [0.3, 0.2, 0.12, 0.1, 0.15, 0.35, 0.7, 1.1, 1.15, 0.95, 0.85, 0.85,
+                                   0.9, 0.85, 0.85, 0.9, 1, 1.15, 1.1, 0.9, 0.75, 0.6, 0.5, 0.4]
+            let weekendMorning = (t.weekday == 1 || t.weekday == 7) && (6...10).contains(t.hour)
+            return curve[t.hour] * (weekendMorning ? 0.6 : 1)
+        // A highway never quite stops.
+        case .highway:
+            let curve: [Double] = [0.5, 0.4, 0.35, 0.35, 0.45, 0.65, 0.9, 1.1, 1.1, 1, 0.95, 0.95,
+                                   0.95, 0.95, 0.95, 1, 1.05, 1.1, 1.05, 0.95, 0.85, 0.75, 0.65, 0.55]
+            return curve[t.hour]
+        // A plane passes over now and then: up to three an hour on a busy flight path, one an hour
+        // elsewhere, each in a two-minute window long enough to hear it go by, at minutes of the
+        // place's own so places don't all hear one at once. Airports rest in the small hours.
+        case .planes:
+            let busy = place?.signature.first { $0.0 == .planes }?.1 ?? 0.1
+            let every = busy >= 0.25 ? 20 : busy >= 0.12 ? 30 : 60
+            let shift = (place?.name.unicodeScalars.reduce(0) { $0 + Int($1.value) } ?? 0) % every
+            guard (t.minute + 60 - shift) % every < 2 else { return 0 }
+            switch t.hour {
+            case 1...5: return 0
+            case 0, 6, 23: return 0.5
+            default: return 1
+            }
         case .bells:
             guard (8...20).contains(t.hour) else { return 0 }
             // Calling to Sunday morning services, otherwise just on the hour.
@@ -329,9 +353,15 @@ enum Ecology {
         case .leaves:
             let breeze = c.windKMH < 5 ? 0.4 : c.windKMH < 15 ? 0.7 : c.windKMH > 30 ? 1.4 : 1
             return c.isSnow ? breeze * 0.5 : breeze
-        // Snow muffles a city; rain empties café terraces.
+        // Snow muffles a city; rain empties café terraces; wet roads hiss.
         case .cityHum, .rainyStreet, .train:
             return snowCover ? 0.65 : 1
+        case .traffic:
+            return snowCover ? 0.6 : 1
+        case .highway:
+            return snowCover ? 0.7 : c.isRaining ? 1.15 : 1
+        case .planes:
+            return heavy ? 0.5 : 1
         case .cafe:
             return heavy ? 0.5 : snowCover ? 0.6 : 1
         case .whales:
@@ -392,6 +422,7 @@ enum Soundscape {
         // Rain lands on what's there: a wet street in a city, a tin roof in a tropical town.
         if c.isRaining && !c.isSnow {
             if let city = levels.removeValue(forKey: .cityHum) { add(.rainyStreet, city) }
+            if let cars = levels.removeValue(forKey: .traffic) { add(.rainyStreet, cars) }
             let isCity = cast.contains { $0.0 == .cityHum && $0.1 >= 0.3 }
             let isForest = cast.contains { $0.0 == .canopy }
             if let place, abs(place.latitude) < 23.5, !isCity, !isForest {

@@ -54,7 +54,10 @@ final class PlaceSearch: NSObject, MKLocalSearchCompleterDelegate {
         async let woods = count("forest", near: c, km: 10)
         async let cafes = count("cafe", near: c, km: 1)
         async let churches = count("church", near: c, km: 1.5)
+        async let airports = count("airport", near: c, km: 25)
+        async let fuel = count("gas station", near: c, km: 3)   // where the big roads are
         let (b, s, l, f, k, ch) = await (beaches, stations, lakes, woods, cafes, churches)
+        let (a, g) = await (airports, fuel)
         let tropical = abs(c.latitude) < 23.5
         let urban = s >= 2
 
@@ -62,6 +65,10 @@ final class PlaceSearch: NSObject, MKLocalSearchCompleterDelegate {
         if b > 0 { cast.append((.ocean, 0.55)) }
         if l > 0 && b == 0 { cast.append((.lake, 0.35)) }
         if urban { cast.append((.cityHum, 0.4)) } else if s == 1 { cast.append((.cityHum, 0.2)) }
+        // Cars on the streets, a highway's hum, and planes: often near an airport, now and then anywhere.
+        if urban { cast.append((.traffic, 0.25)) } else if s == 1 || g > 0 { cast.append((.traffic, 0.08)) }
+        if g >= 4 { cast.append((.highway, 0.15)) } else if g >= 1 { cast.append((.highway, 0.06)) }
+        cast.append((.planes, a > 0 ? 0.15 : 0.05))
         if s >= 5 { cast.append((.train, 0.15)) }
         if k >= 5 { cast.append((.cafe, 0.2)) }
         if ch >= 2 { cast.append((.bells, 0.12)) }

@@ -47,4 +47,7 @@ Freesound files were taken from their public HQ previews (about 128 kbps MP3).
 | gulls | https://freesound.org/s/208074/ | Further_Roman | CC0 | 10 s (100 s loop) |
 | foghorn | https://freesound.org/s/140898/ | exuberate | CC0 | 4 s (86 s loop, exactly four blasts) |
 | peepers | https://freesound.org/s/423812/ | kvgarlic | CC0 | 10 s (110 s loop) |
-| geese | https://freesound.org/s/842773/ | onionaire | CC0 | 2 s (92 s loop, one flyover) |
+| geese | https://freesound.org/s/842773/ | onionaire | CC0 | 2 s (92 s, one flyover, plays once) |
+| traffic | https://freesound.org/s/110310/ | nickpursehouse | CC0 | 60 s (120 s loop) |
+| highway | https://freesound.org/s/448092/ | courter | CC0 | 175 s (120 s loop) |
+| planes | https://freesound.org/s/383068/ | Kinoton | CC0 | 0 s (105 s, one flyover, plays once) |

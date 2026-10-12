@@ -684,7 +684,7 @@ final class Mixer {
                               signature: near.signature, climate: near.climate, wetMonths: near.wetMonths, seasonal: near.seasonal)
             return
         }
-        let key = String(format: "%.1f,%.1f", c.latitude, c.longitude)   // about 10 km
+        let key = String(format: "v2:%.1f,%.1f", c.latitude, c.longitude)   // about 10 km; v2 added traffic and planes
         if let saved = defaults.dictionary(forKey: "homeCast"), saved["key"] as? String == key,
            let dict = saved["place"] as? [String: Any], let place = Place(dictionary: dict) {
             homePlace = place

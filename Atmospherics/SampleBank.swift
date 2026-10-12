@@ -54,11 +54,16 @@ final class SampleBank {
         files[kind] = file
         current[kind] = 0
 
-        // Start somewhere random so a sound doesn't always begin at the same moment.
-        let start = AVAudioFramePosition(Double.random(in: 0..<0.8) * Double(file.length))
-        player.scheduleSegment(file, startingFrame: start, frameCount: AVAudioFrameCount(file.length - start), at: nil)
-        queueRepeat(kind, player: player)
-        queueRepeat(kind, player: player)
+        if kind.isEvent {
+            // A plane passing over plays once, from its first approach.
+            player.scheduleFile(file, at: nil)
+        } else {
+            // Start somewhere random so a sound doesn't always begin at the same moment.
+            let start = AVAudioFramePosition(Double.random(in: 0..<0.8) * Double(file.length))
+            player.scheduleSegment(file, startingFrame: start, frameCount: AVAudioFrameCount(file.length - start), at: nil)
+            queueRepeat(kind, player: player)
+            queueRepeat(kind, player: player)
+        }
         if engine.isRunning && masterTarget > 0 { player.play() }
     }
 

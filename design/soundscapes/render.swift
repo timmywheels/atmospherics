@@ -6,7 +6,7 @@
 //   /tmp/render synth <dir>                            each synthesized sound alone at gain 1 (uncalibrated), as WAV
 //   /tmp/render mix <sounds dir> <out.wav> <seconds> [--uncalibrated] kind=gain ...
 //                                                      engine gains, mixed as the app mixes them
-//   /tmp/render scene <sounds dir> <out.wav> <seconds> <place> <month> <hour> <°C> <weather code> <rain mm> <wind km/h>
+//   /tmp/render scene <sounds dir> <out.wav> <seconds> <place> <month> <hour> <°C> <weather code> <rain mm> <wind km/h> [minute]
 //                                                      a place's scene, composed and mixed as the app does
 import AVFoundation
 
@@ -38,7 +38,8 @@ struct Render {
                                latitude: place.latitude, utcOffset: 0, sunrise: 6 * 60 + 30, sunset: 18 * 60 + 30)
             var cal = Calendar(identifier: .gregorian)
             cal.timeZone = .gmt
-            let now = cal.date(from: DateComponents(year: 2026, month: Int(n[0]), day: 15, hour: Int(n[1]), minute: 20))!
+            let minute = args.count > 11 ? Int(args[11])! : 20
+            let now = cal.date(from: DateComponents(year: 2026, month: Int(n[0]), day: 15, hour: Int(n[1]), minute: minute))!
             let levels = Soundscape.compose(c, place: place, now: now, playableOnly: false)
             let gains = Mix.gains(Dictionary(levels, uniquingKeysWith: max))
             print(levels.map { "\($0.0.rawValue) \(String(format: "%.2f", $0.1)) (\(Int(Mix.loudness($0.0, $0.1).rounded())) LUFS)" }
@@ -55,9 +56,12 @@ struct Render {
         var out = synth(gains.filter { !$0.0.isRecorded }, seconds: seconds, calibrated: calibrated)
         for (kind, gain) in gains where kind.isRecorded && gain > 0 {
             let loop = try decode(dir.appendingPathComponent("\(kind.rawValue).m4a"))
-            let start = Int(Double.random(in: 0..<0.8) * Double(loop[0].count))
+            // Events (a plane passing) play once from the start; everything else loops from a random point.
+            let start = kind.isEvent ? 0 : Int(Double.random(in: 0..<0.8) * Double(loop[0].count))
             for c in 0..<2 {
-                for i in 0..<out[c].count { out[c][i] += Float(gain) * loop[c][(start + i) % loop[c].count] }
+                for i in 0..<out[c].count where !kind.isEvent || i < loop[c].count {
+                    out[c][i] += Float(gain) * loop[c][(start + i) % loop[c].count]
+                }
             }
         }
         return out
