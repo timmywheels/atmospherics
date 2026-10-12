@@ -28,7 +28,7 @@ struct MixerView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text("LAYERS")
-                    .font(Theme.label(11, .medium))
+                    .font(Theme.caps(11))
                     .tracking(1.3)
                     .foregroundStyle(Theme.muted)
             }
@@ -386,7 +386,7 @@ struct SoundSections: View {
     private func section(_ title: String, kinds: [SoundKind], playing: Set<SoundKind>) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title.uppercased())
-                .font(Theme.label(10, .medium))
+                .font(Theme.caps(10))
                 .tracking(1.2)
                 .foregroundStyle(Theme.muted)
                 .padding(.horizontal, 24)

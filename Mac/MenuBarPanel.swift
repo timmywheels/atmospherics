@@ -112,7 +112,7 @@ struct MenuBarPanel: View {
     private var timer: some View {
         HStack(spacing: 6) {
             Text("SLEEP")
-                .font(Theme.label(10, .medium))
+                .font(Theme.caps(10))
                 .tracking(1.2)
                 .foregroundStyle(Theme.muted)
             Spacer()
@@ -170,7 +170,7 @@ struct MenuBarPanel: View {
 
     private func header(_ title: String) -> some View {
         Text(title.uppercased())
-            .font(Theme.label(10, .medium))
+            .font(Theme.caps(10))
             .tracking(1.2)
             .foregroundStyle(Theme.muted)
             .frame(maxWidth: .infinity, alignment: .leading)

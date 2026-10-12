@@ -29,7 +29,7 @@ struct TeleportView: View {
                 if close == nil {
                     HStack {
                         Text("TELEPORT")
-                            .font(Theme.label(11, .medium))
+                            .font(Theme.caps(11))
                             .tracking(1.3)
                             .foregroundStyle(Theme.muted)
                         Spacer()
@@ -189,7 +189,7 @@ struct TeleportView: View {
     private var sayIt: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("OR SAY IT")
-                .font(Theme.label(10, .medium))
+                .font(Theme.caps(10))
                 .tracking(1.2)
                 .foregroundStyle(Theme.muted)
             HStack(spacing: 10) {
@@ -229,7 +229,7 @@ struct TeleportView: View {
     private var ideas: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("IDEAS")
-                .font(Theme.label(10, .medium))
+                .font(Theme.caps(10))
                 .tracking(1.2)
                 .foregroundStyle(Theme.muted)
             LazyVStack(spacing: 10) {

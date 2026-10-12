@@ -28,7 +28,7 @@ struct MacListen: View {
                         Image(systemName: mixer.outsideSymbol)
                         Text(mixer.outsideLabel)
                     }
-                    .font(Theme.label(11, .medium))
+                    .font(Theme.caps(11))
                     .tracking(1.3)
                     .foregroundStyle(Theme.muted)
                     .contentShape(Rectangle())

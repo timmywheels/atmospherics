@@ -136,7 +136,6 @@ struct NowPlayingView: View {
                         .shadow(color: mixer.isImagining ? Color.oklch(0.8, 0.13, 70).opacity(0.6) : .clear, radius: 3)
                         .animation(.smooth, value: mixer.isImagining)
                         Text("ATMOSPHERICS")
-                            .font(Theme.brand(11))
                     }
                     .padding(.vertical, 6)
                     .contentShape(Rectangle())
@@ -157,7 +156,7 @@ struct NowPlayingView: View {
                 .accessibilityLabel("Outside. \(mixer.outsideLabel)")
                 .accessibilityHint("Plays the weather outside your window")
             }
-            .font(Theme.label(11, .medium))
+            .font(Theme.caps(11))
             .tracking(1.3)
             .foregroundStyle(Theme.muted)
 

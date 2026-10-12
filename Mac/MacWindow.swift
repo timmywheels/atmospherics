@@ -76,7 +76,7 @@ private struct TabBar: View {
             ForEach(MacNavigation.Tab.allCases) { tab in
                 Button { selection = tab } label: {
                     Text(tab.rawValue.uppercased())
-                        .font(Theme.label(11, .medium))
+                        .font(Theme.caps(11))
                         .tracking(1.3)
                         .foregroundStyle(selection == tab ? Theme.text : hovered == tab ? Theme.secondary : Theme.muted)
                         .padding(.vertical, 8)

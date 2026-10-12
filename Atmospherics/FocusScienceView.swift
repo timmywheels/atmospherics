@@ -67,7 +67,7 @@ struct FocusScienceView: View {
                 ForEach(findings, id: \.title) { finding in
                     VStack(alignment: .leading, spacing: 10) {
                         Text(finding.evidence.rawValue.uppercased())
-                            .font(Theme.label(10, .medium))
+                            .font(Theme.caps(10))
                             .tracking(1.2)
                             .foregroundStyle(Theme.muted)
                         Text(finding.title).font(Theme.body(20))
