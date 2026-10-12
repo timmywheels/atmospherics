@@ -148,34 +148,57 @@ enum WeatherMix {
 }
 
 /// One-shot approximate location, plus a reverse-geocoded place name.
+/// The permission status comes from the delegate, so the main thread never waits on the
+/// location service, and a request gives up after 15 seconds rather than hanging
+/// (but never while the person is still deciding on the permission prompt).
 @MainActor
 final class LocationProvider: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     private var continuation: CheckedContinuation<CLLocation, Error>?
+    private var status: CLAuthorizationStatus?   // nil until the delegate first reports it
+    private var deadline = 0                     // bumped to cancel a pending time limit
 
     override init() {
         super.init()
-        manager.delegate = self
+        manager.delegate = self   // iOS reports the current status right after this
         manager.desiredAccuracy = kCLLocationAccuracyReduced
     }
 
-    var isDenied: Bool {
-        let status = manager.authorizationStatus
-        return status == .denied || status == .restricted
-    }
+    var isDenied: Bool { status == .denied || status == .restricted }
 
     func current() async throws -> (CLLocationCoordinate2D, String) {
         let location: CLLocation = try await withCheckedThrowingContinuation { continuation in
             self.continuation = continuation
-            switch manager.authorizationStatus {
-            case .notDetermined: manager.requestWhenInUseAuthorization()
-            case .denied, .restricted: finish(.failure(CLError(.denied)))
-            default: manager.requestLocation()
-            }
+            // Without a status yet, wait for the delegate's first report (but not forever).
+            if let status { proceed(status) } else { giveUp(after: 15) }
         }
         let placemark = try? await CLGeocoder().reverseGeocodeLocation(location).first
         let name = placemark?.locality ?? placemark?.administrativeArea ?? "Here"
         return (location.coordinate, name)
+    }
+
+    private func proceed(_ status: CLAuthorizationStatus) {
+        switch status {
+        case .notDetermined:
+            deadline += 1   // no time limit while the person decides
+            manager.requestWhenInUseAuthorization()
+        case .denied, .restricted:
+            finish(.failure(CLError(.denied)))
+        default:
+            manager.requestLocation()
+            giveUp(after: 15)
+        }
+    }
+
+    /// Fails the request if the location service hasn't answered in time.
+    private func giveUp(after seconds: Double) {
+        deadline += 1
+        let this = deadline
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard let self, self.deadline == this else { return }
+            self.finish(.failure(CLError(.locationUnknown)))
+        }
     }
 
     private func finish(_ result: Result<CLLocation, Error>) {
@@ -184,13 +207,10 @@ final class LocationProvider: NSObject, CLLocationManagerDelegate {
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
         Task { @MainActor in
-            guard continuation != nil else { return }
-            switch manager.authorizationStatus {
-            case .authorizedWhenInUse, .authorizedAlways: manager.requestLocation()
-            case .denied, .restricted: finish(.failure(CLError(.denied)))
-            default: break
-            }
+            self.status = status
+            if self.continuation != nil { self.proceed(status) }
         }
     }
 

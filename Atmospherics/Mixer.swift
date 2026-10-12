@@ -637,6 +637,10 @@ final class Mixer {
         lastWeatherFetch = Date()
         if home == nil { weatherState = .loading }
 
+        // Places first: they don't depend on where you are.
+        let places = allPlaces
+        async let placeWeather = try? weatherService.conditions(for: places)
+
         do {
             let (coordinate, place) = try await location.current()
             homeCoordinate = coordinate
@@ -647,8 +651,7 @@ final class Mixer {
             weatherState = location.isDenied ? .locationOff : .failed
         }
 
-        let places = allPlaces
-        if let options = try? await weatherService.conditions(for: places) {
+        if let options = await placeWeather {
             livePlaceConditions = Dictionary(zip(places.map(\.name), options), uniquingKeysWith: { a, _ in a })
             chooseEscape()
             if upcoming == nil { refreshUpcoming() }

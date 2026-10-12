@@ -174,11 +174,21 @@ enum Ecology {
         case .birds:
             let p = by(1, 0.55, 0.3, 0)
             if tropical { return p }
-            var s = month([1: 0.08, 2: 0.1, 3: 0.5, 4: 0.9, 5: 1, 6: 1, 7: 0.7, 8: 0.5, 9: 0.35, 10: 0.2, 11: 0.12, 12: 0.08])
+            var s = month([1: 0.03, 2: 0.05, 3: 0.4, 4: 0.9, 5: 1, 6: 1, 7: 0.7, 8: 0.45, 9: 0.25, 10: 0.08, 11: 0.04, 12: 0.03])
             // Where winters are mild, plenty of birds stay and sing year-round.
-            if [.subtropical, .mediterranean, .arid].contains(climate) { s = max(s, 0.45) }
+            if [.subtropical, .mediterranean, .arid].contains(climate) { s = max(s, 0.3) }
             let darkWinter = climate == .subpolar && (m <= 2 || m >= 11)
             return darkWinter ? 0 : p * s
+        // The cold months' birds: a few chickadees and jays, busiest late morning.
+        case .winterBirds:
+            guard !tropical else { return 0 }
+            return by(0.8, 1, 0.4, 0) * month([9: 0.3, 10: 0.8, 11: 1, 12: 1, 1: 1, 2: 1, 3: 0.6])
+        case .gulls:
+            return by(0.8, 1, 0.6, 0.05)
+        // Geese pass over now and then in migration season: a few minutes, twice an hour.
+        case .geese:
+            guard [12, 13, 41, 42].contains(t.minute) else { return 0 }
+            return by(1, 0.7, 1, 0.1) * month([3: 0.8, 4: 0.5, 9: 0.3, 10: 1, 11: 0.8])
         case .jungleBirds:
             return by(1, 0.7, 0.5, 0)
         case .parrots:
@@ -204,6 +214,9 @@ enum Ecology {
             let mild = ramp(temp, 6, 13)
             if tropical { return p * mild * wet }
             return p * mild * month([3: 0.4, 4: 1, 5: 1, 6: 0.8, 7: 0.6, 8: 0.4, 9: 0.15])
+        // Spring peepers: the first sound of spring nights, from about 5°C.
+        case .peepers:
+            return by(0.2, 0.05, 0.9, 1) * ramp(temp, 4, 10) * month([3: 0.6, 4: 1, 5: 0.9, 6: 0.4])
         case .treeFrogs:
             let p = by(0.25, 0.05, 0.7, 1)
             let warm = ramp(temp, 16, 22)
@@ -293,6 +306,16 @@ enum Ecology {
         // Night animals call less in rain.
         case .owls, .wolves, .loons:
             return heavy ? 0.3 : c.isRaining ? 0.6 : 1
+        // Winter birds don't mind the cold, but shelter from rain.
+        case .winterBirds:
+            return heavy ? 0 : c.isRaining ? 0.3 : c.isFog ? 0.6 : 1
+        case .gulls:
+            return heavy ? 0.4 : c.isRaining ? 0.7 : 1
+        // Geese keep flying in weather, and honk more in fog.
+        case .geese:
+            return heavy ? 0.3 : c.isRaining ? 0.7 : 1
+        case .peepers:
+            return freezing ? 0 : c.isRaining ? 1.3 : 1
         // Frogs love rain; cold silences them.
         case .frogs, .treeFrogs:
             if freezing { return 0 }
@@ -353,9 +376,17 @@ enum Soundscape {
 
         // The place itself, in season and at this hour.
         let cast = place?.signature ?? []
+        let seasonal = (place?.climate ?? Climate.of(latitude: c.latitude)).hasSeasons
+        func level(_ kind: SoundKind, _ base: Double) -> Double {
+            base * 1.5 * Ecology.activity(of: kind, at: place, in: c, now: now) * Ecology.weatherFactor(for: kind, in: c)
+        }
         for (kind, base) in cast {
-            add(kind, base * 1.5 * Ecology.activity(of: kind, at: place, in: c, now: now)
-                * Ecology.weatherFactor(for: kind, in: c))
+            add(kind, level(kind, base))
+            // Where there are seasons, a place's birds include the few that stay for winter.
+            if kind == .birds && seasonal { add(.winterBirds, level(.winterBirds, base)) }
+        }
+        if c.isFog && cast.contains(where: { $0.0 == .ocean || $0.0 == .gulls }) {
+            add(.foghorn, 0.4)
         }
 
         // Rain lands on what's there: a wet street in a city, a tin roof in a tropical town.

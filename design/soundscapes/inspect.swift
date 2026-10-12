@@ -36,12 +36,14 @@ struct Inspect {
             // label, month, hour, temp °C, weather code, precip mm
             ("Jan night snow", 1, 2, -6, 73, 0),
             ("Apr dawn", 4, 6, 8, 1, 0),
+            ("Apr night", 4, 22, 9, 0, 0),
             ("Jul afternoon", 7, 15, 30, 1, 0),
             ("Jul night", 7, 23, 21, 0, 0),
             ("Aug night rain", 8, 23, 20, 61, 0.4),
             ("Oct morning", 10, 9, 11, 3, 0),
             ("Oct mild night", 10, 23, 16, 0, 0),
             ("Oct cold night", 10, 23, 7, 0, 0),
+            ("Oct fog dawn", 10, 7, 12, 45, 0),
         ]
         for name in names {
             guard let p = Place.all.first(where: { $0.name == name }) else { continue }

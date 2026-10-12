@@ -70,8 +70,12 @@ final class PlaceSearch: NSObject, MKLocalSearchCompleterDelegate {
         if tropical {
             cast += [(.jungleBirds, 0.25), (.crickets, 0.25), (.treeFrogs, 0.2)]
         } else {
-            cast += [(.birds, urban ? 0.12 : 0.2), (.crickets, urban ? 0.1 : 0.2)]
+            cast += [(.birds, urban ? 0.12 : 0.2), (.crickets, urban ? 0.1 : 0.2), (.geese, urban ? 0.06 : 0.12)]
+            if b > 0 { cast.append((.gulls, 0.12)) }
             if !urban { cast += [(.owls, 0.15), (.frogs, l > 0 ? 0.2 : 0.1)] }
+            // Spring peepers: eastern North America's wet woods and towns.
+            let easternNorthAmerica = (25...55).contains(c.latitude) && (-100 ... -55).contains(c.longitude)
+            if easternNorthAmerica && !urban { cast.append((.peepers, l > 0 ? 0.25 : 0.15)) }
         }
         return cast
     }

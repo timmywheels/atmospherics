@@ -43,3 +43,8 @@ Freesound files were taken from their public HQ previews (about 128 kbps MP3).
 | frogs | https://freesound.org/s/135561/ | felix.blume | CC0 | 2 s (55 s loop) |
 | lightRain | https://freesound.org/s/572267/ | TRP | CC0 | 5 s (85 s loop) |
 | heavyRain | https://freesound.org/s/717843/ | TRP | CC0 | 10 s (100 s loop) |
+| winterBirds | https://freesound.org/s/454024/ | kyles | CC0 | 15 s (100 s loop) |
+| gulls | https://freesound.org/s/208074/ | Further_Roman | CC0 | 10 s (100 s loop) |
+| foghorn | https://freesound.org/s/140898/ | exuberate | CC0 | 4 s (86 s loop, exactly four blasts) |
+| peepers | https://freesound.org/s/423812/ | kvgarlic | CC0 | 10 s (110 s loop) |
+| geese | https://freesound.org/s/842773/ | onionaire | CC0 | 2 s (92 s loop, one flyover) |
