@@ -53,7 +53,13 @@ final class Mixer {
     enum WeatherState { case loading, ready, locationOff, failed }
     private(set) var weatherState: WeatherState = .loading
     private(set) var home: Conditions?
-    private(set) var escape: (place: Escape, conditions: Conditions)?
+    private(set) var escape: (place: Place, conditions: Conditions)?
+    /// Live conditions at every place, keyed by name, for the globe and list.
+    private(set) var placeConditions: [String: Conditions] = [:]
+    /// A place the user chose. When nil, Escape picks the place least like home.
+    private(set) var pinnedPlace: Place?
+    /// Bumps on every random jump, so views can animate and play a haptic.
+    private(set) var shuffleCount = 0
     /// Whether each mode's field is following the weather, or the user has taken over.
     private(set) var following: [Mode: Bool]
 
@@ -87,6 +93,7 @@ final class Mixer {
             .escape: defaults.object(forKey: "following.escape") as? Bool ?? true,
         ]
         if let raw = defaults.string(forKey: "mode"), let saved = Mode(rawValue: raw) { mode = saved }
+        pinnedPlace = defaults.string(forKey: "pinnedPlace").flatMap(Place.named)
         apply()
         setUpSystemAudio()
     }
@@ -170,8 +177,15 @@ final class Mixer {
                 return WeatherSummary(place: "", temp: "", line: "Finding somewhere else…", head: "Escaping outside")
             }
             let c = escape.conditions
-            let line = following[.escape] == true ? Self.escapeLine(c) : "Tap Escape outside to follow \(escape.place.name)"
-            return WeatherSummary(place: escape.place.name, temp: c.temperature, line: line,
+            let line: String
+            if following[.escape] != true {
+                line = "Tap Escape outside to follow \(escape.place.name)"
+            } else if pinnedPlace != nil {
+                line = "\(c.mixName) in \(escape.place.name) right now"
+            } else {
+                line = Self.escapeLine(c)
+            }
+            return WeatherSummary(place: escape.place.title, temp: c.temperature, line: line,
                                   head: "Escaping to \(escape.place.name)")
         }
     }
@@ -301,12 +315,56 @@ final class Mixer {
             weatherState = location.isDenied ? .locationOff : .failed
         }
 
-        if let options = try? await weatherService.escapes() {
-            let i = WeatherMix.bestEscape(from: home, options: options)
-            escape = (Escape.all[i], options[i])
+        if let options = try? await weatherService.places() {
+            placeConditions = Dictionary(uniqueKeysWithValues: zip(Place.all.map(\.name), options))
+            chooseEscape()
         }
 
         applyWeather(to: .match, animated: true)
+        applyWeather(to: .escape, animated: true)
+    }
+
+    /// Uses the pinned place if there is one, otherwise the place least like home.
+    private func chooseEscape() {
+        if let pinned = pinnedPlace, let c = placeConditions[pinned.name] {
+            escape = (pinned, c)
+            return
+        }
+        let options = Place.all.compactMap { p in placeConditions[p.name].map { (p, $0) } }
+        guard !options.isEmpty else { return }
+        let i = WeatherMix.bestEscape(from: home, options: options.map(\.1))
+        escape = options[i]
+    }
+
+    /// Goes to a place: pins it, switches to Escape, and glides the field to its sound.
+    func select(_ place: Place) {
+        pinnedPlace = place
+        defaults.set(place.name, forKey: "pinnedPlace")
+        chooseEscape()
+        if mode != .escape {
+            transition?.cancel()
+            mode = .escape
+            defaults.set(Mode.escape.rawValue, forKey: "mode")
+        }
+        setFollowing(true, for: .escape)
+        applyWeather(to: .escape, animated: true)
+        updateNowPlaying()
+        if !isPlaying { play() }
+    }
+
+    /// Jumps to a random place other than the current one.
+    func shuffle() {
+        let others = Place.all.filter { $0 != escape?.place && placeConditions[$0.name] != nil }
+        guard let place = others.randomElement() ?? Place.all.randomElement() else { return }
+        shuffleCount += 1
+        select(place)
+    }
+
+    /// Lets Escape pick automatically again (the place least like home).
+    func unpinPlace() {
+        pinnedPlace = nil
+        defaults.removeObject(forKey: "pinnedPlace")
+        chooseEscape()
         applyWeather(to: .escape, animated: true)
     }
 
@@ -321,8 +379,8 @@ final class Mixer {
             name = home.mixName
         case .escape:
             guard let escape else { return }
-            target = WeatherMix.orbs(for: escape.conditions, escape: escape.place)
-            name = escape.place.name
+            target = WeatherMix.orbs(for: escape.conditions, place: escape.place)
+            name = escape.place.title
         }
         setTitle(name, for: mode)
         let orbs = Preset.layout(target)

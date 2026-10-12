@@ -43,24 +43,6 @@ struct Conditions: Equatable {
     }
 }
 
-/// A place to escape to, with the sounds that make it that place.
-/// Fire only joins in when it's actually cold there.
-struct Escape {
-    let name: String
-    let latitude: Double
-    let longitude: Double
-    let signature: [(SoundKind, Double)]
-
-    static let all: [Escape] = [
-        Escape(name: "Lanzarote", latitude: 28.96, longitude: -13.55, signature: [(.ocean, 0.6)]),
-        Escape(name: "Lofoten", latitude: 68.23, longitude: 14.56, signature: [(.ocean, 0.5), (.fire, 0.45)]),
-        Escape(name: "Kyoto", latitude: 35.01, longitude: 135.77, signature: [(.green, 0.4), (.birds, 0.25)]),
-        Escape(name: "Big Sur", latitude: 36.27, longitude: -121.81, signature: [(.ocean, 0.65), (.birds, 0.15)]),
-        Escape(name: "Manaus", latitude: -3.12, longitude: -60.02, signature: [(.green, 0.45), (.birds, 0.4)]),
-        Escape(name: "the Highlands", latitude: 57.12, longitude: -4.71, signature: [(.fire, 0.5)]),
-    ]
-}
-
 enum WeatherError: LocalizedError {
     case badResponse
     var errorDescription: String? { "The weather service didn't answer." }
@@ -80,10 +62,10 @@ struct WeatherService {
         return result
     }
 
-    /// Conditions at every escape, in `Escape.all` order, from one request.
-    func escapes() async throws -> [Conditions] {
-        var all = try await openMeteo(Escape.all.map { ($0.latitude, $0.longitude) })
-        for i in all.indices { all[i].place = Escape.all[i].name }
+    /// Conditions at every place, in `Place.all` order, from one request.
+    func places() async throws -> [Conditions] {
+        var all = try await openMeteo(Place.all.map { ($0.latitude, $0.longitude) })
+        for i in all.indices { all[i].place = Place.all[i].name }
         return all
     }
 
@@ -126,7 +108,7 @@ struct WeatherService {
 
 /// Turns conditions into a field of sounds.
 enum WeatherMix {
-    static func orbs(for c: Conditions, escape: Escape? = nil) -> [(SoundKind, Double)] {
+    static func orbs(for c: Conditions, place: Place? = nil) -> [(SoundKind, Double)] {
         var mix: [(SoundKind, Double)] = []
 
         // A noise bed: deeper when pressure is low or it's night, brighter in fog.
@@ -160,7 +142,7 @@ enum WeatherMix {
         if c.isDay && !c.isRaining && c.temperatureC >= 25 {
             mix.append((.cicadas, 0.25))
         }
-        for (kind, level) in escape?.signature ?? [] {
+        for (kind, level) in place?.signature ?? [] {
             if kind == .fire && c.temperatureC >= 12 { continue }
             if let i = mix.firstIndex(where: { $0.0 == kind }) {
                 mix[i].1 = max(mix[i].1, level)
@@ -171,7 +153,7 @@ enum WeatherMix {
         return mix
     }
 
-    /// The escape whose weather is most unlike home's.
+    /// The place whose weather is most unlike home's.
     static func bestEscape(from home: Conditions?, options: [Conditions]) -> Int {
         guard let home else { return 0 }
         func distance(_ c: Conditions) -> Double {

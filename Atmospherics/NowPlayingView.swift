@@ -4,13 +4,28 @@ import SwiftUI
 struct NowPlayingView: View {
     @Environment(Mixer.self) private var mixer
     @State private var showLibrary = false
+    @State private var showGlobe = false
+    @State private var swipe: CGFloat = 0
+    @State private var pastThreshold = false
+    @AppStorage("hasSwiped") private var hasSwiped = false
+
+    private let swipeThreshold: CGFloat = 70
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("ATMOSPHERICS")
                 Spacer()
-                Text("\(mixer.weather.place) \(mixer.weather.temp)")
+                Button { showGlobe = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "globe")
+                        Text("\(mixer.weather.place) \(mixer.weather.temp)")
+                    }
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("World. \(mixer.weather.place)")
             }
             .font(Theme.mono(11, .medium))
             .tracking(1.3)
@@ -19,6 +34,19 @@ struct NowPlayingView: View {
             Halo(orbs: mixer.byVolume)
                 .frame(height: 380)
                 .padding(.top, 20)
+                .offset(x: swipe)
+                .opacity(1 - Double(min(abs(swipe), 160) / 320))
+                .contentShape(Rectangle())
+                .gesture(travelSwipe)
+                .overlay(alignment: .bottom) {
+                    if !hasSwiped {
+                        Text("← swipe to travel →")
+                            .font(Theme.mono(10))
+                            .foregroundStyle(Theme.mono.opacity(0.7))
+                            .transition(.opacity)
+                    }
+                }
+                .accessibilityAction(named: "Travel somewhere random") { mixer.shuffle() }
 
             Button { showLibrary = true } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -87,6 +115,39 @@ struct NowPlayingView: View {
         .sheet(isPresented: $showLibrary) {
             LibraryView()
         }
+        .fullScreenCover(isPresented: $showGlobe) {
+            GlobeView()
+        }
+        // A soft tick when the swipe is far enough to count, a firmer one when it lands.
+        .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.6), trigger: pastThreshold) { _, now in now }
+        .sensoryFeedback(.impact(weight: .medium), trigger: mixer.shuffleCount)
+    }
+
+    /// Swipe the halo sideways to jump to a random place.
+    private var travelSwipe: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { g in
+                guard abs(g.translation.width) > abs(g.translation.height) else { return }
+                swipe = g.translation.width * 0.6
+                pastThreshold = abs(g.translation.width) > swipeThreshold
+            }
+            .onEnded { g in
+                let travel = abs(g.translation.width) > swipeThreshold && abs(g.translation.width) > abs(g.translation.height)
+                if travel {
+                    // Slide out the way it was swiped, change place, slide back in from the other side.
+                    let direction: CGFloat = g.translation.width > 0 ? 1 : -1
+                    withAnimation(.easeIn(duration: 0.18)) { swipe = direction * 220 }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                        mixer.shuffle()
+                        swipe = -direction * 220
+                        withAnimation(.spring(duration: 0.5, bounce: 0.2)) { swipe = 0 }
+                        withAnimation { hasSwiped = true }
+                    }
+                } else {
+                    withAnimation(.spring(duration: 0.4, bounce: 0.3)) { swipe = 0 }
+                }
+                pastThreshold = false
+            }
     }
 }
 
