@@ -51,10 +51,12 @@ struct MacListen: View {
 
             HStack(spacing: 14) {
                 LayerStrip(orbs: mixer.byVolume)
+                ResetTuning()
                 TimerMenu()
                 MacPlayButton()
             }
             .padding(.top, 14)
+            .animation(.smooth, value: mixer.currentPlaceIsTweaked)
         }
         .padding(.horizontal, 28)
         .padding(.bottom, 22)

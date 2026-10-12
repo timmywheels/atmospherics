@@ -8,6 +8,7 @@ import SwiftUI
 struct MixerView: View {
     @Environment(Mixer.self) private var mixer
     @State private var saving = false
+    @State private var resetting = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,7 +35,7 @@ struct MixerView: View {
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if mixer.currentPlaceIsTweaked {
-                    Button { withAnimation(.smooth) { mixer.resetCurrentPlace() } } label: {
+                    Button { resetting = true } label: {
                         Text("Reset").font(Theme.label(12, .medium))
                     }
                     .accessibilityLabel("Reset \(mixer.currentPlaceName) to default")
@@ -47,6 +48,7 @@ struct MixerView: View {
         }
         .toolbarBackground(.hidden, for: .navigationBar)
         .saveMixPrompt(isPresented: $saving)
+        .confirmReset(isPresented: $resetting)
     }
 }
 #endif

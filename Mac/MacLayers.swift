@@ -11,7 +11,7 @@ struct MacLayers: View {
             HStack(spacing: 18) {
                 Spacer()
                 if mixer.currentPlaceIsTweaked {
-                    Button { withAnimation(.smooth) { mixer.resetCurrentPlace() } } label: { Text("Reset") }
+                    Button { navigation.resetting = true } label: { Text("Reset") }
                         .help("Put \(mixer.currentPlaceName) back to how it sounds by default")
                 }
                 Button { navigation.saving = true } label: { Text("Save") }

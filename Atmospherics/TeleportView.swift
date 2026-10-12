@@ -13,11 +13,15 @@ struct TeleportView: View {
     @State private var words = ""
     @State private var notUnderstood = false
     @State private var goes = 0
+    /// Open with the keyboard up, ready to say where to go.
+    private let typing: Bool
+    @FocusState private var saying: Bool
 
     private enum Slot { case setting, sky, time }
 
-    init(start: Atmosphere? = nil, close: (() -> Void)? = nil) {
+    init(start: Atmosphere? = nil, typing: Bool = false, close: (() -> Void)? = nil) {
         self.close = close
+        self.typing = typing
         _draft = State(initialValue: start ?? Atmosphere.curated[0])
     }
 
@@ -55,12 +59,16 @@ struct TeleportView: View {
                     .padding(.top, 14)
                     .animation(.smooth, value: preview.line)
 
+                // Or in your own words, right under the sentence (and above the keyboard).
+                sayIt
+                    .padding(.top, 24)
+
                 choices
                     .padding(.top, 22)
 
                 HStack(spacing: 10) {
                     Button { surprise() } label: {
-                        Label("Surprise me", systemImage: "dice")
+                        Label("Surprise me", systemImage: Atmosphere.surpriseSymbol)
                             .font(Theme.body(15, .medium))
                             .padding(.vertical, 12)
                             .padding(.horizontal, 18)
@@ -83,8 +91,6 @@ struct TeleportView: View {
                 }
                 .padding(.top, 24)
 
-                sayIt
-                    .padding(.top, 30)
 
                 ideas
                     .padding(.top, 34)
@@ -92,6 +98,12 @@ struct TeleportView: View {
             .padding(.horizontal, 24)
             .padding(.top, 24)
             .padding(.bottom, 40)
+        }
+        .task {
+            // Focus once the sheet has finished coming up; sooner, the keyboard doesn't show.
+            guard typing else { return }
+            try? await Task.sleep(for: .milliseconds(600))
+            saying = true
         }
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
@@ -196,6 +208,7 @@ struct TeleportView: View {
                 Image(systemName: "text.bubble").foregroundStyle(Theme.muted)
                 TextField("", text: $words, prompt: Text("a rainy night in the city").foregroundStyle(Theme.muted))
                     .textFieldStyle(.plain)
+                    .focused($saying)
                     .autocorrectionDisabled()
                     .submitLabel(.go)
                     .onSubmit { understand() }

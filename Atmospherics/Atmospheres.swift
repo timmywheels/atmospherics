@@ -494,6 +494,9 @@ struct Atmosphere: Hashable, Codable, Identifiable {
     ]
 
     /// Any setting, in weather that suits it, mostly on your clock.
+    /// The symbol for Surprise me, wherever it's offered.
+    static let surpriseSymbol = "shuffle"
+
     static func random() -> Atmosphere {
         let setting = Setting.allCases.randomElement()!
         let info = setting.info

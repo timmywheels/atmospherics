@@ -122,4 +122,6 @@ final class MacNavigation {
     var tab: Tab = .listen
     /// Set to ask the window for the save prompt (from the menu bar or the Playback menu).
     var saving = false
+    /// Set to ask the window to confirm a reset (from Layers or the Playback menu).
+    var resetting = false
 }
