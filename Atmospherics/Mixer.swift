@@ -575,7 +575,14 @@ final class Mixer {
     var currentCast: [SoundKind] {
         guard activePreset == nil else { return [] }
         let place = mode == .escape ? escape?.place : homePlace
-        return place?.signature.compactMap { $0.0.playable } ?? []
+        var seen = Set<SoundKind>()
+        return (place?.signature.compactMap { $0.0.playable } ?? []).filter { seen.insert($0).inserted }
+    }
+
+    /// Where those sounds are from, e.g. "Lisbon".
+    var currentCastPlace: String? {
+        guard activePreset == nil else { return nil }
+        return mode == .escape ? escape?.place.name : home?.place
     }
     var currentPlaceName: String { mode == .escape ? (escape?.place.name ?? "this place") : "home" }
 

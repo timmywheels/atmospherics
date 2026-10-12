@@ -28,8 +28,7 @@ struct MixerView: View {
                 .foregroundStyle(Theme.mono)
                 .padding(.bottom, 14)
 
-            SoundPills()
-                .padding(.bottom, 10)
+            SoundSections()
         }
         .foregroundStyle(Theme.text)
         .background { SceneWash(orbs: mixer.orbs) }
@@ -178,29 +177,52 @@ private struct OrbView: View {
     }
 }
 
-/// Every sound as a pill, lit while it's in the field: tap to add it or take it away.
-/// What's playing comes first, then this place's own sounds, then everything else.
-private struct SoundPills: View {
+/// Every sound as a pill, in sections: this place's own sounds first, then by kind, with noise
+/// last. Each section scrolls sideways; a pill is lit while its sound is playing, and tapping
+/// adds it or takes it away. Pills keep their places, so nothing jumps when you tap.
+private struct SoundSections: View {
     @Environment(Mixer.self) private var mixer
 
-    private var ordered: (kinds: [SoundKind], playing: Set<SoundKind>) {
-        let playing = mixer.byVolume.map(\.kind)
-        let rest = SoundKind.Category.allCases.flatMap { c in SoundKind.available.filter { $0.category == c } }
-        var seen = Set<SoundKind>()
-        return ((playing + mixer.currentCast + rest).filter { seen.insert($0).inserted }, Set(playing))
-    }
+    private static let order: [SoundKind.Category] = [.water, .nature, .night, .jungle, .city, .calm, .noise]
 
     var body: some View {
-        let (kinds, playing) = ordered
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                ForEach(kinds) { kind in
-                    pill(kind, on: playing.contains(kind))
+        let playing = Set(mixer.orbs.map(\.kind))
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                if let place = mixer.currentCastPlace, !mixer.currentCast.isEmpty {
+                    section(place, kinds: mixer.currentCast, playing: playing)
+                }
+                ForEach(Self.order, id: \.self) { category in
+                    section(category.rawValue, kinds: SoundKind.available.filter { $0.category == category }, playing: playing)
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
         }
         .scrollIndicators(.hidden)
+        .frame(height: 252)
+        // Fade at the top and bottom edges, so it reads as a list that keeps going.
+        .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.06),
+                                     .init(color: .black, location: 0.88), .init(color: .clear, location: 1)],
+                             startPoint: .top, endPoint: .bottom))
+    }
+
+    private func section(_ title: String, kinds: [SoundKind], playing: Set<SoundKind>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased())
+                .font(Theme.mono(10, .medium))
+                .tracking(1.2)
+                .foregroundStyle(Theme.mono)
+                .padding(.horizontal, 24)
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(kinds) { kind in
+                        pill(kind, on: playing.contains(kind))
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+            .scrollIndicators(.hidden)
+        }
     }
 
     private func pill(_ kind: SoundKind, on: Bool) -> some View {
