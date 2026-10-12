@@ -146,22 +146,24 @@ struct NowPlayingView: View {
                 .frame(height: 40)
                 .padding(.top, 6)
 
-            Spacer().frame(height: 18)
-
-            VStack(spacing: 14) {
+            // What's playing, and the control for it, side by side along the bottom.
+            HStack(spacing: 14) {
+                LayerStrip(orbs: mixer.byVolume)
+                if mixer.timer != .off {
+                    Text(mixer.timer.label)
+                        .font(Theme.mono(11))
+                        .foregroundStyle(Theme.mono)
+                        .transition(.opacity)
+                }
                 PlayButton()
-                Text(mixer.timer == .off ? " " : mixer.timer.label)
-                    .font(Theme.mono(10))
-                    .foregroundStyle(Theme.mono.opacity(0.7))
-                    .frame(height: 14)
-                    .contentTransition(.opacity)
-                    .animation(.smooth, value: mixer.timer)
             }
-            .frame(maxWidth: .infinity)
+            .padding(.top, 14)
+            .animation(.smooth, value: mixer.timer)
         }
         .padding(.horizontal, 28)
         .padding(.top, 18)
-        .padding(.bottom, 12)
+        .padding(.bottom, 16)
+        .background { SceneWash(orbs: mixer.byVolume) }
         .contentShape(Rectangle())
         .simultaneousGesture(
             DragGesture(minimumDistance: 30).onEnded { g in
@@ -277,7 +279,7 @@ private struct Carousel: View {
                 Button("Library", systemImage: "books.vertical") { showLibrary = true }
             }
             .saveMixPrompt(isPresented: $saving)
-            PageLines(line: mixer.weather.line, orbs: mixer.byVolume)
+            PageLines(line: mixer.weather.line)
         }
     }
 
@@ -343,7 +345,7 @@ private struct PageView: View {
                     .foregroundStyle(Theme.mono)
                     .hidden()
             }
-            PageLines(line: page.line, orbs: page.orbs)
+            PageLines(line: page.line)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
@@ -363,23 +365,18 @@ private struct PageTitle: View {
 
 private struct PageLines: View {
     let line: String
-    let orbs: [Orb]
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(line)
-                .font(Theme.body(15))
-                .foregroundStyle(Theme.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .padding(.top, 10)
-            LayerStrip(orbs: orbs)
-                .padding(.top, 14)
-        }
+        Text(line)
+            .font(Theme.body(15))
+            .foregroundStyle(Theme.secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .padding(.top, 10)
     }
 }
 
 /// The sounds playing, loudest first, each with a dot in its light's color. Always one line:
-/// as many as fit, then "+2" for the rest, so it never wraps and pages line up.
+/// as many as fit, then "+2" for the rest, so it never wraps.
 private struct LayerStrip: View {
     let orbs: [Orb]
 
@@ -506,21 +503,22 @@ private struct PlayButton: View {
     @State private var held = 0
 
     var body: some View {
+        // A quiet ring rather than a big disc, so the scene stays the focus.
         ZStack {
-            Circle().fill(Theme.text)
+            Circle().strokeBorder(Theme.text.opacity(0.8), lineWidth: 1.5)
             if mixer.isPlaying {
-                HStack(spacing: 6) {
-                    RoundedRectangle(cornerRadius: 2).frame(width: 5, height: 20)
-                    RoundedRectangle(cornerRadius: 2).frame(width: 5, height: 20)
+                HStack(spacing: 5) {
+                    RoundedRectangle(cornerRadius: 1.5).frame(width: 4, height: 17)
+                    RoundedRectangle(cornerRadius: 1.5).frame(width: 4, height: 17)
                 }
             } else {
                 Image(systemName: "play.fill")
-                    .font(.system(size: 22))
-                    .offset(x: 2)
+                    .font(.system(size: 18))
+                    .offset(x: 1.5)
             }
         }
-        .foregroundStyle(Theme.background)
-        .frame(width: 68, height: 68)
+        .foregroundStyle(Theme.text)
+        .frame(width: 56, height: 56)
         .contentShape(Circle())
         // Tap to play or pause; hold for a sleep timer.
         .onTapGesture { mixer.togglePlayback() }

@@ -92,7 +92,7 @@ struct LibraryView: View {
             row(preset)
         }
         .buttonStyle(.plain)
-        .listRowInsets(EdgeInsets())
+        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
         .id(preset.id)
@@ -118,59 +118,55 @@ struct LibraryView: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
+    /// A card in the colors of its mix: what it's for and how long at the top, its name at the bottom.
     private func row(_ preset: Preset) -> some View {
-        HStack(spacing: 16) {
-            MiniField(preset: preset)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(preset.name).font(Theme.body(17))
-                Text(preset.description)
-                    .font(Theme.mono(11))
-                    .foregroundStyle(Theme.mono)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            if preset.id == mixer.activePreset?.id {
-                Text(mixer.isPlaying ? "Playing" : "Current")
+        let hues = preset.mix.prefix(3).map(\.0.hue)
+        let first = hues.first ?? 250
+        let second = hues.count > 1 ? hues[1] : first
+        let third = hues.count > 2 ? hues[2] : second
+        let current = preset.id == mixer.activePreset?.id
+        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(preset.tag.map { "\($0.rawValue) · \(preset.length)" } ?? "Yours")
                     .font(Theme.mono(11, .medium))
-                    .foregroundStyle(Theme.text)
-            } else {
-                Text(preset.length)
-                    .font(Theme.mono(11))
-                    .foregroundStyle(Theme.mono)
+                    .foregroundStyle(.white.opacity(0.75))
+                Spacer()
+                if current {
+                    Text(mixer.isPlaying ? "Playing" : "Current")
+                        .font(Theme.mono(10, .medium))
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 9)
+                        .background(Capsule().fill(.black.opacity(0.3)))
+                }
+            }
+            Spacer(minLength: 22)
+            Text(preset.name)
+                .font(Theme.body(21))
+                .lineLimit(1)
+            Text(preset.description)
+                .font(Theme.mono(10.5))
+                .foregroundStyle(.white.opacity(0.62))
+                .lineLimit(1)
+                .padding(.top, 4)
+        }
+        .foregroundStyle(.white)
+        .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 132, alignment: .leading)
+        .background {
+            ZStack {
+                LinearGradient(colors: [.oklch(0.4, 0.085, first), .oklch(0.27, 0.06, second)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                RadialGradient(colors: [.oklch(0.62, 0.12, first).opacity(0.55), .clear],
+                               center: UnitPoint(x: 0.8, y: 0.25), startRadius: 0, endRadius: 150)
+                RadialGradient(colors: [.oklch(0.55, 0.11, third).opacity(0.35), .clear],
+                               center: UnitPoint(x: 0.15, y: 1), startRadius: 0, endRadius: 130)
             }
         }
-        .padding(.vertical, 14)
-        .padding(.horizontal, 4)
-        .contentShape(Rectangle())
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(.white.opacity(0.07)).frame(height: 1)
-        }
+        .clipShape(shape)
+        .overlay { if current { shape.strokeBorder(.white.opacity(0.6), lineWidth: 1.2) } }
+        .contentShape(shape)
         .accessibilityElement(children: .combine)
-    }
-}
-
-/// A tiny preview of where a preset puts its sounds on the field.
-private struct MiniField: View {
-    let preset: Preset
-    private let size: CGFloat = 56
-
-    var body: some View {
-        ZStack {
-            Circle().fill(.white.opacity(0.04))
-            Circle().strokeBorder(.white.opacity(0.08), lineWidth: 1)
-            ForEach(Array(preset.mix.enumerated()), id: \.offset) { j, entry in
-                let (kind, v) = entry
-                let r = (1 - v) * 0.4
-                let angle = Double(j) * 2.4 + 0.6
-                let dot = 6 + v * 8
-                Circle()
-                    .fill(Color.oklch(0.78, 0.13, kind.hue))
-                    .frame(width: dot, height: dot)
-                    .shadow(color: .oklch(0.78, 0.13, kind.hue), radius: 4)
-                    .position(x: size * (0.5 + cos(angle) * r), y: size * (0.5 + sin(angle) * r))
-            }
-        }
-        .frame(width: size, height: size)
     }
 }
 
