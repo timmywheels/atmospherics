@@ -330,7 +330,7 @@ enum Ecology {
         case .planes, .geese, .bells, .foghorn, .thunder, .lightning, .whales:
             return 1
         case .ocean, .rain, .lightRain, .heavyRain, .tinRoof, .tentRain, .rainyStreet, .cityHum, .stream, .waterfall,
-             .lake, .wind, .highway, .cabin, .fan, .caveDrips, .drone, .brown, .pink, .white, .green, .grey, .blue, .violet:
+             .lake, .lapping, .rocks, .wind, .highway, .cabin, .fan, .caveDrips, .drone, .brown, .pink, .white, .green, .grey, .blue, .violet:
             (depth, rests) = (0.15, false)
         default:
             (depth, rests) = (0.5, true)
@@ -410,6 +410,17 @@ enum Ecology {
             return heavy ? 0.5 : snowCover ? 0.6 : 1
         case .whales:
             return heavy ? 0.6 : 1
+        // Calm water laps; wind turns it into surf. Swell pounds the rocks harder in wind.
+        case .lapping:
+            return c.windKMH < 20 ? 1 : c.windKMH < 35 ? 0.85 : 0.6
+        case .rocks:
+            return c.windKMH < 10 ? 0.85 : c.windKMH > 30 ? 1.25 : 1
+        // Palm fronds and a harbor's rigging only talk in a breeze.
+        case .palms, .halyards:
+            return c.windKMH < 8 ? 0.3 : c.windKMH < 18 ? 0.7 : c.windKMH > 30 ? 1.3 : 1
+        // A bell buoy rocks with the swell, and carries best in fog.
+        case .buoy:
+            return (c.windKMH < 10 ? 0.6 : c.windKMH > 25 ? 1.2 : 1) * (c.isFog ? 1.2 : 1)
         default:
             return 1
         }
@@ -460,7 +471,7 @@ enum Soundscape {
             // Where there are seasons, a place's birds include the few that stay for winter.
             if kind == .birds && seasonal { add(.winterBirds, level(.winterBirds, base)) }
         }
-        if c.isFog && cast.contains(where: { $0.0 == .ocean || $0.0 == .gulls }) {
+        if c.isFog && cast.contains(where: { [.ocean, .rocks, .gulls, .buoy].contains($0.0) }) {
             add(.foghorn, 0.4)
         }
 

@@ -47,9 +47,9 @@ extension SoundKind {
         // Weather and water: the air of a scene.
         case .heavyRain, .brown: 0
         case .rain, .thunder, .waterfall, .cabin, .fan, .pink, .green: -1
-        case .ocean, .rainyStreet, .cityHum, .grey: -2
+        case .ocean, .rocks, .rainyStreet, .cityHum, .grey: -2
         case .tentRain, .tinRoof, .wind, .stream: -3
-        case .cafe, .train, .fire, .white, .blue: -4
+        case .cafe, .train, .fire, .white, .blue, .lapping: -4
         case .violet, .traffic: -5
         case .highway: -6
         case .lightRain: -6
@@ -59,10 +59,11 @@ extension SoundKind {
         case .birds, .winterBirds: -3
         case .parrots, .frogs: -4
         case .crickets, .treeFrogs: -5
-        case .cicadas, .peepers, .howlers, .loons, .gulls, .geese, .whales, .bells, .drone, .lightning: -6
+        case .cicadas, .peepers, .howlers, .loons, .gulls, .geese, .whales, .bells, .drone, .lightning, .palms: -6
+        case .halyards: -7
         case .owls: -7
         case .wolves, .foghorn, .library, .planes: -8
-        case .leaves: -9
+        case .leaves, .buoy: -9
         case .typing, .chimes: -10
         case .clock: -12
         }

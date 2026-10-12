@@ -11,6 +11,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
     case cafe, library, cabin, bells, typing, clock, rainyStreet, lightRain, heavyRain
     case winterBirds, gulls, foghorn, peepers, geese
     case traffic, highway, planes
+    case lapping, palms, rocks, buoy, halyards
 
     /// Recorded sounds play from `Sounds/<rawValue>.m4a` instead of being synthesized.
     var isRecorded: Bool {
@@ -19,7 +20,8 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
              .waterfall, .caveDrips, .tentRain, .tinRoof, .whales, .lake,
              .cafe, .library, .cabin, .bells, .typing, .clock, .cityHum, .rainyStreet,
              .rain, .lightRain, .heavyRain, .thunder, .fire, .crickets, .ocean, .birds, .stream, .train, .wind, .cicadas, .frogs,
-             .winterBirds, .gulls, .foghorn, .peepers, .geese, .traffic, .highway, .planes: true
+             .winterBirds, .gulls, .foghorn, .peepers, .geese, .traffic, .highway, .planes,
+             .lapping, .palms, .rocks, .buoy, .halyards: true
         default: false
         }
     }
@@ -37,13 +39,14 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .canopy: return .cicadas
         case .tentRain, .tinRoof, .lightRain, .heavyRain: return .rain
         case .waterfall, .caveDrips: return .stream
-        case .lake, .whales: return .ocean
+        case .lake, .whales, .lapping, .rocks: return .ocean
         case .leaves: return .wind
+        case .palms: return .leaves
         case .cafe, .rainyStreet, .traffic, .highway: return .cityHum
         case .bells: return .chimes
         case .cabin: return .fan
         // Better silent than wrong: no stand-in for these (a spring chorus is no winter bird).
-        default: return nil   // howlers, owls, loons, wolves, library, typing, clock, winter birds, gulls, foghorn, geese, planes
+        default: return nil   // howlers, owls, loons, wolves, library, typing, clock, winter birds, gulls, foghorn, geese, planes, buoy, rigging
         }
     }
 
@@ -73,6 +76,8 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .winterBirds, .geese, .peepers: .nature
         case .gulls, .foghorn: .water
         case .traffic, .highway, .planes: .city
+        case .lapping, .rocks, .buoy, .halyards: .water
+        case .palms: .nature
         }
     }
 
@@ -92,6 +97,11 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .heavyRain: "Downpour"
         case .winterBirds: "Winter birds"
         case .peepers: "Spring peepers"
+        case .lapping: "Lapping water"
+        case .palms: "Palm fronds"
+        case .rocks: "Surf on rocks"
+        case .buoy: "Bell buoy"
+        case .halyards: "Sailboat rigging"
         default: short
         }
     }
@@ -110,6 +120,8 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .lightRain: "Drizzle"
         case .heavyRain: "Downpour"
         case .winterBirds: "Winter birds"
+        case .lapping: "Lapping"
+        case .halyards: "Rigging"
         default: rawValue.capitalized
         }
     }
@@ -160,6 +172,11 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .traffic: 20
         case .highway: 335
         case .planes: 185
+        case .lapping: 182
+        case .palms: 122
+        case .rocks: 212
+        case .buoy: 28
+        case .halyards: 268
         case .tinRoof: 240
         case .whales: 250
         case .lake: 210

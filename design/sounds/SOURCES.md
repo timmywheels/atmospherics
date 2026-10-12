@@ -51,3 +51,8 @@ Freesound files were taken from their public HQ previews (about 128 kbps MP3).
 | traffic | https://freesound.org/s/110310/ | nickpursehouse | CC0 | 60 s (120 s loop) |
 | highway | https://freesound.org/s/448092/ | courter | CC0 | 175 s (120 s loop) |
 | planes | https://freesound.org/s/383068/ | Kinoton | CC0 | 0 s (105 s, one flyover, plays once) |
+| lapping | https://freesound.org/s/520246/ | blaukreuz | CC0 | 2 s (130 s loop) |
+| palms | https://freesound.org/s/423800/ | klangfabrik | CC0 | 2 s (120 s loop; low-passed at 15 kHz to drop preview artifacts) |
+| rocks | https://freesound.org/s/411509/ | felix.blume | CC0 | 3 s (150 s loop) |
+| buoy | https://freesound.org/s/675693/ | craigsmith | CC0 | 1 s (85 s loop) |
+| halyards | https://freesound.org/s/538010/ | bruno.auzet | CC0 | 60 s (150 s loop) |

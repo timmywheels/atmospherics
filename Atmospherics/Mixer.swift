@@ -810,10 +810,16 @@ final class Mixer {
     /// Where home is on the map, to tell when a chosen place is really just home.
     @ObservationIgnored private var homeCoordinate: CLLocationCoordinate2D?
 
+    /// Whether a place is where you are: anywhere within 15 km, or the curated place nearest to
+    /// you within 40 km. (So from Providence, Newport is still a trip.)
     private func isNearHome(_ place: Place) -> Bool {
         guard let h = homeCoordinate else { return false }
         let here = CLLocation(latitude: h.latitude, longitude: h.longitude)
-        return here.distance(from: CLLocation(latitude: place.latitude, longitude: place.longitude)) < 40_000
+        func distance(_ p: Place) -> Double { here.distance(from: CLLocation(latitude: p.latitude, longitude: p.longitude)) }
+        let d = distance(place)
+        if d < 15_000 { return true }
+        guard d < 40_000 else { return false }
+        return Place.all.min(by: { distance($0) < distance($1) })?.name == place.name
     }
 
     /// Where "home" is, for the "Back to …" line.
