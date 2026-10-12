@@ -570,6 +570,13 @@ final class Mixer {
     }
 
     var currentPlaceIsTweaked: Bool { tweakKey.map { !(tweaks[$0] ?? [:]).isEmpty } ?? false }
+
+    /// The sounds that belong to where you are, to suggest first in Layers.
+    var currentCast: [SoundKind] {
+        guard activePreset == nil else { return [] }
+        let place = mode == .escape ? escape?.place : homePlace
+        return place?.signature.compactMap { $0.0.playable } ?? []
+    }
     var currentPlaceName: String { mode == .escape ? (escape?.place.name ?? "this place") : "home" }
 
     /// What the weather alone gives this mode, before tweaks.
