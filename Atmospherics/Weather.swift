@@ -156,6 +156,10 @@ enum WeatherMix {
                 mix.append((kind, level))
             }
         }
+        // In a city in the rain, the street is wet: tyres hiss, drops hit hard surfaces.
+        if c.isRaining && !c.isSnow, let i = mix.firstIndex(where: { $0.0 == .cityHum }) {
+            mix[i].0 = .rainyStreet
+        }
         // In the tropics, rain lands on tin roofs.
         if let place, abs(place.latitude) < 23.5, let i = mix.firstIndex(where: { $0.0 == .rain }) {
             mix[i].0 = .tinRoof

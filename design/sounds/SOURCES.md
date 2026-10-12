@@ -28,3 +28,5 @@ Loops are made with `prepare.py` (60 s from the given start, seam crossfaded, lo
 | clock | https://freesound.org/s/171043/ | ST303 | CC0 | 10 s |
 
 Freesound files were taken from their public HQ previews (about 128 kbps MP3).
+| cityHum (city street) | https://commons.wikimedia.org/wiki/File:Sunday_in_the_city_street_noise1.ogg | cori | Public domain | 20 s (90 s loop) |
+| rainyStreet | https://commons.wikimedia.org/wiki/File:Urban_Street_on_a_Rainy_Afternoon.flac | Extemporalist | CC0 | 300 s (90 s loop) |

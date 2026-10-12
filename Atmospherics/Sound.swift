@@ -8,14 +8,14 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
     case howlers, jungleBirds, parrots, canopy, treeFrogs
     case owls, loons, wolves, leaves
     case waterfall, caveDrips, tentRain, tinRoof, whales, lake
-    case cafe, library, cabin, bells, typing, clock
+    case cafe, library, cabin, bells, typing, clock, rainyStreet
 
     /// Recorded sounds play from `Sounds/<rawValue>.m4a` instead of being synthesized.
     var isRecorded: Bool {
         switch self {
         case .howlers, .jungleBirds, .parrots, .canopy, .treeFrogs, .owls, .loons, .wolves, .leaves,
              .waterfall, .caveDrips, .tentRain, .tinRoof, .whales, .lake,
-             .cafe, .library, .cabin, .bells, .typing, .clock: true
+             .cafe, .library, .cabin, .bells, .typing, .clock, .cityHum, .rainyStreet: true
         default: false
         }
     }
@@ -31,7 +31,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .waterfall, .caveDrips: return .stream
         case .lake, .whales: return .ocean
         case .leaves: return .wind
-        case .cafe: return .cityHum
+        case .cafe, .rainyStreet: return .cityHum
         case .bells: return .chimes
         case .cabin: return .fan
         default: return nil   // howlers, owls, loons, wolves, library, typing, clock
@@ -60,14 +60,14 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .howlers, .jungleBirds, .parrots, .canopy, .treeFrogs: .jungle
         case .owls, .loons, .wolves, .leaves: .night
         case .waterfall, .caveDrips, .tentRain, .tinRoof, .whales, .lake: .water
-        case .cafe, .library, .cabin, .typing, .clock: .city
+        case .cafe, .library, .cabin, .typing, .clock, .rainyStreet: .city
         }
     }
 
     var name: String {
         switch self {
         case .brown, .pink, .white, .green, .grey, .blue, .violet: "\(short) noise"
-        case .cityHum: "City hum"
+        case .cityHum: "City street"
         case .jungleBirds: "Jungle birds"
         case .treeFrogs: "Tree frogs"
         case .caveDrips: "Cave drips"
@@ -75,6 +75,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .tinRoof: "Rain on a tin roof"
         case .cabin: "Airplane cabin"
         case .bells: "Church bells"
+        case .rainyStreet: "Rainy street"
         default: short
         }
     }
@@ -89,6 +90,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .tentRain: "Tent"
         case .tinRoof: "Tin roof"
         case .cafe: "Café"
+        case .rainyStreet: "Wet street"
         default: rawValue.capitalized
         }
     }
@@ -140,6 +142,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .bells: 80
         case .typing: 300
         case .clock: 50
+        case .rainyStreet: 235
         }
     }
 
