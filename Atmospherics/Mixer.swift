@@ -270,7 +270,7 @@ final class Mixer {
 
     var unusedSounds: [SoundKind] {
         let used = Set(orbs.map(\.kind))
-        return SoundKind.allCases.filter { !used.contains($0) }
+        return SoundKind.available.filter { !used.contains($0) }
     }
 
     // MARK: Editing the field

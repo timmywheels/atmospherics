@@ -4,11 +4,32 @@ import SwiftUI
 enum SoundKind: String, CaseIterable, Identifiable, Codable {
     case brown, pink, white, green, rain, ocean, wind, thunder, fire, birds
     case grey, blue, violet, crickets, cicadas, frogs, stream, cityHum, train, fan, chimes, drone, lightning
+    // Recorded (public-domain field recordings in Sounds/)
+    case howlers, jungleBirds, parrots, canopy, treeFrogs
+    case owls, loons, wolves, leaves
+    case waterfall, caveDrips, tentRain, tinRoof, whales, lake
+    case cafe, library, cabin, bells, typing, clock
+
+    /// Recorded sounds play from `Sounds/<rawValue>.m4a` instead of being synthesized.
+    var isRecorded: Bool {
+        switch self {
+        case .howlers, .jungleBirds, .parrots, .canopy, .treeFrogs, .owls, .loons, .wolves, .leaves,
+             .waterfall, .caveDrips, .tentRain, .tinRoof, .whales, .lake,
+             .cafe, .library, .cabin, .bells, .typing, .clock: true
+        default: false
+        }
+    }
+
+    /// Recorded sounds whose file is actually in the app. Ones without a file are hidden.
+    static let available: [SoundKind] = allCases.filter {
+        !$0.isRecorded || Bundle.main.url(forResource: $0.rawValue, withExtension: "m4a") != nil
+    }
 
     var id: String { rawValue }
 
     enum Category: String, CaseIterable {
-        case noise = "Noise", water = "Water & weather", nature = "Nature", city = "City & home", calm = "Calm"
+        case noise = "Noise", water = "Water & weather", nature = "Nature", jungle = "Jungle", night = "Night & forest",
+             city = "Places & home", calm = "Calm"
     }
 
     var category: Category {
@@ -17,7 +38,11 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .rain, .ocean, .stream, .wind, .thunder, .lightning: .water
         case .birds, .crickets, .cicadas, .frogs, .fire: .nature
         case .cityHum, .train, .fan: .city
-        case .chimes, .drone: .calm
+        case .chimes, .drone, .bells: .calm
+        case .howlers, .jungleBirds, .parrots, .canopy, .treeFrogs: .jungle
+        case .owls, .loons, .wolves, .leaves: .night
+        case .waterfall, .caveDrips, .tentRain, .tinRoof, .whales, .lake: .water
+        case .cafe, .library, .cabin, .typing, .clock: .city
         }
     }
 
@@ -25,6 +50,13 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .brown, .pink, .white, .green, .grey, .blue, .violet: "\(short) noise"
         case .cityHum: "City hum"
+        case .jungleBirds: "Jungle birds"
+        case .treeFrogs: "Tree frogs"
+        case .caveDrips: "Cave drips"
+        case .tentRain: "Rain on a tent"
+        case .tinRoof: "Rain on a tin roof"
+        case .cabin: "Airplane cabin"
+        case .bells: "Church bells"
         default: short
         }
     }
@@ -32,6 +64,13 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
     var short: String {
         switch self {
         case .cityHum: "City"
+        case .howlers: "Howlers"
+        case .jungleBirds: "Jungle"
+        case .treeFrogs: "Tree frogs"
+        case .caveDrips: "Cave"
+        case .tentRain: "Tent"
+        case .tinRoof: "Tin roof"
+        case .cafe: "Café"
         default: rawValue.capitalized
         }
     }
@@ -62,6 +101,27 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .chimes: 345
         case .drone: 275
         case .lightning: 95
+        case .howlers: 70
+        case .jungleBirds: 115
+        case .parrots: 130
+        case .canopy: 145
+        case .treeFrogs: 160
+        case .owls: 40
+        case .loons: 215
+        case .wolves: 280
+        case .leaves: 105
+        case .waterfall: 200
+        case .caveDrips: 255
+        case .tentRain: 230
+        case .tinRoof: 240
+        case .whales: 250
+        case .lake: 210
+        case .cafe: 45
+        case .library: 60
+        case .cabin: 225
+        case .bells: 80
+        case .typing: 300
+        case .clock: 50
         }
     }
 

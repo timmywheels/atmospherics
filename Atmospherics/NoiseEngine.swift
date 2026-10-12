@@ -71,6 +71,7 @@ final class NoiseEngine {
                                                queue: .main) { [weak self] _ in
             guard let self, self.masterTarget.pointee > 0, !self.engine.isRunning else { return }
             try? self.engine.start()
+            self.samples.resume()
         }
     }
 
@@ -80,9 +81,13 @@ final class NoiseEngine {
     }
 
     func setLevel(_ level: Float, for kind: SoundKind) {
+        let level = max(0, min(1, level))
+        if kind.isRecorded { samples.setLevel(level, for: kind); return }
         let index = SoundKind.allCases.firstIndex(of: kind)!
-        targets[index] = max(0, min(1, level))
+        targets[index] = level
     }
+
+    private lazy var samples = SampleBank(engine: engine)
 
     /// The most recent slice of output, as peak levels, for the waveform.
     let scope = Scope()
@@ -94,11 +99,13 @@ final class NoiseEngine {
         try session.setActive(true)
         if !engine.isRunning { try engine.start() }
         masterTarget.pointee = 1
+        samples.setMaster(true)
     }
 
     /// Fades out, then pauses the engine so it stops using power.
     func stop() {
         masterTarget.pointee = 0
+        samples.setMaster(false)
         stopGeneration += 1
         let generation = stopGeneration
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
