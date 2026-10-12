@@ -1,10 +1,10 @@
 import MetalKit
 import SwiftUI
 
-// The soundscape as a sculpture: a soft body of light for each sound, bigger and higher the
-// louder it is, merging where sounds are near. On the home screen it's a small form that turns
-// and drifts; in Layers it's the same sounds standing on the field, to be moved about. Drawn by
-// `SculptureShader` on the GPU.
+// The soundscape as a glass ghost: a soft body for each sound, bigger and higher the louder it
+// is, merged where sounds are near, and seen through like colored glass with glowing edges. On
+// the home screen it's a small form that turns and drifts; in Layers it's the same sounds standing
+// on the field, to be moved about. Drawn by `SculptureShader` on the GPU.
 
 /// The camera the sculpture is seen through, by the shader and by the labels drawn over it:
 /// turned (yaw), tilted (pitch, 0 is side on), in perspective, looking at the middle of the view.
