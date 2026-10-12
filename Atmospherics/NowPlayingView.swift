@@ -50,12 +50,12 @@ struct NowPlayingView: View {
                         Task { await runHints() }
                     }
                 } label: {
-                    HStack(spacing: 8) {
-                        Text("ATMOSPHERICS")
+                    HStack(spacing: 10) {
                         // A quiet vertical ⋮ so it reads as a menu.
                         VStack(spacing: 2.5) {
                             ForEach(0..<3, id: \.self) { _ in Circle().frame(width: 2.5, height: 2.5) }
                         }
+                        Text("ATMOSPHERICS")
                     }
                     .padding(.vertical, 6)
                     .contentShape(Rectangle())

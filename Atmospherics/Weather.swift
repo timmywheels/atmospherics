@@ -111,15 +111,17 @@ enum WeatherMix {
     static func orbs(for c: Conditions, place: Place? = nil) -> [(SoundKind, Double)] {
         var mix: [(SoundKind, Double)] = []
 
-        // A noise bed: deeper when pressure is low or it's night, brighter in fog.
+        // A quiet noise floor under everything: deeper when pressure is low, brighter in fog.
+        // It's a floor, not the sound. At a place, the place leads and the floor nearly vanishes.
         let lowPressure = c.pressureHPA < 1005
+        let floor = place == nil ? 1.0 : 0.45
         if c.isFog {
-            mix.append((.white, 0.35))
-            mix.append((.brown, 0.5))
+            mix.append((.white, 0.15 * floor))
+            mix.append((.brown, 0.25 * floor))
         } else if c.isDay && !c.isRaining && !lowPressure {
-            mix.append((.pink, 0.55))
+            mix.append((.pink, 0.25 * floor))
         } else {
-            mix.append((.brown, lowPressure || c.isSnow ? 0.75 : 0.6))
+            mix.append((.brown, (lowPressure || c.isSnow ? 0.35 : 0.28) * floor))
         }
 
         if c.isRaining && !c.isSnow {
@@ -145,7 +147,8 @@ enum WeatherMix {
         }
         for (kind, signatureLevel) in place?.signature ?? [] {
             if kind == .fire && c.temperatureC >= 12 { continue }
-            let level = signatureLevel * weatherFactor(for: kind, in: c)
+            // The place's own sounds lead the mix.
+            let level = min(0.9, signatureLevel * 1.5) * weatherFactor(for: kind, in: c)
             if level < 0.06 { continue }
             if let i = mix.firstIndex(where: { $0.0 == kind }) {
                 mix[i].1 = max(mix[i].1, level)

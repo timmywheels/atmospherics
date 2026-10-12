@@ -3,7 +3,7 @@
     python3 -I prepare.py input.(ogg|flac|wav|mp3) ../../Atmospherics/Sounds/<kind>.m4a [--start S] [--length L]
 
 Takes L seconds from S, then blends the 3 s just after the loop into its first 3 s, so the end
-flows straight back into the start. Loudness is normalised to about -23 LUFS, and the result is
+flows straight back into the start. Loudness is normalised to about -16 LUFS (level with the synthesized sounds), and the result is
 encoded as 96 kbps stereo AAC at 44.1 kHz. Only needs ffmpeg.
 """
 import argparse
@@ -28,7 +28,7 @@ def main():
         f"[b]atrim={F}:{L},asetpts=PTS-STARTPTS[mid];"
         f"[c]atrim={L}:{L + F},asetpts=PTS-STARTPTS,afade=t=out:d={F}:curve=qsin[tail];"
         f"[head][tail]amix=inputs=2:normalize=0[seam];"
-        f"[seam][mid]concat=n=2:v=0:a=1,loudnorm=I=-23:TP=-2:LRA=11,aresample=44100[out]"
+        f"[seam][mid]concat=n=2:v=0:a=1,loudnorm=I=-16:TP=-1.5:LRA=11,aresample=44100[out]"
     )
     subprocess.run(
         ["ffmpeg", "-nostdin", "-v", "error", "-y", "-ss", str(a.start), "-t", str(L + F), "-i", a.src,
