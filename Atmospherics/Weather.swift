@@ -16,9 +16,17 @@ struct Conditions: Equatable {
     var isFog: Bool { code == 45 || code == 48 }
     var isRaining: Bool { precipitationMM > 0.05 || (51...67).contains(code) || (80...82).contains(code) || isThunder }
 
+    /// "auto" (the phone's region), "f" or "c"; set from the menu.
+    static var unitPreference: String { UserDefaults.standard.string(forKey: "tempUnit") ?? "auto" }
+
     var temperature: String {
-        Measurement(value: temperatureC, unit: UnitTemperature.celsius)
-            .formatted(.measurement(width: .narrow, usage: .weather, numberFormatStyle: .number.precision(.fractionLength(0))))
+        let m = Measurement(value: temperatureC, unit: UnitTemperature.celsius)
+        switch Self.unitPreference {
+        case "f": return "\(Int(m.converted(to: .fahrenheit).value.rounded()))°"
+        case "c": return "\(Int(temperatureC.rounded()))°"
+        default:
+            return m.formatted(.measurement(width: .narrow, usage: .weather, numberFormatStyle: .number.precision(.fractionLength(0))))
+        }
     }
 
     /// A short name for the mix this weather makes, e.g. "Light Rain".

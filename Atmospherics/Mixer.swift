@@ -55,10 +55,90 @@ final class Mixer {
     // Weather
     enum WeatherState { case loading, ready, locationOff, failed }
     private(set) var weatherState: WeatherState = .loading
-    private(set) var home: Conditions?
-    private(set) var escape: (place: Place, conditions: Conditions)?
+    /// Live weather as fetched. Everything else reads the computed versions below, which apply
+    /// any weather or time-of-day override.
+    private var liveHome: Conditions?
+    private var liveEscape: (place: Place, conditions: Conditions)?
+    private var livePlaceConditions: [String: Conditions] = [:]
+
+    var home: Conditions? { liveHome.map(overridden) }
+    var escape: (place: Place, conditions: Conditions)? { liveEscape.map { ($0.place, overridden($0.conditions)) } }
+    var placeConditions: [String: Conditions] { livePlaceConditions.mapValues(overridden) }
+
+    // MARK: Overrides
+
+    enum SkyOverride: String, CaseIterable {
+        case live = "Live", clear = "Clear", rain = "Rain", storm = "Storm", snow = "Snow", fog = "Fog", wind = "Windy"
+    }
+    enum TimeOverride: String, CaseIterable { case live = "Live", day = "Day", night = "Night" }
+
+    private(set) var skyOverride: SkyOverride = .live
+    private(set) var timeOverride: TimeOverride = .live
+    var isImagining: Bool { skyOverride != .live || timeOverride != .live }
+
+    func setSky(_ s: SkyOverride) {
+        skyOverride = s
+        defaults.set(s.rawValue, forKey: "skyOverride")
+        reapplyAfterOverride()
+    }
+
+    func setTime(_ t: TimeOverride) {
+        timeOverride = t
+        defaults.set(t.rawValue, forKey: "timeOverride")
+        reapplyAfterOverride()
+    }
+
+    private func reapplyAfterOverride() {
+        // An override is about a place's weather, so it takes you out of a Library mix.
+        if activePreset != nil { setActivePreset(nil) }
+        setFollowing(true, for: mode)
+        traveling = true
+        applyWeather(to: mode, animated: true)
+        updateNowPlaying()
+    }
+
+    /// Live conditions with the chosen sky and time swapped in.
+    private func overridden(_ c: Conditions) -> Conditions {
+        var c = c
+        switch timeOverride {
+        case .live: break
+        case .day: c.isDay = true
+        case .night: c.isDay = false
+        }
+        switch skyOverride {
+        case .live: break
+        case .clear: c.code = 0; c.precipitationMM = 0; c.windKMH = min(c.windKMH, 10)
+        case .rain: c.code = 63; c.precipitationMM = max(c.precipitationMM, 1.5)
+        case .storm: c.code = 95; c.precipitationMM = max(c.precipitationMM, 4); c.windKMH = max(c.windKMH, 35); c.pressureHPA = min(c.pressureHPA, 998)
+        case .snow: c.code = 73; c.precipitationMM = 0; c.temperatureC = min(c.temperatureC, -2)
+        case .fog: c.code = 45; c.precipitationMM = 0; c.windKMH = min(c.windKMH, 6)
+        case .wind: c.code = 3; c.precipitationMM = 0; c.windKMH = max(c.windKMH, 45)
+        }
+        return c
+    }
+
+    /// "Imagining a rainy night in Tokyo".
+    func imaginingLine(at place: String) -> String {
+        let sky: String? = {
+            switch skyOverride {
+            case .live: return nil
+            case .clear: return timeOverride == .live ? "clear skies" : "clear"
+            case .rain: return timeOverride == .live ? "rain" : "rainy"
+            case .storm: return timeOverride == .live ? "a storm" : "stormy"
+            case .snow: return timeOverride == .live ? "snow" : "snowy"
+            case .fog: return timeOverride == .live ? "fog" : "foggy"
+            case .wind: return timeOverride == .live ? "wind" : "windy"
+            }
+        }()
+        let time: String? = timeOverride == .live ? nil : timeOverride.rawValue.lowercased()
+        switch (sky, time) {
+        case let (s?, t?): return "Imagining a \(s) \(t) in \(place)"
+        case let (s?, nil): return "Imagining \(s) in \(place)"
+        case let (nil, t?): return "Imagining \(t) in \(place)"
+        default: return ""
+        }
+    }
     /// Live conditions at every place, keyed by name, for the globe and list.
-    private(set) var placeConditions: [String: Conditions] = [:]
     /// A place the user chose. When nil, Escape picks the place least like home.
     private(set) var pinnedPlace: Place?
     /// Places found through search, newest first.
@@ -107,6 +187,8 @@ final class Mixer {
         if let raw = defaults.string(forKey: "mode"), let saved = Mode(rawValue: raw) { mode = saved }
         customPlaces = (defaults.array(forKey: "customPlaces") as? [[String: Any]] ?? []).compactMap(Place.init(dictionary:))
         pinnedPlace = defaults.string(forKey: "pinnedPlace").flatMap { name in allPlaces.first { $0.name == name } }
+        skyOverride = defaults.string(forKey: "skyOverride").flatMap(SkyOverride.init(rawValue:)) ?? .live
+        timeOverride = defaults.string(forKey: "timeOverride").flatMap(TimeOverride.init(rawValue:)) ?? .live
         tweaks = defaults.dictionary(forKey: "placeTweaks") as? [String: [String: Double]] ?? [:]
         if let data = defaults.data(forKey: "savedMixes"), let saved = try? JSONDecoder().decode([SavedMix].self, from: data) {
             savedMixes = saved
@@ -240,7 +322,7 @@ final class Mixer {
             default:
                 guard let home else { return WeatherSummary(place: "", temp: "", line: "", head: head) }
                 let line = following[.match] == true
-                    ? "Following \(home.subject) outside" + (tweaks["home"] != nil ? " · tuned by you" : "")
+                    ? (isImagining ? imaginingLine(at: home.place) : "Following \(home.subject) outside") + (tweaks["home"] != nil ? " · tuned by you" : "")
                     : "Your own mix, made here"
                 return WeatherSummary(place: home.place, temp: home.temperature, line: line, head: head)
             }
@@ -257,7 +339,8 @@ final class Mixer {
             if following[.escape] != true {
                 line = "Your own mix, made in \(escape.place.name)"
             } else if pinnedPlace != nil {
-                line = "\(c.mixName) in \(escape.place.name) right now" + (tweaks[escape.place.name] != nil ? " · tuned by you" : "")
+                line = (isImagining ? imaginingLine(at: escape.place.name) : "\(c.mixName) in \(escape.place.name) right now")
+                    + (tweaks[escape.place.name] != nil ? " · tuned by you" : "")
             } else {
                 line = Self.escapeLine(c)
             }
@@ -542,7 +625,7 @@ final class Mixer {
         do {
             let (coordinate, place) = try await location.current()
             homeCoordinate = coordinate
-            home = try await weatherService.conditions(at: coordinate, place: place)
+            liveHome = try await weatherService.conditions(at: coordinate, place: place)
             weatherState = .ready
         } catch {
             weatherState = location.isDenied ? .locationOff : .failed
@@ -550,7 +633,7 @@ final class Mixer {
 
         let places = allPlaces
         if let options = try? await weatherService.conditions(for: places) {
-            placeConditions = Dictionary(zip(places.map(\.name), options), uniquingKeysWith: { a, _ in a })
+            livePlaceConditions = Dictionary(zip(places.map(\.name), options), uniquingKeysWith: { a, _ in a })
             chooseEscape()
             if upcoming == nil { refreshUpcoming() }
         } else {
@@ -568,14 +651,14 @@ final class Mixer {
 
     /// Uses the pinned place if there is one, otherwise the place least like home.
     private func chooseEscape() {
-        if let pinned = pinnedPlace, let c = placeConditions[pinned.name] {
-            escape = (pinned, c)
+        if let pinned = pinnedPlace, let c = livePlaceConditions[pinned.name] {
+            liveEscape = (pinned, c)
             return
         }
-        let options = Place.all.compactMap { p in placeConditions[p.name].map { (p, $0) } }   // curated places only
+        let options = Place.all.compactMap { p in livePlaceConditions[p.name].map { (p, $0) } }   // curated places only
         guard !options.isEmpty else { return }
-        let i = WeatherMix.bestEscape(from: home, options: options.map(\.1))
-        escape = options[i]
+        let i = WeatherMix.bestEscape(from: liveHome, options: options.map(\.1))
+        liveEscape = options[i]
     }
 
     /// Goes to a place: pins it, switches to Escape, and glides the field to its sound.
@@ -611,7 +694,7 @@ final class Mixer {
         customPlaces = Array(customPlaces.prefix(8))
         defaults.set(customPlaces.map(\.dictionary), forKey: "customPlaces")
         if let c = try? await weatherService.conditions(for: [place]).first {
-            placeConditions[place.name] = c
+            livePlaceConditions[place.name] = c
         }
         select(place)
     }
@@ -722,13 +805,14 @@ final class Mixer {
         case .home:
             guard let h = home else { return Page(title: "Home", line: "", layers: "", orbs: []) }
             let o = Preset.layout(Self.applying(tweaks["home"], to: WeatherMix.orbs(for: h)))
-            return Page(title: h.mixName, line: "Following \(h.subject) outside", layers: layers(o), orbs: o)
+            return Page(title: h.mixName, line: isImagining ? imaginingLine(at: h.place) : "Following \(h.subject) outside",
+                        layers: layers(o), orbs: o)
         case .place(let p):
             let o: [Orb]
             let line: String
             if let c = placeConditions[p.name] {
                 o = Preset.layout(Self.applying(tweaks[p.name], to: WeatherMix.orbs(for: c, place: p)))
-                line = "\(c.mixName) in \(p.name) right now"
+                line = isImagining ? imaginingLine(at: p.name) : "\(c.mixName) in \(p.name) right now"
             } else {
                 o = Preset.layout(p.signature.compactMap { k, v in k.playable.map { ($0, v) } })
                 line = p.country

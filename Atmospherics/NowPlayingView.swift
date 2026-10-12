@@ -11,6 +11,8 @@ struct NowPlayingView: View {
     @State private var hint: String?
     /// How many of the one-time hints have been shown.
     @AppStorage("hintStep") private var hintStep = 0
+    @AppStorage("tempUnit") private var tempUnit = "auto"
+    private var tempUnitLabel: String { tempUnit == "f" ? "°F" : tempUnit == "c" ? "°C" : "Auto" }
 
     private static let hints = [
         "Swipe left or right to travel",
@@ -43,6 +45,23 @@ struct NowPlayingView: View {
                             Button(t == .off ? "No timer" : "Stop after \(t.label)") { mixer.setTimer(t) }
                         }
                     }
+                    Menu("Weather · \(mixer.skyOverride.rawValue)", systemImage: "cloud.sun") {
+                        Picker("Weather", selection: Binding(get: { mixer.skyOverride }, set: { mixer.setSky($0) })) {
+                            ForEach(Mixer.SkyOverride.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        }
+                    }
+                    Menu("Time of day · \(mixer.timeOverride.rawValue)", systemImage: "sun.and.horizon") {
+                        Picker("Time of day", selection: Binding(get: { mixer.timeOverride }, set: { mixer.setTime($0) })) {
+                            ForEach(Mixer.TimeOverride.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        }
+                    }
+                    Menu("Temperature · \(tempUnitLabel)", systemImage: "thermometer.medium") {
+                        Picker("Temperature", selection: $tempUnit) {
+                            Text("Auto").tag("auto")
+                            Text("°F").tag("f")
+                            Text("°C").tag("c")
+                        }
+                    }
                     Button("Save this mix", systemImage: "bookmark") { saving = true }
                     if mixer.currentPlaceIsTweaked {
                         Button("Reset \(mixer.currentPlaceName) to default", systemImage: "arrow.counterclockwise") {
@@ -57,15 +76,19 @@ struct NowPlayingView: View {
                 } label: {
                     HStack(spacing: 10) {
                         // A quiet vertical ⋮ so it reads as a menu.
+                        // Amber while a weather or time override is on.
                         VStack(spacing: 2.5) {
                             ForEach(0..<3, id: \.self) { _ in Circle().frame(width: 2.5, height: 2.5) }
                         }
+                        .foregroundStyle(mixer.isImagining ? Color.oklch(0.8, 0.13, 70) : Theme.mono)
+                        .shadow(color: mixer.isImagining ? Color.oklch(0.8, 0.13, 70).opacity(0.6) : .clear, radius: 3)
+                        .animation(.smooth, value: mixer.isImagining)
                         Text("ATMOSPHERICS")
                     }
                     .padding(.vertical, 6)
                     .contentShape(Rectangle())
                 }
-                .accessibilityLabel("Menu")
+                .accessibilityLabel(mixer.isImagining ? "Menu. Weather override on." : "Menu")
                 .buttonStyle(.plain)
                 Spacer()
                 Button { showGlobe = true } label: {
