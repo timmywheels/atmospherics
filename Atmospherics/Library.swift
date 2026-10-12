@@ -34,11 +34,37 @@ struct Preset: Identifiable {
                mix: [(.grey, 0.7), (.drone, 0.3)]),
         Preset(name: "Box Fan", tag: .sleep, length: "8 h", description: "Fan, brown noise",
                mix: [(.fan, 0.75), (.brown, 0.3)]),
+        Preset(name: "Campsite", tag: .sleep, length: "8 h", description: "Rain on the tent, owls, a low fire",
+               mix: [(.tentRain, 0.75), (.owls, 0.25), (.fire, 0.3)]),
+        Preset(name: "Tin Roof Nap", tag: .sleep, length: "2 h", description: "Rain on a tin roof, tree frogs",
+               mix: [(.tinRoof, 0.75), (.treeFrogs, 0.25), (.brown, 0.25)]),
+        Preset(name: "Red-eye", tag: .sleep, length: "8 h", description: "Airplane cabin, brown noise",
+               mix: [(.cabin, 0.75), (.brown, 0.3)]),
+        Preset(name: "North Woods", tag: .sleep, length: "8 h", description: "Lake, loons, leaves, owls",
+               mix: [(.lake, 0.6), (.loons, 0.35), (.leaves, 0.3), (.owls, 0.2)]),
+        Preset(name: "Wolf Moon", tag: .relax, length: "1 h", description: "Distant wolves, wind, a fire",
+               mix: [(.wind, 0.5), (.wolves, 0.3), (.fire, 0.4)]),
+        Preset(name: "Reading Room", tag: .focus, length: "2 h", description: "Library, a ticking clock, rain",
+               mix: [(.library, 0.7), (.clock, 0.25), (.rain, 0.3)]),
+        Preset(name: "Coffee Shop", tag: .focus, length: "90 min", description: "Café murmur, rain on the window",
+               mix: [(.cafe, 0.75), (.rain, 0.25)]),
+        Preset(name: "Late Draft", tag: .focus, length: "90 min", description: "Typing, a clock, pink noise",
+               mix: [(.typing, 0.5), (.clock, 0.25), (.pink, 0.4)]),
+        Preset(name: "Cave Retreat", tag: .relax, length: "1 h", description: "Cave drips, a warm drone",
+               mix: [(.caveDrips, 0.7), (.drone, 0.3)]),
+        Preset(name: "Whale Song", tag: .relax, length: "45 min", description: "Whales, ocean, a warm drone",
+               mix: [(.whales, 0.55), (.ocean, 0.5), (.drone, 0.2)]),
+        Preset(name: "Clear Head", tag: .focus, length: "1 h", description: "Blue noise, a little white",
+               mix: [(.blue, 0.6), (.white, 0.2)]),
+        Preset(name: "Bright Hiss", tag: .focus, length: "1 h", description: "Violet and pink noise",
+               mix: [(.violet, 0.4), (.pink, 0.45)]),
+        Preset(name: "Rainforest", tag: .relax, length: "1 h", description: "Canopy, howler monkeys, a waterfall",
+               mix: [(.canopy, 0.7), (.howlers, 0.3), (.waterfall, 0.3)]),
     ]
 
     /// Places each sound at the distance from center that gives its volume,
     /// spread around the field so orbs don't overlap.
-    var orbs: [Orb] { Self.layout(mix) }
+    var orbs: [Orb] { Self.layout(mix.compactMap { k, v in k.playable.map { ($0, v) } }) }
 
     static func layout(_ mix: [(SoundKind, Double)]) -> [Orb] {
         mix.enumerated().map { j, entry in

@@ -51,6 +51,8 @@ struct Place: Identifiable, Hashable {
               signature: [(.cityHum, 0.3), (.stream, 0.25), (.leaves, 0.2), (.bells, 0.2)]),
         Place(name: "Waterford", country: "Maine", region: .americas, latitude: 44.25, longitude: -70.75,
               signature: [(.lake, 0.4), (.loons, 0.35), (.leaves, 0.3), (.owls, 0.2), (.fire, 0.4)]),
+        Place(name: "Yellowstone", country: "Wyoming", region: .americas, latitude: 44.43, longitude: -110.59,
+              signature: [(.wolves, 0.3), (.lake, 0.35), (.wind, 0.3), (.leaves, 0.2)]),
         Place(name: "San Francisco", country: "USA", region: .americas, latitude: 37.77, longitude: -122.42,
               signature: [(.ocean, 0.35), (.wind, 0.3), (.cityHum, 0.25), (.cafe, 0.15)]),
         Place(name: "Big Sur", country: "USA", region: .americas, latitude: 36.27, longitude: -121.81,

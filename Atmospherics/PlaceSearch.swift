@@ -48,13 +48,25 @@ final class PlaceSearch: NSObject, MKLocalSearchCompleterDelegate {
     private func signature(near c: CLLocationCoordinate2D) async -> [(SoundKind, Double)] {
         async let beaches = count("beach", near: c, km: 15)
         async let stations = count("train station", near: c, km: 5)
-        let (b, s) = await (beaches, stations)
+        async let lakes = count("lake", near: c, km: 10)
+        async let woods = count("forest", near: c, km: 10)
+        async let cafes = count("cafe", near: c, km: 1)
+        let (b, s, l, f, k) = await (beaches, stations, lakes, woods, cafes)
         var sig: [(SoundKind, Double)] = []
         if b > 0 { sig.append((.ocean, 0.55)) }
+        if l > 0 && b == 0 { sig.append((.lake, 0.4)) }
         if s >= 2 { sig.append((.cityHum, 0.4)) }
         if s >= 5 { sig.append((.train, 0.15)) }
-        if s < 2 { sig.append((.stream, 0.25)) }   // somewhere quieter: a little water
-        sig.append((.birds, 0.2))
+        if k >= 5 { sig.append((.cafe, 0.2)) }
+        if f > 0 && s < 2 { sig.append((.leaves, 0.25)) }
+        if s < 2 && l == 0 && b == 0 { sig.append((.stream, 0.25)) }   // somewhere quieter: a little water
+        // Tropical places get jungle birds and tree frogs; elsewhere, ordinary birds.
+        if abs(c.latitude) < 23.5 {
+            sig.append((.jungleBirds, 0.25))
+            sig.append((.treeFrogs, 0.2))
+        } else {
+            sig.append((.birds, 0.2))
+        }
         return sig
     }
 
