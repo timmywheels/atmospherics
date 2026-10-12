@@ -9,7 +9,7 @@ import Foundation
 let W: CGFloat = 1320, H: CGFloat = 2868
 let shots: [(file: String, title: String, sub: String, glow: NSColor)] = [
     ("1-now-playing", "Sounds that follow\nthe weather", "Rain outside? You’ll hear rain.", NSColor(srgbRed: 0.35, green: 0.55, blue: 0.75, alpha: 1)),
-    ("2-globe", "Travel the world’s\nweather", "39 places, live. Spin and listen.", NSColor(srgbRed: 0.3, green: 0.6, blue: 0.5, alpha: 1)),
+    ("2-globe", "Travel the world’s\nweather", "41 places, live. Spin and listen.", NSColor(srgbRed: 0.3, green: 0.6, blue: 0.5, alpha: 1)),
     ("3-escape", "Escape to Aruba,\ntonight", "Warm trade winds, wherever you are.", NSColor(srgbRed: 0.25, green: 0.7, blue: 0.65, alpha: 1)),
     ("4-mixer", "Drag closer to\nhear more", "23 sounds, all generated live.", NSColor(srgbRed: 0.85, green: 0.5, blue: 0.3, alpha: 1)),
     ("5-library", "Mixes for sleep,\nfocus and calm", "With a sleep timer up to 8 hours.", NSColor(srgbRed: 0.6, green: 0.45, blue: 0.85, alpha: 1)),

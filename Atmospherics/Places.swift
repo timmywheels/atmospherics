@@ -79,6 +79,10 @@ struct Place: Identifiable, Hashable {
               signature: [(.ocean, 0.6)]),
 
         // Africa & Middle East
+        Place(name: "The Gambia", country: "West Africa", region: .africa, latitude: 13.45, longitude: -16.58,
+              signature: [(.birds, 0.4), (.ocean, 0.35), (.crickets, 0.25)]),
+        Place(name: "Cape Verde", country: "Atlantic islands", region: .africa, latitude: 16.75, longitude: -22.95,
+              signature: [(.ocean, 0.55), (.wind, 0.45)]),
         Place(name: "Marrakech", country: "Morocco", region: .africa, latitude: 31.63, longitude: -7.99,
               signature: [(.cityHum, 0.35), (.wind, 0.25), (.crickets, 0.2)]),
         Place(name: "Cairo", country: "Egypt", region: .africa, latitude: 30.04, longitude: 31.24,
