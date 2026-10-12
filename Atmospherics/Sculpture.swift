@@ -2,9 +2,9 @@ import MetalKit
 import SwiftUI
 
 // The soundscape as a glass ghost: a soft body for each sound, bigger and higher the louder it
-// is, merged where sounds are near, and seen through like colored glass with glowing edges. On
-// the home screen it's a small form that turns and drifts; in Layers it's the same sounds standing
-// on the field, to be moved about. Drawn by `SculptureShader` on the GPU.
+// is, seen through like colored glass with a glowing edge. On the home screen they merge into
+// one blob that turns and drifts, swelling toward its louder sounds; in Layers they're the same
+// sounds standing apart on the field, to be moved about. Drawn by `SculptureShader` on the GPU.
 
 /// The camera the sculpture is seen through, by the shader and by the labels drawn over it:
 /// turned (yaw), tilted (pitch, 0 is side on), in perspective, looking at the middle of the view.
@@ -65,10 +65,92 @@ enum SculptureStyle {
             let drift = SIMD3(sin(time * 0.23 + seed * 1.7), sin(time * 0.19 + seed * 2.3) * 0.6,
                               cos(time * 0.21 + seed * 1.1)) * 0.04
             let breathe = 1 + 0.035 * sin(time * 0.5 + seed)
-            let r = (0.15 + 0.27 * v) * breathe
-            return (SIMD3(x * 0.55, 0.3 * v - 0.12, z * 0.55) + drift, r)
+            // One blob: each sound swells it toward where the sound is, but never so far that
+            // it parts from the rest.
+            var toward = SIMD2(x, z) * 0.5
+            let length = (toward * toward).sum().squareRoot()
+            if length > 1e-6 { toward *= 0.26 * tanh(length / 0.26) / length }
+            let r = (0.17 + 0.22 * v) * breathe
+            return (SIMD3(toward.x, 0.2 * v - 0.1, toward.y) + drift, r)
         }
     }
+
+    /// Whether a point on screen is on one of the sounds' bodies, or within `slop` points of one
+    /// (enough to cover where they merge, and a fingertip).
+    func touches(_ point: CGPoint, orbs: [Orb], camera: SculptureCamera, slop: CGFloat = 18) -> Bool {
+        orbs.contains { orb in
+            guard orb.volume > 0.02 else { return false }
+            let body = body(of: orb, at: 0)
+            let spot = camera.project(body.center.x, body.center.y, body.center.z)
+            let radius = body.radius * camera.scale(atDepth: spot.depth)
+            return hypot(point.x - spot.point.x, point.y - spot.point.y) <= radius + slop
+        }
+    }
+}
+
+/// The home form's turn, shared by every page's sculpture so the next page arrives turned the
+/// same way. It turns slowly on its own; a finger (or the mouse) turns and tilts it, a flick sets
+/// it spinning until it slows to its own pace, and the tilt settles back level.
+final class SculptureSpin {
+    static let home = SculptureSpin()
+
+    private(set) var yaw = 0.0
+    /// Added to the view's own tilt: below 0 looks up at the form, above looks down on it.
+    private(set) var tilt = 0.0
+    private var spin = 0.0
+    private var tiltSpeed = 0.0
+    private var held: (yaw: Double, tilt: Double)?
+    private var pull = CGSize.zero
+    private var last: CFTimeInterval?
+    /// When a finger last moved it, so a drag that turned it isn't also taken as a swipe.
+    private(set) var touched: CFTimeInterval = 0
+
+    /// Radians a second it turns by itself.
+    private let pace = 0.06
+    /// Radians a point of drag, across and down.
+    private let turnPerPoint = 0.01, tiltPerPoint = 0.006
+
+    var recentlyTouched: Bool { CACurrentMediaTime() - touched < 0.3 }
+
+    /// The finger has moved `translation` since it took hold.
+    func drag(_ translation: CGSize) {
+        if held == nil {
+            held = (yaw, tilt)
+            spin = 0
+            tiltSpeed = 0
+        }
+        pull = translation
+        touched = CACurrentMediaTime()
+    }
+
+    /// Let go at `velocity` (points a second). Without `coast` it stays where it was left.
+    func release(_ velocity: CGSize, coast: Bool) {
+        held = nil
+        touched = CACurrentMediaTime()
+        guard coast else { return }
+        spin = min(12, max(-12, velocity.width * turnPerPoint))
+        tiltSpeed = min(4, max(-4, velocity.height * tiltPerPoint))
+    }
+
+    /// Moves on to `now` and gives the turn and tilt to draw. Every home sculpture calls this each
+    /// frame, and time passes once however many are drawing.
+    func advance(to now: CFTimeInterval, still: Bool) -> (yaw: Double, tilt: Double) {
+        let dt = min(0.1, max(0, now - (last ?? now)))
+        last = now
+        if let held {
+            yaw = held.yaw + pull.width * turnPerPoint
+            tilt = Self.limit(held.tilt + pull.height * tiltPerPoint)
+        } else {
+            yaw = (yaw + ((still ? 0 : pace) + spin) * dt).truncatingRemainder(dividingBy: 2 * .pi)
+            spin *= exp(-dt * 1.5)
+            tilt = Self.limit(tilt + tiltSpeed * dt) * exp(-dt * 1.2)
+            tiltSpeed *= exp(-dt * 5)
+        }
+        return (yaw, tilt)
+    }
+
+    /// From a little below the form to nearly overhead, around the home view's tilt of 0.5.
+    private static func limit(_ tilt: Double) -> Double { min(0.95, max(-1, tilt)) }
 }
 
 extension SoundKind {
@@ -195,7 +277,7 @@ final class SculptureRenderer: NSObject, MTKViewDelegate {
         var center: SIMD2<Float>
         var focal: Float, distance: Float, yaw: Float, pitch: Float
         var smoothness: Float, glow: Float, ground: Float, time: Float
-        var count: Int32, exposure: Float, wobble: Float = 0, pad1: Float = 0
+        var count: Int32, exposure: Float, wobble: Float = 0, lightAlpha: Float = 0
     }
 
     private struct Blob {
@@ -279,8 +361,8 @@ final class SculptureRenderer: NSObject, MTKViewDelegate {
             return (d * d).sum().squareRoot() + Double(b.sphere.w)
         }.max() ?? 0
 
-        let turning = settings.style == .home && !settings.still ? now * 0.06 : 0
-        let camera = SculptureCamera(yaw: settings.yaw + turning, pitch: settings.pitch, size: view.bounds.size,
+        let hand = settings.style == .home ? SculptureSpin.home.advance(to: now, still: settings.still) : (yaw: 0, tilt: 0)
+        let camera = SculptureCamera(yaw: settings.yaw + hand.yaw, pitch: settings.pitch + hand.tilt, size: view.bounds.size,
                                      extent: settings.extent)
         let scale = Double(view.drawableSize.width / view.bounds.width)
         var uniforms = Uniforms(
@@ -289,10 +371,14 @@ final class SculptureRenderer: NSObject, MTKViewDelegate {
             center: SIMD2(Float(camera.center.x * scale), Float(camera.center.y * scale)),
             focal: Float(camera.focal * scale), distance: Float(camera.distance),
             yaw: Float(camera.yaw), pitch: Float(camera.pitch),
-            smoothness: settings.style == .home ? 0.32 : 0.16, glow: settings.style == .home ? 0.7 : 0.45,
+            smoothness: settings.style == .home ? 0.4 : 0.16, glow: settings.style == .home ? 0.7 : 0.45,
             ground: settings.ground ? 1 : 0, time: Float(time.truncatingRemainder(dividingBy: 10_000)),
             count: Int32(blobs.count), exposure: Float(settings.exposure),
             wobble: settings.style == .home && !settings.still ? 1 : 0)
+        #if os(macOS)
+        // A Mac drops light with no coverage, so the halo's faint light gets a little.
+        uniforms.lightAlpha = 1
+        #endif
 
         encoder.setRenderPipelineState(pipeline)
         encoder.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)

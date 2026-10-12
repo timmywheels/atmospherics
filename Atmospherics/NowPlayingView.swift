@@ -23,6 +23,7 @@ struct NowPlayingView: View {
         "Swipe down to change the weather",
         "Hold play for a sleep timer",
         "Tap the name to teleport",
+        "Drag the light to turn it",
     ]
 
     @State private var weatherToastTask: Task<Void, Never>?
@@ -192,7 +193,9 @@ struct NowPlayingView: View {
         .simultaneousGesture(
             DragGesture(minimumDistance: 30).onEnded { g in
                 let up = -g.translation.height
-                guard abs(up) > 80, abs(up) > abs(g.translation.width) * 1.5 else { return }
+                // A drag on the glass turned it; it wasn't a swipe.
+                guard abs(up) > 80, abs(up) > abs(g.translation.width) * 1.5,
+                      !SculptureSpin.home.recentlyTouched else { return }
                 if up > 0 {
                     showLibrary = true
                 } else {
@@ -242,8 +245,10 @@ enum Route: Hashable { case mixer }
 /// The halo, title, weather and layers as a page, with the previous and next places beside it.
 /// Drag follows the finger 1:1; let go past a quarter of the width (or flick) to land on the neighbour.
 /// On a Mac, two fingers on the trackpad do the same, and the keyboard and menus slide it too.
+/// A drag that starts on the glass turns the form instead.
 struct Carousel: View {
     @Environment(Mixer.self) private var mixer
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var dragX: CGFloat
     let openMixer: () -> Void
     /// Tapping the name: Teleport.
@@ -255,6 +260,10 @@ struct Carousel: View {
     /// While a swipe lands, the two pages are drawn from a snapshot so the sound can switch at
     /// release without the sliding pages changing under the finger.
     @State private var frozen: (outgoing: Mixer.Page, incoming: Mixer.Page, forward: Bool)?
+    /// The live page's form, whose glass a drag can take hold of.
+    @State private var formSize: CGSize = .zero
+    /// Where the current drag started, and whether that was on the glass.
+    @State private var grab: (at: CGPoint, onForm: Bool)?
 
     private let gap: CGFloat = 56
     /// Neighbouring pages only draw their sculptures while they're sliding into view.
@@ -302,6 +311,7 @@ struct Carousel: View {
         VStack(alignment: .leading, spacing: 0) {
             SoundForm(orbs: mixer.byVolume)
                 .frame(maxHeight: .infinity)
+                .onGeometryChange(for: CGSize.self) { $0.size } action: { formSize = $0 }
                 .contentShape(Rectangle())
                 .onTapGesture { openMixer() }
                 .accessibilityAddTraits(.isButton)
@@ -324,10 +334,23 @@ struct Carousel: View {
     private func drag(width: CGFloat, step: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 10)
             .onChanged { g in
+                if turnsForm(g) { return SculptureSpin.home.drag(g.translation) }
                 guard abs(g.translation.width) > abs(g.translation.height) else { return }
                 follow(g.translation.width, width: width)
             }
-            .onEnded { g in release(projected: g.predictedEndTranslation.width, width: width, step: step) }
+            .onEnded { g in
+                if turnsForm(g) { return SculptureSpin.home.release(g.velocity, coast: !reduceMotion) }
+                release(projected: g.predictedEndTranslation.width, width: width, step: step)
+            }
+    }
+
+    /// Whether this drag took hold of the glass: decided where it starts, and kept for the drag.
+    /// (The live page sits at the top left, so the drag's start is a point in its form.)
+    private func turnsForm(_ g: DragGesture.Value) -> Bool {
+        if let grab, grab.at == g.startLocation { return grab.onForm }
+        let onForm = !settling && dragX == 0 && SoundForm.touches(g.startLocation, orbs: mixer.byVolume, size: formSize)
+        grab = (g.startLocation, onForm)
+        return onForm
     }
 
     /// The pages follow the finger.
@@ -487,12 +510,22 @@ struct SoundForm: View {
     let orbs: [Orb]
     var live = true
 
+    /// How it's seen: a little from above, filling most of the width.
+    static let pitch = 0.5, extent = 0.8
+
     var body: some View {
         ZStack {
             Halo(orbs: orbs)
                 .opacity(0.4)
-            SculptureView(orbs: orbs, style: .home, pitch: 0.5, extent: 0.8, animated: live)
+            SculptureView(orbs: orbs, style: .home, pitch: Self.pitch, extent: Self.extent, animated: live)
         }
+    }
+
+    /// Whether a point in a form of this size is on the glass, as it's turned right now.
+    static func touches(_ point: CGPoint, orbs: [Orb], size: CGSize) -> Bool {
+        let spin = SculptureSpin.home
+        let camera = SculptureCamera(yaw: spin.yaw, pitch: pitch + spin.tilt, size: size, extent: extent)
+        return SculptureStyle.home.touches(point, orbs: orbs, camera: camera)
     }
 }
 

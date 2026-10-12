@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Listening: the halo and the scene's name, with the ones before and after beside it. Swipe
-/// with two fingers or press ← → to travel, click the light for its layers, click the name to
-/// teleport. Along the bottom, what's playing, the sleep timer and play.
+/// with two fingers or press ← → to travel, click the light for its layers or drag it to turn it,
+/// click the name to teleport. Along the bottom, what's playing, the sleep timer and play.
 struct MacListen: View {
     @Environment(Mixer.self) private var mixer
     @Environment(MacNavigation.self) private var navigation
@@ -16,6 +16,7 @@ struct MacListen: View {
         "Swipe with two fingers, or press → to travel",
         "Click the light to see its layers",
         "Click the name to teleport",
+        "Drag the light to turn it",
     ]
 
     var body: some View {
