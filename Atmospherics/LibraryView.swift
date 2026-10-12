@@ -5,9 +5,14 @@ struct LibraryView: View {
     @Environment(Mixer.self) private var mixer
     @Environment(\.dismiss) private var dismiss
     @State private var filter: Preset.Tag?
+    @State private var showingYours = false
+    @State private var renaming: SavedMix?
+    @State private var newName = ""
 
     private var presets: [Preset] {
-        Preset.all.filter { filter == nil || $0.tag == filter }
+        let yours = mixer.savedMixes.map(\.preset)
+        if showingYours { return yours }
+        return (filter == nil ? yours : []) + Preset.all.filter { filter == nil || $0.tag == filter }
     }
 
     var body: some View {
@@ -18,9 +23,12 @@ struct LibraryView: View {
                 .padding(.horizontal, 4)
 
             HStack(spacing: 8) {
-                chip("All", selected: filter == nil) { filter = nil }
+                chip("All", selected: filter == nil && !showingYours) { filter = nil; showingYours = false }
+                if !mixer.savedMixes.isEmpty {
+                    chip("Yours", selected: showingYours) { filter = nil; showingYours = true }
+                }
                 ForEach(Preset.Tag.allCases, id: \.self) { tag in
-                    chip(tag.rawValue, selected: filter == tag) { filter = tag }
+                    chip(tag.rawValue, selected: filter == tag && !showingYours) { filter = tag; showingYours = false }
                 }
             }
             .padding(.top, 18)
@@ -37,6 +45,15 @@ struct LibraryView: View {
                             row(preset)
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            if let saved = mixer.savedMixes.first(where: { $0.id == preset.savedID }) {
+                                Button("Rename", systemImage: "pencil") { newName = saved.name; renaming = saved }
+                                Button("Delete", systemImage: "trash", role: .destructive) {
+                                    withAnimation { mixer.delete(saved) }
+                                    if mixer.savedMixes.isEmpty { showingYours = false }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -48,6 +65,12 @@ struct LibraryView: View {
         .presentationBackground(Theme.background)
         .presentationDragIndicator(.visible)
         .animation(.smooth(duration: 0.25), value: filter)
+        .animation(.smooth(duration: 0.25), value: showingYours)
+        .alert("Rename mix", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Name", text: $newName)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") { if let r = renaming { mixer.rename(r, to: newName) } }
+        }
         .sensoryFeedback(.selection, trigger: filter)
     }
 
@@ -113,4 +136,32 @@ private struct MiniField: View {
         }
         .frame(width: size, height: size)
     }
+}
+
+/// Asks for a name, pre-filled with a suggestion, and saves the current mix.
+struct SaveMixPrompt: ViewModifier {
+    @Environment(Mixer.self) private var mixer
+    @Binding var isPresented: Bool
+    @State private var name = ""
+    @State private var saves = 0
+
+    func body(content: Content) -> some View {
+        content
+            .alert("Save this mix", isPresented: $isPresented) {
+                TextField("Name", text: $name)
+                Button("Cancel", role: .cancel) {}
+                Button("Save") {
+                    mixer.saveCurrent(named: name)
+                    saves += 1
+                }
+            } message: {
+                Text("It'll keep sounding exactly like this, in Library › Yours.")
+            }
+            .onChange(of: isPresented) { _, shown in if shown { name = mixer.suggestedSaveName } }
+            .sensoryFeedback(.success, trigger: saves)
+    }
+}
+
+extension View {
+    func saveMixPrompt(isPresented: Binding<Bool>) -> some View { modifier(SaveMixPrompt(isPresented: isPresented)) }
 }

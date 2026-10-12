@@ -4,12 +4,16 @@ struct Preset: Identifiable {
     enum Tag: String, CaseIterable { case sleep = "Sleep", focus = "Focus", relax = "Relax" }
 
     let name: String
-    let tag: Tag
+    let tag: Tag?          // nil for a mix you saved
     let length: String
     let description: String
     let mix: [(SoundKind, Double)]
+    /// A saved mix keeps its exact field instead of being laid out from `mix`.
+    var savedOrbs: [Orb]? = nil
+    var savedID: UUID? = nil
 
-    var id: String { name }
+    var id: String { savedID?.uuidString ?? name }
+    var isSaved: Bool { savedID != nil }
 
     static let all: [Preset] = [
         Preset(name: "Attic Rain", tag: .sleep, length: "8 h", description: "Brown noise, rain, distant thunder",
@@ -64,7 +68,10 @@ struct Preset: Identifiable {
 
     /// Places each sound at the distance from center that gives its volume,
     /// spread around the field so orbs don't overlap.
-    var orbs: [Orb] { Self.layout(mix.compactMap { k, v in k.playable.map { ($0, v) } }) }
+    var orbs: [Orb] {
+        if let saved = savedOrbs { return saved.compactMap { o in o.kind.playable.map { Orb(id: $0.stableID, kind: $0, x: o.x, y: o.y) } } }
+        return Self.layout(mix.compactMap { k, v in k.playable.map { ($0, v) } })
+    }
 
     static func layout(_ mix: [(SoundKind, Double)]) -> [Orb] {
         mix.enumerated().map { j, entry in
@@ -95,5 +102,20 @@ extension SoundKind {
     var stableID: UUID {
         let i = SoundKind.allCases.firstIndex(of: self) ?? 0
         return UUID(uuidString: String(format: "A7505000-0000-0000-0000-%012d", i))!
+    }
+}
+
+/// A mix you saved: its exact field, and where it came from.
+struct SavedMix: Codable, Identifiable, Equatable {
+    var id = UUID()
+    var name: String
+    var origin: String
+    var created = Date()
+    var orbs: [Orb]
+
+    var preset: Preset {
+        Preset(name: name, tag: nil, length: "Yours", description: origin,
+               mix: orbs.sorted { $0.volume > $1.volume }.map { ($0.kind, $0.volume) },
+               savedOrbs: orbs, savedID: id)
     }
 }

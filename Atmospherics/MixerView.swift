@@ -3,6 +3,7 @@ import SwiftUI
 /// The field: drag a light toward the center to hear more of it, toward the rim to fade it out.
 struct MixerView: View {
     @Environment(Mixer.self) private var mixer
+    @State private var saving = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -11,9 +12,16 @@ struct MixerView: View {
                     .font(Theme.display(30))
                     .tracking(-0.6)
                 Spacer()
-                Text(mixer.weather.head)
-                    .font(Theme.mono(11))
-                    .foregroundStyle(Theme.mono)
+                Button { saving = true } label: {
+                    Text("Save")
+                        .font(Theme.mono(12, .medium))
+                        .padding(.vertical, 7)
+                        .padding(.horizontal, 14)
+                        .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(mixer.orbs.isEmpty)
             }
             .padding(.horizontal, 8)
 
@@ -65,6 +73,7 @@ struct MixerView: View {
         .foregroundStyle(Theme.text)
         .background(Theme.background.ignoresSafeArea())
         .toolbarBackground(.hidden, for: .navigationBar)
+        .saveMixPrompt(isPresented: $saving)
     }
 
     private func chip(_ kind: SoundKind) -> some View {

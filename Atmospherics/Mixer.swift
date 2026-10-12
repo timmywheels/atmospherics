@@ -107,7 +107,12 @@ final class Mixer {
         if let raw = defaults.string(forKey: "mode"), let saved = Mode(rawValue: raw) { mode = saved }
         customPlaces = (defaults.array(forKey: "customPlaces") as? [[String: Any]] ?? []).compactMap(Place.init(dictionary:))
         pinnedPlace = defaults.string(forKey: "pinnedPlace").flatMap { name in allPlaces.first { $0.name == name } }
-        activePreset = defaults.string(forKey: "activePreset").flatMap { name in Preset.all.first { $0.name == name } }
+        if let data = defaults.data(forKey: "savedMixes"), let saved = try? JSONDecoder().decode([SavedMix].self, from: data) {
+            savedMixes = saved
+        }
+        activePreset = defaults.string(forKey: "activePreset").flatMap { id in
+            Preset.all.first { $0.id == id } ?? savedMixes.first { $0.id.uuidString == id }?.preset
+        }
         apply()
         setUpSystemAudio()
         PlayPauseIntent.handler = { [weak self] in self?.togglePlayback() }
@@ -340,9 +345,63 @@ final class Mixer {
     /// A Library mix that's playing. It stands on its own, apart from any place's weather.
     private(set) var activePreset: Preset?
 
+    // MARK: Saved mixes
+
+    private(set) var savedMixes: [SavedMix] = []
+
+    /// A name to start from when saving, e.g. "Waterford, light rain".
+    var suggestedSaveName: String {
+        if let p = activePreset, title == p.name { return "\(p.name) (mine)" }
+        if title == "Your mix" { return "My mix \(savedMixes.count + 1)" }
+        if mode == .escape, let e = escape { return "\(e.place.title), \(e.conditions.mixName.lowercased())" }
+        if let h = home { return "\(h.place), \(h.mixName.lowercased())" }
+        return title
+    }
+
+    private var saveOrigin: String {
+        let date = Date().formatted(.dateTime.month(.abbreviated).day())
+        if let p = activePreset { return title == p.name ? "Copy of \(p.name), \(date)" : "Started from \(p.name), \(date)" }
+        if title == "Your mix" { return "Made in the mixer, \(date)" }
+        if mode == .escape, let e = escape { return "Saved from \(e.place.name)'s \(e.conditions.mixName.lowercased()), \(date)" }
+        if let h = home { return "Saved from \(h.mixName.lowercased()) in \(h.place), \(date)" }
+        return "Saved \(date)"
+    }
+
+    /// Saves the field exactly as it is now and makes it the playing mix.
+    func saveCurrent(named name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let mix = SavedMix(name: trimmed.isEmpty ? suggestedSaveName : trimmed, origin: saveOrigin,
+                           orbs: (visualTarget ?? orbs).filter { $0.volume > 0.01 })
+        savedMixes.insert(mix, at: 0)
+        persistSaved()
+        setActivePreset(mix.preset)
+        setTitle(mix.name, for: mode)
+    }
+
+    func rename(_ mix: SavedMix, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let i = savedMixes.firstIndex(of: mix) else { return }
+        savedMixes[i].name = trimmed
+        persistSaved()
+        if activePreset?.savedID == mix.id {
+            setActivePreset(savedMixes[i].preset)
+            setTitle(trimmed, for: mode)
+        }
+    }
+
+    func delete(_ mix: SavedMix) {
+        savedMixes.removeAll { $0.id == mix.id }
+        persistSaved()
+        if activePreset?.savedID == mix.id { setActivePreset(nil) }
+    }
+
+    private func persistSaved() {
+        if let data = try? JSONEncoder().encode(savedMixes) { defaults.set(data, forKey: "savedMixes") }
+    }
+
     private func setActivePreset(_ preset: Preset?) {
         activePreset = preset
-        defaults.set(preset?.name, forKey: "activePreset")
+        defaults.set(preset?.id, forKey: "activePreset")
     }
 
     /// Where "Back to …" returns from a Library mix: the place you were in, or home.

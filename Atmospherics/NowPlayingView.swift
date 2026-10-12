@@ -169,6 +169,7 @@ private struct Carousel: View {
     @Binding var hasSwiped: Bool
     @State private var pastThreshold = false
     @State private var settling = false
+    @State private var saving = false
     /// While a swipe lands, the two pages are drawn from a snapshot so the sound can switch at
     /// release without the sliding pages changing under the finger.
     @State private var frozen: (outgoing: Mixer.Page, incoming: Mixer.Page, forward: Bool)?
@@ -226,6 +227,11 @@ private struct Carousel: View {
             }
             .buttonStyle(.plain)
             .accessibilityHint("Opens the library")
+            .contextMenu {
+                Button("Save this mix", systemImage: "bookmark") { saving = true }
+                Button("Library", systemImage: "books.vertical") { showLibrary = true }
+            }
+            .saveMixPrompt(isPresented: $saving)
             PageLines(line: mixer.weather.line, layers: mixer.layersLine)
         }
     }
