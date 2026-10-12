@@ -56,3 +56,8 @@ Freesound files were taken from their public HQ previews (about 128 kbps MP3).
 | rocks | https://freesound.org/s/411509/ | felix.blume | CC0 | 3 s (150 s loop) |
 | buoy | https://freesound.org/s/675693/ | craigsmith | CC0 | 1 s (85 s loop) |
 | halyards | https://freesound.org/s/538010/ | bruno.auzet | CC0 | 60 s (150 s loop) |
+| tram | https://freesound.org/s/776247/ | soundandmelodies | CC0 | 72 s (45 s, one tram passing by the Sé, plays once) |
+| motorbikes | https://freesound.org/s/452418/ | kyles | CC0 | 30 s (145 s loop) |
+| fountain | https://freesound.org/s/572465/ | frnk_cnt | CC0 | 3 s (118 s loop) |
+| templeBell | https://freesound.org/s/397352/ | Vurca | CC0 | 0 s (29 s, one strike, plays once) |
+| bazaar | https://freesound.org/s/511005/ | 3bagbrew | CC0 | 14 s (52 s loop, before the singing starts) |

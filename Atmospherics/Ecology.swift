@@ -302,6 +302,29 @@ enum Ecology {
             case 0, 6, 23: return 0.5
             default: return 1
             }
+        // A tram rattles past every so often while the trams run, each place at its own minutes.
+        case .tram:
+            guard (6...22).contains(t.hour) else { return 0 }
+            let busy = place?.signature.first { $0.0 == .tram }?.1 ?? 0.1
+            let every = busy >= 0.25 ? 12 : 20
+            let shift = (place?.name.unicodeScalars.reduce(0) { $0 + Int($1.value) } ?? 0) % every
+            return (t.minute + 60 - shift) % every < 2 ? 1 : 0
+        // A temple bell sounds every two hours from dawn, as the hour turns.
+        case .templeBell:
+            return (6...20).contains(t.hour) && t.hour % 2 == 0 && t.minute < 2 ? 1 : 0
+        case .motorbikes:
+            let curve: [Double] = [0.35, 0.25, 0.15, 0.12, 0.2, 0.45, 0.8, 1.1, 1.15, 1, 0.9, 0.9,
+                                   0.95, 0.9, 0.9, 0.95, 1.05, 1.15, 1.1, 0.95, 0.8, 0.65, 0.55, 0.45]
+            return curve[t.hour]
+        // Fountains run from morning to late evening; a market keeps market hours.
+        case .fountain:
+            return (6...23).contains(t.hour) ? 1 : 0.4
+        case .bazaar:
+            switch t.hour {
+            case 9...21: return 1
+            case 8, 22: return 0.5
+            default: return 0
+            }
         case .bells:
             guard (8...20).contains(t.hour) else { return 0 }
             // Calling to Sunday morning services, otherwise just on the hour.
@@ -327,10 +350,10 @@ enum Ecology {
     static func drift(of kind: SoundKind, at place: Place?, now: Date) -> Double {
         let depth: Double, rests: Bool
         switch kind {
-        case .planes, .geese, .bells, .foghorn, .thunder, .lightning, .whales:
+        case .planes, .geese, .tram, .templeBell, .bells, .foghorn, .thunder, .lightning, .whales:
             return 1
         case .ocean, .rain, .lightRain, .heavyRain, .tinRoof, .tentRain, .rainyStreet, .cityHum, .stream, .waterfall,
-             .lake, .lapping, .rocks, .wind, .highway, .cabin, .fan, .caveDrips, .drone, .brown, .pink, .white, .green, .grey, .blue, .violet:
+             .lake, .lapping, .rocks, .fountain, .wind, .highway, .cabin, .fan, .caveDrips, .drone, .brown, .pink, .white, .green, .grey, .blue, .violet:
             (depth, rests) = (0.15, false)
         default:
             (depth, rests) = (0.5, true)
@@ -406,6 +429,13 @@ enum Ecology {
             return snowCover ? 0.7 : c.isRaining ? 1.15 : 1
         case .planes:
             return heavy ? 0.5 : 1
+        // Fewer riders in the rain; fountains are drained in a freeze; markets thin out in a downpour.
+        case .motorbikes:
+            return heavy ? 0.5 : c.isRaining ? 0.8 : 1
+        case .fountain:
+            return c.temperatureC < 1 ? 0 : 1
+        case .bazaar:
+            return heavy ? 0.6 : 1
         case .cafe:
             return heavy ? 0.5 : snowCover ? 0.6 : 1
         case .whales:

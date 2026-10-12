@@ -50,17 +50,17 @@ extension SoundKind {
         case .ocean, .rocks, .rainyStreet, .cityHum, .grey: -2
         case .tentRain, .tinRoof, .wind, .stream: -3
         case .cafe, .train, .fire, .white, .blue, .lapping: -4
-        case .violet, .traffic: -5
+        case .violet, .traffic, .bazaar: -5
         case .highway: -6
         case .lightRain: -6
         case .lake, .caveDrips: -7
-        // Life: in front of the air, but never on top of you.
+        // Life, and the life of a place: in front of the air, but never on top of you.
         case .jungleBirds, .canopy: -2
         case .birds, .winterBirds: -3
         case .parrots, .frogs: -4
         case .crickets, .treeFrogs: -5
-        case .cicadas, .peepers, .howlers, .loons, .gulls, .geese, .whales, .bells, .drone, .lightning, .palms: -6
-        case .halyards: -7
+        case .cicadas, .peepers, .howlers, .loons, .gulls, .geese, .whales, .bells, .drone, .lightning, .palms, .tram, .motorbikes, .fountain: -6
+        case .halyards, .templeBell: -7
         case .owls: -7
         case .wolves, .foghorn, .library, .planes: -8
         case .leaves, .buoy: -9

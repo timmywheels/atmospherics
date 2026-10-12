@@ -12,6 +12,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
     case winterBirds, gulls, foghorn, peepers, geese
     case traffic, highway, planes
     case lapping, palms, rocks, buoy, halyards
+    case tram, motorbikes, fountain, templeBell, bazaar
 
     /// Recorded sounds play from `Sounds/<rawValue>.m4a` instead of being synthesized.
     var isRecorded: Bool {
@@ -21,14 +22,14 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
              .cafe, .library, .cabin, .bells, .typing, .clock, .cityHum, .rainyStreet,
              .rain, .lightRain, .heavyRain, .thunder, .fire, .crickets, .ocean, .birds, .stream, .train, .wind, .cicadas, .frogs,
              .winterBirds, .gulls, .foghorn, .peepers, .geese, .traffic, .highway, .planes,
-             .lapping, .palms, .rocks, .buoy, .halyards: true
+             .lapping, .palms, .rocks, .buoy, .halyards, .tram, .motorbikes, .fountain, .templeBell, .bazaar: true
         default: false
         }
     }
 
-    /// One-off events (a plane passing over, geese flying by) play through once from the start
+    /// One-off events (a plane passing over, geese flying by, a tram, a temple bell) play through once from the start
     /// when they come on, instead of looping.
-    var isEvent: Bool { self == .planes || self == .geese }
+    var isEvent: Bool { [.planes, .geese, .tram, .templeBell].contains(self) }
 
     /// This sound if the app has it, otherwise the closest synthesized one (or nothing).
     var playable: SoundKind? {
@@ -42,11 +43,14 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .lake, .whales, .lapping, .rocks: return .ocean
         case .leaves: return .wind
         case .palms: return .leaves
-        case .cafe, .rainyStreet, .traffic, .highway: return .cityHum
+        case .cafe, .rainyStreet, .traffic, .highway, .bazaar: return .cityHum
+        case .motorbikes: return .traffic
+        case .fountain: return .stream
+        case .templeBell: return .bells
         case .bells: return .chimes
         case .cabin: return .fan
         // Better silent than wrong: no stand-in for these (a spring chorus is no winter bird).
-        default: return nil   // howlers, owls, loons, wolves, library, typing, clock, winter birds, gulls, foghorn, geese, planes, buoy, rigging
+        default: return nil   // howlers, owls, loons, wolves, library, typing, clock, winter birds, gulls, foghorn, geese, planes, buoy, rigging, tram
         }
     }
 
@@ -78,6 +82,9 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .traffic, .highway, .planes: .city
         case .lapping, .rocks, .buoy, .halyards: .water
         case .palms: .nature
+        case .tram, .motorbikes, .bazaar: .city
+        case .fountain: .water
+        case .templeBell: .calm
         }
     }
 
@@ -102,6 +109,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .rocks: "Surf on rocks"
         case .buoy: "Bell buoy"
         case .halyards: "Sailboat rigging"
+        case .templeBell: "Temple bell"
         default: short
         }
     }
@@ -122,6 +130,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .winterBirds: "Winter birds"
         case .lapping: "Lapping"
         case .halyards: "Rigging"
+        case .templeBell: "Temple bell"
         default: rawValue.capitalized
         }
     }
@@ -177,6 +186,11 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .rocks: 212
         case .buoy: 28
         case .halyards: 268
+        case .tram: 92
+        case .motorbikes: 0
+        case .fountain: 190
+        case .templeBell: 75
+        case .bazaar: 32
         case .tinRoof: 240
         case .whales: 250
         case .lake: 210
