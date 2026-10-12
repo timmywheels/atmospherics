@@ -163,15 +163,11 @@ struct NowPlayingView: View {
 
             Carousel(dragX: $dragX, openMixer: { showMixer = true }, teleport: { showTeleport = true },
                      openLibrary: { showLibrary = true })
-                .frame(minHeight: 420, maxHeight: .infinity)
+                .frame(minHeight: 400, maxHeight: .infinity)
 
             .sensoryFeedback(.selection, trigger: mixer.mode)
 
-            Waveform()
-                .frame(height: 40)
-                .padding(.top, 6)
-
-            // What's playing, and the control for it, side by side along the bottom.
+            // What's playing, and the sleep timer if there is one.
             HStack(spacing: 14) {
                 LayerStrip(orbs: mixer.byVolume)
                 if mixer.timer != .off {
@@ -180,10 +176,21 @@ struct NowPlayingView: View {
                         .foregroundStyle(Theme.muted)
                         .transition(.opacity)
                 }
-                PlayButton()
             }
             .padding(.top, 14)
             .animation(.smooth, value: mixer.timer)
+
+            Waveform()
+                .frame(height: 40)
+                .padding(.top, 2)
+
+            // Where to go next, your library, and play, in reach of a thumb.
+            HStack(spacing: 12) {
+                TakeMeBar { showTeleport = true }
+                LibraryButton { showLibrary = true }
+                PlayButton()
+            }
+            .padding(.top, 10)
         }
         .padding(.horizontal, 28)
         .padding(.top, 18)
@@ -608,6 +615,51 @@ private struct Breathing<Content: View>: View {
                     expanded = true
                 }
             }
+    }
+}
+
+/// The way to Teleport, as the start of a sentence: "Take me to…".
+private struct TakeMeBar: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 15))
+                Text("Take me to…")
+                    .font(Theme.label(15))
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(Theme.secondary)
+            .padding(.horizontal, 18)
+            .frame(height: 48)
+            .background(Capsule().fill(Color.white.opacity(0.06)))
+            .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Teleport")
+        .accessibilityHint("Build a scene, or say where to go")
+    }
+}
+
+/// Your library, beside the way to Teleport.
+private struct LibraryButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "books.vertical")
+                .font(.system(size: 17))
+                .foregroundStyle(Theme.secondary)
+                .frame(width: 48, height: 48)
+                .background(Circle().fill(Color.white.opacity(0.06)))
+                .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Library")
     }
 }
 
