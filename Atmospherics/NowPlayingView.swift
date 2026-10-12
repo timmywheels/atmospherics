@@ -18,8 +18,22 @@ struct NowPlayingView: View {
         "Swipe left or right to travel",
         "Tap the light to open the mixer",
         "Swipe up for your library",
+        "Swipe down to change the weather",
         "Hold play for a sleep timer",
     ]
+
+    @State private var weatherToastTask: Task<Void, Never>?
+
+    private func showWeatherToast() {
+        weatherToastTask?.cancel()
+        let label = mixer.skyOverride == .live ? "Live weather" : mixer.skyOverride.rawValue
+        withAnimation(.smooth(duration: 0.25)) { hint = label }
+        weatherToastTask = Task {
+            try? await Task.sleep(for: .seconds(1.4))
+            guard !Task.isCancelled else { return }
+            withAnimation(.smooth(duration: 0.4)) { hint = nil }
+        }
+    }
 
     /// Shows each hint once, a few seconds apart, the first times you open the app.
     private func runHints() async {
@@ -37,6 +51,23 @@ struct NowPlayingView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Menu {
+                    if mixer.activePreset != nil {
+                        Button("Back to \(mixer.presetReturnName)", systemImage: "arrow.uturn.backward") {
+                            withAnimation(.smooth(duration: 0.35)) { mixer.leavePreset() }
+                        }
+                    } else if mixer.mode == .escape {
+                        Button("Home · \(mixer.homeName)", systemImage: "house") {
+                            withAnimation(.smooth(duration: 0.35)) { mixer.goHome() }
+                        }
+                    } else if mixer.following[.match] != true {
+                        Button("Follow the weather", systemImage: "arrow.clockwise") { mixer.followWeatherAgain() }
+                    }
+                    if mixer.isImagining {
+                        Button("Back to live weather", systemImage: "arrow.uturn.backward") {
+                            withAnimation(.smooth) { mixer.clearOverrides() }
+                        }
+                        Divider()
+                    }
                     Button("Mixer", systemImage: "circle.dotted") { showMixer = true }
                     Button("Library", systemImage: "books.vertical") { showLibrary = true }
                     Button("World", systemImage: "globe") { showGlobe = true }
@@ -109,31 +140,6 @@ struct NowPlayingView: View {
             Carousel(showLibrary: $showLibrary, dragX: $dragX, openMixer: { showMixer = true })
                 .frame(minHeight: 420, maxHeight: .infinity)
 
-            // Away: a quiet way home. At home but edited: a way back to following the weather.
-            // A fixed-height slot: the line fades in and out without moving anything.
-            ZStack(alignment: .leading) {
-                Text(" ").hidden()
-                if mixer.activePreset != nil {
-                    Button { withAnimation(.smooth(duration: 0.35)) { mixer.leavePreset() } } label: {
-                        Text("← Back to \(mixer.presetReturnName)")
-                    }
-                } else if mixer.mode == .escape {
-                    Button { withAnimation(.smooth(duration: 0.35)) { mixer.goHome() } } label: {
-                        Text("← Back to \(mixer.homeName)")
-                    }
-                } else if mixer.following[.match] != true {
-                    Button { mixer.followWeatherAgain() } label: {
-                        Text("↺ Follow the weather")
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .font(Theme.mono(12))
-            .foregroundStyle(Theme.text.opacity(0.8))
-            .buttonStyle(.plain)
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
-            .padding(.top, 14)
             .sensoryFeedback(.selection, trigger: mixer.mode)
 
             Waveform()
@@ -160,12 +166,18 @@ struct NowPlayingView: View {
         .simultaneousGesture(
             DragGesture(minimumDistance: 30).onEnded { g in
                 let up = -g.translation.height
-                if up > 80, up > abs(g.translation.width) * 1.5 {
+                guard abs(up) > 80, abs(up) > abs(g.translation.width) * 1.5 else { return }
+                if up > 0 {
                     showLibrary = true
+                } else {
+                    // Swipe down: change the weather.
+                    withAnimation(.smooth) { mixer.cycleSky() }
+                    showWeatherToast()
                 }
             }
         )
         .accessibilityAction(named: "Library") { showLibrary = true }
+        .accessibilityAction(named: "Change the weather") { mixer.cycleSky() }
         .accessibilityAction(named: "Mixer") { showMixer = true }
         .navigationDestination(isPresented: $showMixer) { MixerView() }
         .overlay(alignment: .bottom) {
@@ -191,6 +203,7 @@ struct NowPlayingView: View {
             GlobeView()
         }
         .sensoryFeedback(.impact(weight: .medium), trigger: mixer.shuffleCount)
+        .sensoryFeedback(.impact(flexibility: .soft), trigger: mixer.skyOverride)
     }
 
 }

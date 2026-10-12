@@ -68,7 +68,8 @@ final class Mixer {
     // MARK: Overrides
 
     enum SkyOverride: String, CaseIterable {
-        case live = "Live", clear = "Clear", rain = "Rain", storm = "Storm", snow = "Snow", fog = "Fog", wind = "Windy"
+        case live = "Live", clear = "Clear", drizzle = "Drizzle", rain = "Rain", downpour = "Downpour"
+        case storm = "Storm", snow = "Snow", fog = "Fog", wind = "Windy"
     }
     enum TimeOverride: String, CaseIterable { case live = "Live", day = "Day", night = "Night" }
 
@@ -85,6 +86,21 @@ final class Mixer {
     func setTime(_ t: TimeOverride) {
         timeOverride = t
         defaults.set(t.rawValue, forKey: "timeOverride")
+        reapplyAfterOverride()
+    }
+
+    /// Swipe down: the next weather in the list, wrapping back to Live.
+    func cycleSky() {
+        let all = SkyOverride.allCases
+        setSky(all[(all.firstIndex(of: skyOverride)! + 1) % all.count])
+    }
+
+    /// Clears both overrides at once.
+    func clearOverrides() {
+        skyOverride = .live
+        timeOverride = .live
+        defaults.set(SkyOverride.live.rawValue, forKey: "skyOverride")
+        defaults.set(TimeOverride.live.rawValue, forKey: "timeOverride")
         reapplyAfterOverride()
     }
 
@@ -108,7 +124,9 @@ final class Mixer {
         switch skyOverride {
         case .live: break
         case .clear: c.code = 0; c.precipitationMM = 0; c.windKMH = min(c.windKMH, 10)
-        case .rain: c.code = 63; c.precipitationMM = max(c.precipitationMM, 1.5)
+        case .drizzle: c.code = 53; c.precipitationMM = 0.2
+        case .rain: c.code = 63; c.precipitationMM = 1.5
+        case .downpour: c.code = 65; c.precipitationMM = 8
         case .storm: c.code = 95; c.precipitationMM = max(c.precipitationMM, 4); c.windKMH = max(c.windKMH, 35); c.pressureHPA = min(c.pressureHPA, 998)
         case .snow: c.code = 73; c.precipitationMM = 0; c.temperatureC = min(c.temperatureC, -2)
         case .fog: c.code = 45; c.precipitationMM = 0; c.windKMH = min(c.windKMH, 6)
@@ -123,7 +141,9 @@ final class Mixer {
             switch skyOverride {
             case .live: return nil
             case .clear: return timeOverride == .live ? "clear skies" : "clear"
+            case .drizzle: return timeOverride == .live ? "drizzle" : "drizzly"
             case .rain: return timeOverride == .live ? "rain" : "rainy"
+            case .downpour: return timeOverride == .live ? "a downpour" : "pouring"
             case .storm: return timeOverride == .live ? "a storm" : "stormy"
             case .snow: return timeOverride == .live ? "snow" : "snowy"
             case .fog: return timeOverride == .live ? "fog" : "foggy"

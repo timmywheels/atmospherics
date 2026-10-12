@@ -41,3 +41,5 @@ Freesound files were taken from their public HQ previews (about 128 kbps MP3).
 | wind | https://freesound.org/s/521736/ | Fission9 | CC0 | 2 s (55 s loop) |
 | cicadas | https://freesound.org/s/396810/ | Jedo | CC0 | 30 s (90 s loop) |
 | frogs | https://freesound.org/s/135561/ | felix.blume | CC0 | 2 s (55 s loop) |
+| lightRain | https://freesound.org/s/572267/ | TRP | CC0 | 5 s (85 s loop) |
+| heavyRain | https://freesound.org/s/717843/ | TRP | CC0 | 10 s (100 s loop) |

@@ -14,6 +14,15 @@ struct Conditions: Equatable {
     var isThunder: Bool { (95...99).contains(code) }
     var isSnow: Bool { (71...77).contains(code) || code == 85 || code == 86 }
     var isFog: Bool { code == 45 || code == 48 }
+    enum RainIntensity { case light, moderate, heavy }
+
+    var rainIntensity: RainIntensity {
+        if isThunder || precipitationMM > 4 || [65, 67, 82].contains(code) { return .heavy }
+        if precipitationMM < 0.6 && [51, 53, 55, 56, 57, 61, 80].contains(code) { return .light }
+        if precipitationMM < 0.4 { return .light }
+        return .moderate
+    }
+
     var isRaining: Bool { precipitationMM > 0.05 || (51...67).contains(code) || (80...82).contains(code) || isThunder }
 
     /// "auto" (the phone's region), "f" or "c"; set from the menu.
@@ -33,7 +42,13 @@ struct Conditions: Equatable {
     var mixName: String {
         if isThunder { return "Thunderstorm" }
         if isSnow { return "Snowfall" }
-        if isRaining { return precipitationMM > 2.5 ? "Heavy Rain" : "Light Rain" }
+        if isRaining {
+            switch rainIntensity {
+            case .light: return [51, 53, 55].contains(code) ? "Drizzle" : "Light Rain"
+            case .moderate: return "Rain"
+            case .heavy: return "Downpour"
+            }
+        }
         if isFog { return "Fog Bank" }
         if windKMH > 30 { return isDay ? "Gusty Day" : "Windy Night" }
         if code >= 2 { return isDay ? "Overcast" : "Cloudy Night" }
@@ -132,8 +147,15 @@ enum WeatherMix {
             mix.append((.brown, (lowPressure || c.isSnow ? 0.35 : 0.28) * floor))
         }
 
+        // Rain has flavors: a light patter, steady rain, or a rushing downpour.
         if c.isRaining && !c.isSnow {
-            mix.append((.rain, min(0.9, 0.4 + c.precipitationMM / 4)))
+            switch c.rainIntensity {
+            case .light: mix.append((.lightRain, 0.6))
+            case .moderate: mix.append((.rain, min(0.85, 0.45 + c.precipitationMM / 6)))
+            case .heavy:
+                mix.append((.heavyRain, 0.8))
+                mix.append((.rain, 0.25))
+            }
         }
         if c.isThunder {
             mix.append((.thunder, 0.4))
@@ -169,8 +191,12 @@ enum WeatherMix {
             mix[i].0 = .rainyStreet
         }
         // In the tropics, rain lands on tin roofs.
-        if let place, abs(place.latitude) < 23.5, let i = mix.firstIndex(where: { $0.0 == .rain }) {
-            mix[i].0 = .tinRoof
+        if let place, abs(place.latitude) < 23.5, c.isRaining, !c.isSnow {
+            if let i = mix.firstIndex(where: { $0.0 == .rain || $0.0 == .lightRain }) {
+                mix[i] = (.tinRoof, c.rainIntensity == .light ? 0.5 : mix[i].1)
+            } else {
+                mix.append((.tinRoof, 0.5))
+            }
         }
 
         // Creatures keep their hours.
