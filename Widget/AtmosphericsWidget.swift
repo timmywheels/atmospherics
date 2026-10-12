@@ -67,7 +67,7 @@ struct NowPlayingWidgetView: View {
                     .contentTransition(.opacity)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(placeLine(s))
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.secondary)
                     Text(s.title)
                         .font(.system(size: 22, weight: .light))
@@ -92,7 +92,7 @@ struct NowPlayingWidgetView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                     Text(placeLine(s))
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -134,7 +134,7 @@ struct SoundscapeLiveActivity: Widget {
                     .frame(width: 52, height: 52)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(context.state.place.uppercased())
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.secondary)
                     Text(context.state.title)
                         .font(.system(size: 20, weight: .light))
@@ -157,7 +157,7 @@ struct SoundscapeLiveActivity: Widget {
                     VStack(spacing: 2) {
                         Text(context.state.title).font(.system(size: 17, weight: .light)).lineLimit(1)
                         Text(context.state.place.uppercased())
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.secondary)
                     }
                 }

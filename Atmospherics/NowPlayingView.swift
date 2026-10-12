@@ -6,10 +6,9 @@ import SwiftUI
 struct NowPlayingView: View {
     @Environment(Mixer.self) private var mixer
     @State private var showLibrary = false
-    @State private var showGlobe = false
     @State private var dragX: CGFloat = 0
     @State private var showMixer = false
-    @State private var showWhere = false
+    @State private var showTeleport = false
     @State private var saving = false
     @State private var hint: String?
     /// How many of the one-time hints have been shown.
@@ -23,7 +22,7 @@ struct NowPlayingView: View {
         "Swipe up for your library",
         "Swipe down to change the weather",
         "Hold play for a sleep timer",
-        "Tap the name to choose where to go",
+        "Tap the name to teleport",
     ]
 
     @State private var weatherToastTask: Task<Void, Never>?
@@ -76,10 +75,9 @@ struct NowPlayingView: View {
                         }
                         Divider()
                     }
-                    Button("Where to…", systemImage: "signpost.right") { showWhere = true }
+                    Button("Teleport…", systemImage: "sparkles") { showTeleport = true }
                     Button("Layers", systemImage: "square.3.layers.3d") { showMixer = true }
                     Button("Library", systemImage: "books.vertical") { showLibrary = true }
-                    Button("World", systemImage: "globe") { showGlobe = true }
                     Menu("Sleep timer · \(mixer.timer == .off ? "off" : mixer.timer.label)", systemImage: "moon") {
                         ForEach(Mixer.Timer.allCases, id: \.self) { t in
                             Button(t == .off ? "No timer" : "Stop after \(t.label)") { mixer.setTimer(t) }
@@ -134,7 +132,7 @@ struct NowPlayingView: View {
                         VStack(spacing: 2.5) {
                             ForEach(0..<3, id: \.self) { _ in Circle().frame(width: 2.5, height: 2.5) }
                         }
-                        .foregroundStyle(mixer.isImagining ? Color.oklch(0.8, 0.13, 70) : Theme.mono)
+                        .foregroundStyle(mixer.isImagining ? Color.oklch(0.8, 0.13, 70) : Theme.muted)
                         .shadow(color: mixer.isImagining ? Color.oklch(0.8, 0.13, 70).opacity(0.6) : .clear, radius: 3)
                         .animation(.smooth, value: mixer.isImagining)
                         Text("ATMOSPHERICS")
@@ -145,22 +143,24 @@ struct NowPlayingView: View {
                 .accessibilityLabel(mixer.isImagining ? "Menu. Weather override on." : "Menu")
                 .buttonStyle(.plain)
                 Spacer()
-                Button { showGlobe = true } label: {
+                // Your own weather, one tap back to it.
+                Button { withAnimation(.smooth(duration: 0.35)) { mixer.goHome() } } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "globe")
-                        Text(mixer.headerPlace)
+                        Image(systemName: mixer.outsideSymbol)
+                        Text(mixer.outsideLabel)
                     }
                     .padding(.vertical, 6)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("World. \(mixer.headerPlace)")
+                .accessibilityLabel("Outside. \(mixer.outsideLabel)")
+                .accessibilityHint("Plays the weather outside your window")
             }
-            .font(Theme.mono(11, .medium))
+            .font(Theme.label(11, .medium))
             .tracking(1.3)
-            .foregroundStyle(Theme.mono)
+            .foregroundStyle(Theme.muted)
 
-            Carousel(dragX: $dragX, openMixer: { showMixer = true }, chooseWhere: { showWhere = true },
+            Carousel(dragX: $dragX, openMixer: { showMixer = true }, teleport: { showTeleport = true },
                      openLibrary: { showLibrary = true })
                 .frame(minHeight: 420, maxHeight: .infinity)
 
@@ -175,8 +175,8 @@ struct NowPlayingView: View {
                 LayerStrip(orbs: mixer.byVolume)
                 if mixer.timer != .off {
                     Text(mixer.timer.label)
-                        .font(Theme.mono(11))
-                        .foregroundStyle(Theme.mono)
+                        .font(Theme.label(11))
+                        .foregroundStyle(Theme.muted)
                         .transition(.opacity)
                 }
                 PlayButton()
@@ -203,14 +203,14 @@ struct NowPlayingView: View {
             }
         )
         .accessibilityAction(named: "Library") { showLibrary = true }
-        .accessibilityAction(named: "Where to") { showWhere = true }
+        .accessibilityAction(named: "Teleport") { showTeleport = true }
         .accessibilityAction(named: "Change the weather") { inAtmosphere ? mixer.cycleAtmosphereSky() : mixer.cycleSky() }
         .accessibilityAction(named: "Layers") { showMixer = true }
         .navigationDestination(isPresented: $showMixer) { MixerView() }
         .overlay(alignment: .bottom) {
             if let hint {
                 Text(hint)
-                    .font(Theme.mono(11))
+                    .font(Theme.label(11))
                     .foregroundStyle(Theme.text)
                     .padding(.vertical, 10)
                     .padding(.horizontal, 16)
@@ -226,11 +226,8 @@ struct NowPlayingView: View {
         .sheet(isPresented: $showLibrary) {
             LibraryView(current: mixer.activePreset)
         }
-        .sheet(isPresented: $showWhere) {
-            WhereToView(start: mixer.mode == .atmosphere ? mixer.atmosphere : nil)
-        }
-        .fullScreenCover(isPresented: $showGlobe) {
-            GlobeView()
+        .sheet(isPresented: $showTeleport) {
+            TeleportView(start: mixer.mode == .atmosphere ? mixer.atmosphere : nil)
         }
         .sensoryFeedback(.impact(weight: .medium), trigger: mixer.shuffleCount)
         .sensoryFeedback(.impact(flexibility: .soft), trigger: mixer.skyOverride)
@@ -249,8 +246,8 @@ struct Carousel: View {
     @Environment(Mixer.self) private var mixer
     @Binding var dragX: CGFloat
     let openMixer: () -> Void
-    /// Tapping the name: choose where to go.
-    let chooseWhere: () -> Void
+    /// Tapping the name: Teleport.
+    let teleport: () -> Void
     let openLibrary: () -> Void
     @State private var pastThreshold = false
     @State private var settling = false
@@ -298,7 +295,7 @@ struct Carousel: View {
         .accessibilityAction(named: "Go back") { mixer.travel(forward: false) }
     }
 
-    /// The live page: the real mix, with the name opening Where To.
+    /// The live page: the real mix, with the name opening Teleport.
     private var currentPage: some View {
         VStack(alignment: .leading, spacing: 0) {
             Halo(orbs: mixer.byVolume)
@@ -307,13 +304,13 @@ struct Carousel: View {
                 .onTapGesture { openMixer() }
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel("Open layers")
-            Button { chooseWhere() } label: {
+            Button { teleport() } label: {
                 PageTitle(lines: mixer.titleLines)
             }
             .buttonStyle(.plain)
-            .accessibilityHint("Choose where to go")
+            .accessibilityHint("Teleport somewhere")
             .contextMenu {
-                Button("Where to…", systemImage: "signpost.right") { chooseWhere() }
+                Button("Teleport…", systemImage: "sparkles") { teleport() }
                 Button("Save this mix", systemImage: "bookmark") { saving = true }
                 Button("Library", systemImage: "books.vertical") { openLibrary() }
             }
@@ -399,7 +396,7 @@ private struct PageView: View {
 }
 
 /// The page's name, large: an atmosphere's over two lines ("A log cabin / in a snowstorm"),
-/// with a chevron after the last line to say it opens Where To (kept, hidden, on neighbouring
+/// with a chevron after the last line to say it opens Teleport (kept, hidden, on neighbouring
 /// pages so their titles sit the same).
 private struct PageTitle: View {
     let lines: [String]
@@ -417,7 +414,7 @@ private struct PageTitle: View {
                     if i == lines.count - 1 {
                         Image(systemName: "chevron.down")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(Theme.mono)
+                            .foregroundStyle(Theme.muted)
                             .opacity(chevron ? 1 : 0)
                             .accessibilityHidden(true)
                     }
@@ -444,7 +441,7 @@ private struct PageLines: View {
 /// as many as fit, then "+2" for the rest, so it never wraps.
 struct LayerStrip: View {
     let orbs: [Orb]
-    var color: Color = Theme.mono
+    var color: Color = Theme.muted
 
     private var kinds: [SoundKind] {
         var seen = Set<SoundKind>()
@@ -460,7 +457,7 @@ struct LayerStrip: View {
                 row(Array(kinds.prefix(n)), more: kinds.count - n)
             }
         }
-        .font(Theme.mono(11))
+        .font(Theme.label(11))
         .foregroundStyle(color)
         .frame(maxWidth: .infinity, minHeight: 16, alignment: .leading)
         .accessibilityElement(children: .ignore)
@@ -636,7 +633,7 @@ struct Waveform: View {
                 }
                 let colors = mixer.byVolume.prefix(3).map(\.kind.orb)
                 let shading = GraphicsContext.Shading.linearGradient(
-                    Gradient(colors: colors.isEmpty ? [Theme.mono] : colors + [colors[0]]),
+                    Gradient(colors: colors.isEmpty ? [Theme.muted] : colors + [colors[0]]),
                     startPoint: .zero, endPoint: CGPoint(x: size.width, y: 0))
                 ctx.opacity = mixer.isPlaying ? 0.85 : 0.25
                 ctx.drawLayer { glow in

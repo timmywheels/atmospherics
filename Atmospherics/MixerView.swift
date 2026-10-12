@@ -16,8 +16,8 @@ struct MixerView: View {
             Text(mixer.currentPlaceIsTweaked
                  ? "Your changes to \(mixer.currentPlaceName) are kept"
                  : "Closer is louder · drag the ground to turn it")
-                .font(Theme.mono(10.5))
-                .foregroundStyle(Theme.mono)
+                .font(Theme.label(10.5))
+                .foregroundStyle(Theme.muted)
                 .padding(.bottom, 14)
 
             SoundSections()
@@ -28,19 +28,19 @@ struct MixerView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text("LAYERS")
-                    .font(Theme.mono(11, .medium))
+                    .font(Theme.label(11, .medium))
                     .tracking(1.3)
-                    .foregroundStyle(Theme.mono)
+                    .foregroundStyle(Theme.muted)
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if mixer.currentPlaceIsTweaked {
                     Button { withAnimation(.smooth) { mixer.resetCurrentPlace() } } label: {
-                        Text("Reset").font(Theme.mono(12, .medium))
+                        Text("Reset").font(Theme.label(12, .medium))
                     }
                     .accessibilityLabel("Reset \(mixer.currentPlaceName) to default")
                 }
                 Button { saving = true } label: {
-                    Text("Save").font(Theme.mono(12, .medium))
+                    Text("Save").font(Theme.label(12, .medium))
                 }
                 .disabled(mixer.orbs.isEmpty)
             }
@@ -128,8 +128,8 @@ struct TerrainField: View {
                 Canvas { ctx, _ in draw(terrain, camera, in: &ctx) }
                     .accessibilityHidden(true)
                 Text("you")
-                    .font(Theme.mono(10))
-                    .foregroundStyle(Theme.mono)
+                    .font(Theme.label(10))
+                    .foregroundStyle(Theme.muted)
                     .shadow(color: .black.opacity(0.6), radius: 3)
                     .position(x: you.x, y: you.y + 18)
                     .allowsHitTesting(false)
@@ -289,11 +289,11 @@ private struct TerrainOrb: View {
 
         ZStack {
             Circle()
-                .fill((removing ? Theme.mono : orb.kind.halo).opacity(removing ? 0.4 : 0.85))
+                .fill((removing ? Theme.muted : orb.kind.halo).opacity(removing ? 0.4 : 0.85))
                 .frame(width: glow, height: glow)
                 .blur(radius: glow * 0.25)
             Circle()
-                .fill(removing ? Theme.mono : orb.kind.orb)
+                .fill(removing ? Theme.muted : orb.kind.orb)
                 .frame(width: core, height: core)
                 .shadow(color: orb.kind.glow, radius: removing ? 0 : 6)
             if removing {
@@ -306,7 +306,7 @@ private struct TerrainOrb: View {
             Text(removing ? "Release to remove"
                  : outside != nil ? "Drag further to remove"
                  : dragging ? "\(orb.kind.short) \(pct)" : orb.kind.short)
-                .font(Theme.mono(10, .medium))
+                .font(Theme.label(10, .medium))
                 .foregroundStyle(removing ? Theme.text : Theme.orbLabel)
                 .shadow(color: .black.opacity(0.6), radius: 3)
                 .fixedSize()
@@ -386,9 +386,9 @@ struct SoundSections: View {
     private func section(_ title: String, kinds: [SoundKind], playing: Set<SoundKind>) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title.uppercased())
-                .font(Theme.mono(10, .medium))
+                .font(Theme.label(10, .medium))
                 .tracking(1.2)
-                .foregroundStyle(Theme.mono)
+                .foregroundStyle(Theme.muted)
                 .padding(.horizontal, 24)
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {

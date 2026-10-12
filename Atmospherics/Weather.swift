@@ -33,6 +33,18 @@ struct Conditions: Equatable {
 
     var isRaining: Bool { precipitationMM > 0.05 || (51...67).contains(code) || (80...82).contains(code) || isThunder }
 
+    /// An SF Symbol for the weather.
+    var symbol: String {
+        if isThunder { return "cloud.bolt" }
+        if isSnow { return "snowflake" }
+        if isRaining { return rainIntensity == .heavy ? "cloud.heavyrain" : rainIntensity == .light ? "cloud.drizzle" : "cloud.rain" }
+        if isFog { return "cloud.fog" }
+        if windKMH > 30 { return "wind" }
+        if code >= 3 { return "cloud" }
+        if code >= 1 { return isDay ? "cloud.sun" : "cloud.moon" }
+        return isDay ? "sun.max" : "moon.stars"
+    }
+
     /// "auto" (the phone's region), "f" or "c"; set from the menu.
     static var unitPreference: String { UserDefaults.standard.string(forKey: "tempUnit") ?? "auto" }
 

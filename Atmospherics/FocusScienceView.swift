@@ -67,26 +67,26 @@ struct FocusScienceView: View {
                 ForEach(findings, id: \.title) { finding in
                     VStack(alignment: .leading, spacing: 10) {
                         Text(finding.evidence.rawValue.uppercased())
-                            .font(Theme.mono(10, .medium))
+                            .font(Theme.label(10, .medium))
                             .tracking(1.2)
-                            .foregroundStyle(Theme.mono)
+                            .foregroundStyle(Theme.muted)
                         Text(finding.title).font(Theme.body(20))
                         Text(finding.text)
                             .font(Theme.body(15))
                             .foregroundStyle(Theme.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                         Text("Mixes: \(finding.mixes)")
-                            .font(Theme.mono(11))
-                            .foregroundStyle(Theme.mono)
+                            .font(Theme.label(11))
+                            .foregroundStyle(Theme.muted)
                         VStack(alignment: .leading, spacing: 4) {
                             ForEach(finding.sources, id: \.0) { source, link in
                                 if let link, let url = URL(string: link) {
                                     Link(destination: url) {
-                                        Text(source).underline().font(Theme.mono(10.5)).multilineTextAlignment(.leading)
+                                        Text(source).underline().font(Theme.label(10.5)).multilineTextAlignment(.leading)
                                     }
                                     .foregroundStyle(Theme.secondary)
                                 } else {
-                                    Text(source).font(Theme.mono(10.5)).foregroundStyle(Theme.mono)
+                                    Text(source).font(Theme.label(10.5)).foregroundStyle(Theme.muted)
                                 }
                             }
                         }

@@ -1,13 +1,13 @@
 import SwiftUI
 
-/// Where to: an atmosphere as a sentence, "Take me to a log cabin in a snowstorm right now".
+/// Teleport: an atmosphere as a sentence, "Take me to a log cabin in a snowstorm right now".
 /// Tap a part to change it, say it in your own words, or pick one of ours. The colors follow
 /// what you're building, and it says when it's really like that somewhere right now.
-struct WhereToView: View {
+struct TeleportView: View {
     @Environment(Mixer.self) private var mixer
     @Environment(\.dismiss) private var dismiss
-    /// Called after going somewhere (the Mac switches its window back to Listen).
-    var onGo: (() -> Void)? = nil
+    /// When Teleport is part of a window (a tab on the Mac) rather than a sheet: how to leave it.
+    var close: (() -> Void)? = nil
     @State private var draft: Atmosphere
     @State private var slot: Slot = .setting
     @State private var words = ""
@@ -16,8 +16,8 @@ struct WhereToView: View {
 
     private enum Slot { case setting, sky, time }
 
-    init(start: Atmosphere? = nil, onGo: (() -> Void)? = nil) {
-        self.onGo = onGo
+    init(start: Atmosphere? = nil, close: (() -> Void)? = nil) {
+        self.close = close
         _draft = State(initialValue: start ?? Atmosphere.curated[0])
     }
 
@@ -25,28 +25,31 @@ struct WhereToView: View {
         let preview = mixer.page(for: .atmosphere(draft))
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    Text("WHERE TO")
-                        .font(Theme.mono(11, .medium))
-                        .tracking(1.3)
-                        .foregroundStyle(Theme.mono)
-                    Spacer()
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .semibold))
-                            .frame(width: 32, height: 32)
-                            .background(Circle().fill(.white.opacity(0.08)))
+                // As a sheet it has its own name and a way out; in a window's tab, the tab says it.
+                if close == nil {
+                    HStack {
+                        Text("TELEPORT")
+                            .font(Theme.label(11, .medium))
+                            .tracking(1.3)
+                            .foregroundStyle(Theme.muted)
+                        Spacer()
+                        Button { leave() } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 14, weight: .semibold))
+                                .frame(width: 32, height: 32)
+                                .background(Circle().fill(.white.opacity(0.08)))
+                        }
+                        .buttonStyle(.plain)
+                        .keyboardShortcut(.cancelAction)
+                        .accessibilityLabel("Close")
                     }
-                    .buttonStyle(.plain)
-                    .keyboardShortcut(.cancelAction)
-                    .accessibilityLabel("Close")
+                    .padding(.bottom, 18)
                 }
 
                 sentence
-                    .padding(.top, 18)
 
                 Text(preview.line)
-                    .font(Theme.mono(11))
+                    .font(Theme.label(11))
                     .foregroundStyle(Theme.secondary)
                     .lineLimit(2)
                     .padding(.top, 14)
@@ -67,7 +70,7 @@ struct WhereToView: View {
                     .buttonStyle(.plain)
                     Spacer()
                     Button { go(to: draft) } label: {
-                        Text("Go")
+                        Text("Teleport")
                             .font(Theme.body(16, .semibold))
                             .foregroundStyle(Theme.background)
                             .padding(.vertical, 12)
@@ -76,7 +79,7 @@ struct WhereToView: View {
                             .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Go to \(preview.title)")
+                    .accessibilityLabel("Teleport to \(preview.title)")
                 }
                 .padding(.top, 24)
 
@@ -98,6 +101,9 @@ struct WhereToView: View {
         .sensoryFeedback(.selection, trigger: draft)
         .sensoryFeedback(.selection, trigger: slot)
         .sensoryFeedback(.impact(weight: .medium), trigger: goes)
+        #if os(macOS)
+        .onExitCommand { leave() }
+        #endif
     }
 
     // MARK: The sentence
@@ -183,12 +189,12 @@ struct WhereToView: View {
     private var sayIt: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("OR SAY IT")
-                .font(Theme.mono(10, .medium))
+                .font(Theme.label(10, .medium))
                 .tracking(1.2)
-                .foregroundStyle(Theme.mono)
+                .foregroundStyle(Theme.muted)
             HStack(spacing: 10) {
-                Image(systemName: "text.bubble").foregroundStyle(Theme.mono)
-                TextField("", text: $words, prompt: Text("a rainy night in the city").foregroundStyle(Theme.mono))
+                Image(systemName: "text.bubble").foregroundStyle(Theme.muted)
+                TextField("", text: $words, prompt: Text("a rainy night in the city").foregroundStyle(Theme.muted))
                     .textFieldStyle(.plain)
                     .autocorrectionDisabled()
                     .submitLabel(.go)
@@ -202,7 +208,7 @@ struct WhereToView: View {
             .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
             if notUnderstood {
                 Text("Try a place and some weather, like “a cabin in the snow”.")
-                    .font(Theme.mono(11))
+                    .font(Theme.label(11))
                     .foregroundStyle(Theme.secondary)
                     .transition(.opacity)
             }
@@ -223,9 +229,9 @@ struct WhereToView: View {
     private var ideas: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("IDEAS")
-                .font(Theme.mono(10, .medium))
+                .font(Theme.label(10, .medium))
                 .tracking(1.2)
-                .foregroundStyle(Theme.mono)
+                .foregroundStyle(Theme.muted)
             LazyVStack(spacing: 10) {
                 ForEach(Atmosphere.curated) { a in
                     let page = mixer.page(for: .atmosphere(a))
@@ -247,8 +253,11 @@ struct WhereToView: View {
         goes += 1
         Haptics.tap()
         mixer.go(to: atmosphere)
-        onGo?()
-        dismiss()
+        leave()
+    }
+
+    private func leave() {
+        if let close { close() } else { dismiss() }
     }
 }
 

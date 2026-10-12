@@ -1,49 +1,7 @@
 import MapKit
-import Observation
 
-/// Finds towns and cities anywhere, using Apple's place search, and turns a pick into a `Place`
-/// whose sounds are guessed from what's nearby.
-@MainActor
-@Observable
-final class PlaceSearch: NSObject, MKLocalSearchCompleterDelegate {
-    var query = "" {
-        didSet { query.isEmpty ? (results = []) : (completer.queryFragment = query) }
-    }
-    private(set) var results: [MKLocalSearchCompletion] = []
-    private(set) var resolving = false
-
-    @ObservationIgnored private let completer = MKLocalSearchCompleter()
-
-    override init() {
-        super.init()
-        completer.resultTypes = .address
-        completer.delegate = self
-    }
-
-    nonisolated func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
-        let found = completer.results
-        Task { @MainActor in self.results = Array(found.prefix(8)) }
-    }
-
-    nonisolated func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
-        Task { @MainActor in self.results = [] }
-    }
-
-    /// Looks up the chosen suggestion and builds a place for it.
-    func resolve(_ completion: MKLocalSearchCompletion) async -> Place? {
-        resolving = true
-        defer { resolving = false }
-        guard let item = try? await MKLocalSearch(request: MKLocalSearch.Request(completion: completion)).start().mapItems.first
-        else { return nil }
-        let mark = item.placemark
-        let coordinate = mark.coordinate
-        let name = mark.locality ?? item.name ?? completion.title
-        let country = (mark.isoCountryCode == "US" ? mark.administrativeArea : mark.country) ?? completion.subtitle
-        return Place(name: name, country: country, region: .yours,
-                     latitude: coordinate.latitude, longitude: coordinate.longitude,
-                     signature: await Self.cast(near: coordinate))
-    }
-
+/// Listens around your home, through Apple's place search, for "Outside your window".
+enum PlaceSearch {
     /// What could be heard around a spot, worked out from what's nearby: a beach means surf,
     /// a lake means lapping water, train stations mean a city, trees mean rustling leaves.
     /// `Ecology` then decides which of these are in season and awake at any moment.

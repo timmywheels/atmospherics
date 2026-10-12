@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The menu bar control, in the colors of what's playing: play, travel, a sleep timer, and every
-/// place a click away, without opening the window.
+/// atmosphere a click away, without opening the window.
 struct MenuBarPanel: View {
     @Environment(Mixer.self) private var mixer
     @Environment(MacNavigation.self) private var navigation
@@ -25,7 +25,7 @@ struct MenuBarPanel: View {
             Rectangle().fill(Theme.hairline).frame(height: 1)
                 .padding(.top, 16)
 
-            places
+            destinations
                 .frame(height: 248)
 
             Rectangle().fill(Theme.hairline).frame(height: 1)
@@ -59,7 +59,7 @@ struct MenuBarPanel: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Text(subtitle)
-                    .font(Theme.mono(10.5))
+                    .font(Theme.label(10.5))
                     .foregroundStyle(Theme.secondary)
                     .lineLimit(1)
             }
@@ -112,15 +112,15 @@ struct MenuBarPanel: View {
     private var timer: some View {
         HStack(spacing: 6) {
             Text("SLEEP")
-                .font(Theme.mono(10, .medium))
+                .font(Theme.label(10, .medium))
                 .tracking(1.2)
-                .foregroundStyle(Theme.mono)
+                .foregroundStyle(Theme.muted)
             Spacer()
             ForEach(Mixer.Timer.allCases, id: \.self) { t in
                 let selected = mixer.timer == t
                 Button { mixer.setTimer(t) } label: {
                     Text(t.label)
-                        .font(Theme.mono(11, .medium))
+                        .font(Theme.label(11, .medium))
                         .foregroundStyle(selected ? Theme.background : Theme.text)
                         .padding(.vertical, 5)
                         .padding(.horizontal, 8)
@@ -136,9 +136,9 @@ struct MenuBarPanel: View {
         .sensoryFeedback(.selection, trigger: mixer.timer)
     }
 
-    // MARK: Places
+    // MARK: Where to go
 
-    private var places: some View {
+    private var destinations: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
@@ -158,28 +158,11 @@ struct MenuBarPanel: View {
                             mixer.go(to: a)
                         }
                     }
-                    ForEach(Place.Region.allCases, id: \.self) { region in
-                        let inRegion = mixer.allPlaces.filter { $0.region == region }
-                        if !inRegion.isEmpty {
-                            Section {
-                                ForEach(inRegion) { place in
-                                    placeRow(id: place.name, name: place.title,
-                                             temperature: mixer.placeConditions[place.name]?.temperature,
-                                             color: place.accent.orb, current: isCurrent(place)) {
-                                        mixer.select(place)
-                                    }
-                                }
-                            } header: {
-                                header("Places · \(region.rawValue)")
-                            }
-                        }
-                    }
                 }
                 .padding(.bottom, 8)
             }
             .scrollIndicators(.never)
             .onAppear {
-                if let place = mixer.escape?.place, mixer.mode == .escape { proxy.scrollTo(place.name, anchor: .center) }
                 if let a = mixer.atmosphere, mixer.mode == .atmosphere { proxy.scrollTo(a.id, anchor: .center) }
             }
         }
@@ -187,17 +170,13 @@ struct MenuBarPanel: View {
 
     private func header(_ title: String) -> some View {
         Text(title.uppercased())
-            .font(Theme.mono(10, .medium))
+            .font(Theme.label(10, .medium))
             .tracking(1.2)
-            .foregroundStyle(Theme.mono)
+            .foregroundStyle(Theme.muted)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 18)
             .padding(.top, 12)
             .padding(.bottom, 4)
-    }
-
-    private func isCurrent(_ place: Place) -> Bool {
-        mixer.activePreset == nil && mixer.mode == .escape && mixer.escape?.place == place
     }
 
     private func isCurrent(_ atmosphere: Atmosphere) -> Bool {
@@ -218,13 +197,13 @@ struct MenuBarPanel: View {
                 Spacer()
                 if current {
                     Text(mixer.isPlaying ? "Playing" : "Here")
-                        .font(Theme.mono(10, .medium))
+                        .font(Theme.label(10, .medium))
                         .foregroundStyle(Theme.secondary)
                 }
                 if let temperature {
                     Text(temperature)
-                        .font(Theme.mono(11))
-                        .foregroundStyle(Theme.mono)
+                        .font(Theme.label(11))
+                        .foregroundStyle(Theme.muted)
                 }
             }
             .padding(.horizontal, 18)
@@ -247,16 +226,9 @@ struct MenuBarPanel: View {
             }
             .buttonStyle(MenuRowStyle(corner: 6))
             Button {
-                open(navigation.tab)
-                navigation.choosing = true
+                open(.teleport)
             } label: {
-                footerRow("Where To…", shortcut: "⌘K")
-            }
-            .buttonStyle(MenuRowStyle(corner: 6))
-            Button {
-                open(.world)
-            } label: {
-                footerRow("World…", shortcut: nil)
+                footerRow("Teleport…", shortcut: "⌘K")
             }
             .buttonStyle(MenuRowStyle(corner: 6))
             Button {
@@ -273,7 +245,7 @@ struct MenuBarPanel: View {
         HStack {
             Text(title).font(Theme.body(13))
             Spacer()
-            if let shortcut { Text(shortcut).font(Theme.mono(11)).foregroundStyle(Theme.mono) }
+            if let shortcut { Text(shortcut).font(Theme.label(11)).foregroundStyle(Theme.muted) }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)

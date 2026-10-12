@@ -8,8 +8,6 @@ struct MacWindow: View {
     @Environment(\.openWindow) private var openWindow
     /// Read so temperatures redraw when the unit changes in Settings.
     @AppStorage("tempUnit") private var tempUnit = "auto"
-    /// The window's size, so sheets fit inside it.
-    @State private var size = CGSize(width: 480, height: 760)
 
     var body: some View {
         @Bindable var navigation = navigation
@@ -18,9 +16,10 @@ struct MacWindow: View {
             Group {
                 switch navigation.tab {
                 case .listen: MacListen()
+                case .teleport:
+                    TeleportView(start: mixer.mode == .atmosphere ? mixer.atmosphere : nil) { navigation.tab = .listen }
                 case .layers: MacLayers()
                 case .library: LibraryView(current: mixer.activePreset) { navigation.tab = .listen }
-                case .world: GlobeView { navigation.tab = .listen }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -28,29 +27,18 @@ struct MacWindow: View {
         }
         .ignoresSafeArea(edges: .top)
         .background {
-            // Listening and Layers sit in the scene's colors; the Library and World have their own.
+            // Listening and Layers sit in the scene's colors; Teleport and the Library have their own.
             SceneWash(orbs: mixer.byVolume)
                 .opacity(navigation.tab == .listen || navigation.tab == .layers ? 1 : 0)
                 .background(Theme.background)
                 .ignoresSafeArea()
         }
         .frame(minWidth: 440, minHeight: 640)
-        .background {
-            GeometryReader { proxy in
-                Color.clear
-                    .onAppear { size = proxy.size }
-                    .onChange(of: proxy.size) { _, new in size = new }
-            }
-        }
         .foregroundStyle(Theme.text)
         .tint(Theme.text)
         .preferredColorScheme(.dark)
         .animation(.smooth(duration: 0.3), value: navigation.tab)
         .saveMixPrompt(isPresented: $navigation.saving)
-        .sheet(isPresented: $navigation.choosing) {
-            WhereToView(start: mixer.mode == .atmosphere ? mixer.atmosphere : nil, onGo: { navigation.tab = .listen })
-                .frame(width: max(380, min(480, size.width - 40)), height: max(520, min(760, size.height - 60)))
-        }
         .alert("Audio error", isPresented: .constant(mixer.errorMessage != nil)) {
             Button("OK") { mixer.errorMessage = nil }
         } message: {
@@ -76,9 +64,9 @@ private struct TabBar: View {
             ForEach(MacNavigation.Tab.allCases) { tab in
                 Button { selection = tab } label: {
                     Text(tab.rawValue.uppercased())
-                        .font(Theme.mono(11, .medium))
+                        .font(Theme.label(11, .medium))
                         .tracking(1.3)
-                        .foregroundStyle(selection == tab ? Theme.text : hovered == tab ? Theme.secondary : Theme.mono)
+                        .foregroundStyle(selection == tab ? Theme.text : hovered == tab ? Theme.secondary : Theme.muted)
                         .padding(.vertical, 8)
                         .contentShape(Rectangle())
                 }

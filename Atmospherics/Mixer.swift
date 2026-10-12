@@ -160,7 +160,6 @@ final class Mixer {
         default: return ""
         }
     }
-    /// Live conditions at every place, keyed by name, for the globe and list.
     /// A place the user chose. When nil, Escape picks the place least like home.
     private(set) var pinnedPlace: Place?
     /// Places found through search, newest first.
@@ -653,19 +652,18 @@ final class Mixer {
         defaults.set(preset?.id, forKey: "activePreset")
     }
 
-    /// The top-right place label: where you are, or during a Library mix, where you came from.
-    var headerPlace: String {
-        if mode == .atmosphere {
-            // Where its weather is live from, or the World to go and find a real place.
-            return atmosphereSource.map { "\($0.place.title) \($0.conditions.temperature)" } ?? "World"
+    /// Your own weather, for the corner: "Seekonk 65°" (as it really is, whatever you're imagining).
+    var outsideLabel: String {
+        if let h = liveHome { return "\(h.place) \(h.temperature)" }
+        switch weatherState {
+        case .locationOff: return "Location off"
+        case .failed: return "Offline"
+        default: return "Outside"
         }
-        guard activePreset != nil else {
-            return weather.temp.isEmpty ? weather.place : "\(weather.place) \(weather.temp)"
-        }
-        if mode == .escape, let e = escape { return "\(e.place.title) \(e.conditions.temperature)" }
-        if let h = home { return "\(h.place) \(h.temperature)" }
-        return "World"
     }
+
+    /// A symbol for the weather outside, beside it.
+    var outsideSymbol: String { liveHome?.symbol ?? "location" }
 
     /// Where "Back to …" returns from a Library mix: the place you were in, or home.
     var presetReturnName: String {
@@ -952,24 +950,6 @@ final class Mixer {
         if !isPlaying { play() }
     }
 
-    /// Saves a searched place, fetches its weather, and goes there.
-    func addAndSelect(_ place: Place) async {
-        customPlaces.removeAll { $0.name == place.name }
-        customPlaces.insert(Self.refreshed(place), at: 0)
-        customPlaces = Array(customPlaces.prefix(8))
-        defaults.set(customPlaces.map(\.dictionary), forKey: "customPlaces")
-        if let c = try? await weatherService.conditions(for: [place]).first {
-            livePlaceConditions[place.name] = c
-        }
-        select(place)
-    }
-
-    func removeCustom(_ place: Place) {
-        customPlaces.removeAll { $0.name == place.name }
-        defaults.set(customPlaces.map(\.dictionary), forKey: "customPlaces")
-        if pinnedPlace == place { unpinPlace() }
-    }
-
     /// Comes back from a place to the local weather.
     func goHome() {
         setActivePreset(nil)
@@ -1113,22 +1093,6 @@ final class Mixer {
             return Page(title: a.title(in: c), line: atmosphereLine(a, source: source),
                         orbs: Preset.layout(Self.applying(tweaks[a.tweakKey], to: a.mix(in: c))), lines: a.lines(in: c))
         }
-    }
-
-    /// Jumps to a random place other than the current one.
-    func shuffle() {
-        let others = allPlaces.filter { $0 != escape?.place && placeConditions[$0.name] != nil && !isNearHome($0) }
-        guard let place = others.randomElement() ?? Place.all.randomElement() else { return }
-        shuffleCount += 1
-        select(place)
-    }
-
-    /// Lets Escape pick automatically again (the place least like home).
-    func unpinPlace() {
-        pinnedPlace = nil
-        defaults.removeObject(forKey: "pinnedPlace")
-        chooseEscape()
-        applyWeather(to: .escape, animated: true)
     }
 
     private func applyWeather(to mode: Mode, animated: Bool) {

@@ -26,12 +26,6 @@ private struct TabCommands: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Button("Where To…") {
-            openWindow(id: MacNavigation.mainWindow)
-            navigation.choosing = true
-        }
-        .keyboardShortcut("k")
-        Divider()
         ForEach(MacNavigation.Tab.allCases) { tab in
             Button(tab.rawValue) {
                 navigation.tab = tab
@@ -62,6 +56,11 @@ private struct PlaybackCommands: View {
         }
         .keyboardShortcut("h", modifiers: [.command, .shift])
         .disabled(mixer.activePreset == nil && mixer.mode == .match)
+        Button("Teleport…") {
+            navigation.tab = .teleport
+            openWindow(id: MacNavigation.mainWindow)
+        }
+        .keyboardShortcut("k")
         Divider()
         Picker("Sleep Timer", selection: Binding(get: { mixer.timer }, set: { mixer.setTimer($0) })) {
             ForEach(Mixer.Timer.allCases, id: \.self) { t in
