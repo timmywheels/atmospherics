@@ -163,7 +163,19 @@ final class Mixer {
     private(set) var pinnedPlace: Place?
     /// Places found through search, newest first.
     private(set) var customPlaces: [Place] = []
-    var allPlaces: [Place] { customPlaces + Place.all }
+    /// Your places first, then the built-in ones (each once: one you've added isn't listed twice).
+    var allPlaces: [Place] { customPlaces + Place.all.filter { p in !customPlaces.contains { $0.name == p.name } } }
+
+    /// A built-in place you've added keeps its current sounds, not a copy from the day you added it.
+    private static func refreshed(_ place: Place) -> Place {
+        let here = CLLocation(latitude: place.latitude, longitude: place.longitude)
+        guard let builtIn = Place.all.first(where: {
+            $0.name == place.name && here.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude)) < 50_000
+        }) else { return place }
+        return Place(name: builtIn.name, country: builtIn.country, region: .yours, latitude: builtIn.latitude,
+                     longitude: builtIn.longitude, signature: builtIn.signature, climate: builtIn.climate,
+                     wetMonths: builtIn.wetMonths, seasonal: builtIn.seasonal)
+    }
 
     /// Set while moving between places, for a quicker crossfade than weather drift.
     @ObservationIgnored private var traveling = false
@@ -205,7 +217,7 @@ final class Mixer {
             .escape: defaults.object(forKey: "following.escape") as? Bool ?? true,
         ]
         if let raw = defaults.string(forKey: "mode"), let saved = Mode(rawValue: raw) { mode = saved }
-        customPlaces = (defaults.array(forKey: "customPlaces") as? [[String: Any]] ?? []).compactMap(Place.init(dictionary:))
+        customPlaces = (defaults.array(forKey: "customPlaces") as? [[String: Any]] ?? []).compactMap(Place.init(dictionary:)).map(Self.refreshed)
         pinnedPlace = defaults.string(forKey: "pinnedPlace").flatMap { name in allPlaces.first { $0.name == name } }
         skyOverride = defaults.string(forKey: "skyOverride").flatMap(SkyOverride.init(rawValue:)) ?? .live
         timeOverride = defaults.string(forKey: "timeOverride").flatMap(TimeOverride.init(rawValue:)) ?? .live
@@ -784,7 +796,7 @@ final class Mixer {
     /// Saves a searched place, fetches its weather, and goes there.
     func addAndSelect(_ place: Place) async {
         customPlaces.removeAll { $0.name == place.name }
-        customPlaces.insert(place, at: 0)
+        customPlaces.insert(Self.refreshed(place), at: 0)
         customPlaces = Array(customPlaces.prefix(8))
         defaults.set(customPlaces.map(\.dictionary), forKey: "customPlaces")
         if let c = try? await weatherService.conditions(for: [place]).first {
