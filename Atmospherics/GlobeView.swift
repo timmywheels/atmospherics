@@ -367,7 +367,8 @@ private struct GlobeCanvas: View {
 
 // MARK: Card and list
 
-/// The focused place: its live weather and what it sounds like, with a Listen button.
+/// The focused place, in the colors of its sounds right now: its weather and its loudest
+/// sounds on one line, with a Listen button.
 private struct PlaceCard: View {
     @Environment(Mixer.self) private var mixer
     let place: Place
@@ -375,17 +376,17 @@ private struct PlaceCard: View {
 
     var body: some View {
         let c = mixer.placeConditions[place.name]
-        HStack(alignment: .center, spacing: 16) {
+        let sounds = mixer.page(for: .place(place)).orbs.sorted { $0.volume > $1.volume }
+        let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
+        HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(place.title).font(Theme.display(28)).tracking(-0.6)
                 Text(c.map { "\(place.country) · \($0.temperature) · \($0.mixName)" } ?? place.country)
-                    .font(Theme.mono(11))
-                    .foregroundStyle(Theme.mono)
-                Text(place.signature.map(\.0.short).joined(separator: " · "))
-                    .font(Theme.body(13))
-                    .foregroundStyle(Theme.secondary)
+                    .font(Theme.mono(11, .medium))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .lineLimit(1)
+                Text(place.title).font(Theme.display(28)).tracking(-0.6).lineLimit(1).minimumScaleFactor(0.7)
+                LayerStrip(orbs: sounds, color: .white.opacity(0.68))
             }
-            Spacer(minLength: 8)
             Button { listen(place) } label: {
                 Text("Listen")
                     .font(Theme.body(15, .medium))
@@ -397,9 +398,10 @@ private struct PlaceCard: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Listen to \(place.title)")
         }
+        .foregroundStyle(.white)
         .padding(18)
-        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(.white.opacity(0.05)))
-        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
+        .background { CardWash(hues: sounds.prefix(3).map(\.kind.hue)) }
+        .clipShape(shape)
         .animation(.smooth(duration: 0.25), value: place)
     }
 }
@@ -411,7 +413,7 @@ private struct PlaceList: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+            LazyVStack(alignment: .leading, spacing: 10, pinnedViews: [.sectionHeaders]) {
                 ForEach(Place.Region.allCases, id: \.self) { region in
                     Section {
                         ForEach(mixer.allPlaces.filter { $0.region == region }) { place in
@@ -434,33 +436,15 @@ private struct PlaceList: View {
         .scrollIndicators(.hidden)
     }
 
+    /// A card in the colors of the place's sounds right now: where and how warm at the top, the
+    /// name, and its loudest sounds on one line.
     private func row(_ place: Place) -> some View {
         let c = mixer.placeConditions[place.name]
         let current = place == mixer.escape?.place && mixer.mode == .escape
-        return HStack(spacing: 14) {
-            Circle()
-                .fill(place.accent.orb)
-                .frame(width: 10, height: 10)
-                .shadow(color: place.accent.glow, radius: 6)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(place.title).font(Theme.body(17))
-                Text(place.signature.map(\.0.short).joined(separator: " · "))
-                    .font(Theme.mono(11))
-                    .foregroundStyle(Theme.mono)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 3) {
-                Text(c?.temperature ?? "–").font(Theme.mono(13))
-                Text(c?.mixName ?? "").font(Theme.mono(10)).foregroundStyle(Theme.mono)
-            }
-            if current {
-                Image(systemName: "speaker.wave.2.fill").font(.system(size: 12)).foregroundStyle(Theme.mono)
-            }
-        }
-        .padding(.vertical, 12)
-        .contentShape(Rectangle())
-        .overlay(alignment: .bottom) { Rectangle().fill(.white.opacity(0.07)).frame(height: 1) }
-        .accessibilityElement(children: .combine)
+        let sounds = mixer.page(for: .place(place)).orbs.sorted { $0.volume > $1.volume }
+        let top = [place.country, c?.temperature, c?.mixName].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        return ColorCard(hues: sounds.prefix(3).map(\.kind.hue), top: top, title: place.title, sounds: sounds,
+                         badge: current ? (mixer.isPlaying ? "Playing" : "Here") : nil, outlined: current, minHeight: 112)
     }
 }
 

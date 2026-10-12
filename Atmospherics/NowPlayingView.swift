@@ -377,8 +377,9 @@ private struct PageLines: View {
 
 /// The sounds playing, loudest first, each with a dot in its light's color. Always one line:
 /// as many as fit, then "+2" for the rest, so it never wraps.
-private struct LayerStrip: View {
+struct LayerStrip: View {
     let orbs: [Orb]
+    var color: Color = Theme.mono
 
     private var kinds: [SoundKind] {
         var seen = Set<SoundKind>()
@@ -395,7 +396,7 @@ private struct LayerStrip: View {
             }
         }
         .font(Theme.mono(11))
-        .foregroundStyle(Theme.mono)
+        .foregroundStyle(color)
         .frame(maxWidth: .infinity, minHeight: 16, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(kinds.map(\.name).joined(separator: ", "))

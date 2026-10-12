@@ -120,53 +120,11 @@ struct LibraryView: View {
 
     /// A card in the colors of its mix: what it's for and how long at the top, its name at the bottom.
     private func row(_ preset: Preset) -> some View {
-        let hues = preset.mix.prefix(3).map(\.0.hue)
-        let first = hues.first ?? 250
-        let second = hues.count > 1 ? hues[1] : first
-        let third = hues.count > 2 ? hues[2] : second
         let current = preset.id == mixer.activePreset?.id
-        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text(preset.tag.map { "\($0.rawValue) · \(preset.length)" } ?? "Yours")
-                    .font(Theme.mono(11, .medium))
-                    .foregroundStyle(.white.opacity(0.75))
-                Spacer()
-                if current {
-                    Text(mixer.isPlaying ? "Playing" : "Current")
-                        .font(Theme.mono(10, .medium))
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 9)
-                        .background(Capsule().fill(.black.opacity(0.3)))
-                }
-            }
-            Spacer(minLength: 22)
-            Text(preset.name)
-                .font(Theme.body(21))
-                .lineLimit(1)
-            Text(preset.description)
-                .font(Theme.mono(10.5))
-                .foregroundStyle(.white.opacity(0.62))
-                .lineLimit(1)
-                .padding(.top, 4)
-        }
-        .foregroundStyle(.white)
-        .padding(16)
-        .frame(maxWidth: .infinity, minHeight: 132, alignment: .leading)
-        .background {
-            ZStack {
-                LinearGradient(colors: [.oklch(0.4, 0.085, first), .oklch(0.27, 0.06, second)],
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
-                RadialGradient(colors: [.oklch(0.62, 0.12, first).opacity(0.55), .clear],
-                               center: UnitPoint(x: 0.8, y: 0.25), startRadius: 0, endRadius: 150)
-                RadialGradient(colors: [.oklch(0.55, 0.11, third).opacity(0.35), .clear],
-                               center: UnitPoint(x: 0.15, y: 1), startRadius: 0, endRadius: 130)
-            }
-        }
-        .clipShape(shape)
-        .overlay { if current { shape.strokeBorder(.white.opacity(0.6), lineWidth: 1.2) } }
-        .contentShape(shape)
-        .accessibilityElement(children: .combine)
+        return ColorCard(hues: preset.mix.prefix(3).map(\.0.hue),
+                         top: preset.tag.map { "\($0.rawValue) · \(preset.length)" } ?? "Yours",
+                         title: preset.name, subtitle: preset.description,
+                         badge: current ? (mixer.isPlaying ? "Playing" : "Current") : nil, outlined: current)
     }
 }
 
