@@ -70,19 +70,18 @@ struct NowPlayingView: View {
                 // Three evenly spaced tools under the play button.
                 HStack(spacing: 0) {
                     Button { showLibrary = true } label: {
-                        ToolIcon(symbol: "books.vertical", label: "Library")
+                        ToolIcon(glyph: .library)
                     }
                     .accessibilityLabel("Library")
 
                     Button { mixer.cycleTimer() } label: {
-                        ToolIcon(symbol: mixer.timer == .off ? "timer" : "moon.zzz",
-                                 label: mixer.timer == .off ? "Timer" : mixer.timer.label)
+                        ToolIcon(glyph: .timer, badge: mixer.timer == .off ? nil : mixer.timer.label)
                     }
                     .accessibilityLabel("Sleep timer, \(mixer.timer.label). Tap to change.")
                     .sensoryFeedback(.selection, trigger: mixer.timer)
 
                     NavigationLink(value: Route.mixer) {
-                        ToolIcon(symbol: "slider.horizontal.3", label: "Mixer")
+                        ToolIcon(glyph: .mixer)
                     }
                     .accessibilityLabel("Mixer")
                 }
@@ -106,21 +105,57 @@ struct NowPlayingView: View {
 
 enum Route: Hashable { case mixer }
 
-/// An icon with a small label, taking an equal share of the row.
+/// Hairline glyphs drawn to match the app's thin type, instead of stock symbols.
+enum Glyph { case library, timer, mixer }
+
 private struct ToolIcon: View {
-    let symbol: String
-    let label: String
+    let glyph: Glyph
+    var badge: String? = nil
 
     var body: some View {
-        VStack(spacing: 6) {
-            Image(systemName: symbol)
-                .font(.system(size: 19, weight: .regular))
-                .frame(height: 22)
-                .contentTransition(.symbolEffect(.replace))
-            Text(label)
-                .font(Theme.mono(10))
+        HStack(spacing: 5) {
+            Canvas { ctx, size in
+                let s = min(size.width, size.height)
+                let o = CGPoint(x: (size.width - s) / 2, y: (size.height - s) / 2)
+                func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: o.x + x * s, y: o.y + y * s) }
+                let line = StrokeStyle(lineWidth: 1.2, lineCap: .round)
+                var path = Path()
+                switch glyph {
+                case .library:
+                    // Book spines on a shelf: three upright, one leaning.
+                    for x in [0.26, 0.4, 0.54] {
+                        path.move(to: p(x, 0.24))
+                        path.addLine(to: p(x, 0.8))
+                    }
+                    path.move(to: p(0.66, 0.8))
+                    path.addLine(to: p(0.82, 0.28))
+                    ctx.stroke(path, with: .foreground, style: line)
+                case .timer:
+                    // A thin crescent: a disc with an offset disc cut out of it.
+                    ctx.drawLayer { layer in
+                        layer.fill(Path(ellipseIn: CGRect(origin: p(0.16, 0.16), size: CGSize(width: s * 0.68, height: s * 0.68))),
+                                   with: .foreground)
+                        layer.blendMode = .destinationOut
+                        layer.fill(Path(ellipseIn: CGRect(origin: p(0.3, 0.06), size: CGSize(width: s * 0.64, height: s * 0.64))),
+                                   with: .color(.black))
+                    }
+                case .mixer:
+                    // The field in miniature: the ring, its centre point, and one light drifting in it.
+                    path.addEllipse(in: CGRect(origin: p(0.14, 0.14), size: CGSize(width: s * 0.72, height: s * 0.72)))
+                    ctx.stroke(path, with: .foreground, style: StrokeStyle(lineWidth: 1, lineCap: .round))
+                    for (x, y, r) in [(0.5, 0.5, 0.035), (0.36, 0.62, 0.085)] {
+                        ctx.fill(Path(ellipseIn: CGRect(x: o.x + (x - r) * s, y: o.y + (y - r) * s, width: 2 * r * s, height: 2 * r * s)),
+                                 with: .foreground)
+                    }
+                }
+            }
+            .frame(width: 22, height: 22)
+            if let badge {
+                Text(badge).font(Theme.mono(10))
+            }
         }
-        .frame(maxWidth: .infinity, minHeight: 48)
+        .opacity(0.7)
+        .frame(maxWidth: .infinity, minHeight: 44)
         .contentShape(Rectangle())
     }
 }
