@@ -6,12 +6,62 @@ struct NowPlayingView: View {
     @State private var showLibrary = false
     @State private var showGlobe = false
     @State private var dragX: CGFloat = 0
-    @AppStorage("hasSwiped") private var hasSwiped = false
+    @State private var showMixer = false
+    @State private var saving = false
+    @State private var hint: String?
+    /// How many of the one-time hints have been shown.
+    @AppStorage("hintStep") private var hintStep = 0
+
+    private static let hints = [
+        "Swipe left or right to travel",
+        "Tap the light to open the mixer",
+        "Swipe up for your library",
+        "Hold play for a sleep timer",
+    ]
+
+    /// Shows each hint once, a few seconds apart, the first times you open the app.
+    private func runHints() async {
+        while hintStep < Self.hints.count {
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            withAnimation(.smooth(duration: 0.5)) { hint = Self.hints[hintStep] }
+            hintStep += 1
+            try? await Task.sleep(for: .seconds(3.5))
+            withAnimation(.smooth(duration: 0.5)) { hint = nil }
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("ATMOSPHERICS")
+                Menu {
+                    Button("Mixer", systemImage: "circle.dotted") { showMixer = true }
+                    Button("Library", systemImage: "books.vertical") { showLibrary = true }
+                    Button("World", systemImage: "globe") { showGlobe = true }
+                    Menu("Sleep timer · \(mixer.timer == .off ? "off" : mixer.timer.label)", systemImage: "moon") {
+                        ForEach(Mixer.Timer.allCases, id: \.self) { t in
+                            Button(t == .off ? "No timer" : "Stop after \(t.label)") { mixer.setTimer(t) }
+                        }
+                    }
+                    Button("Save this mix", systemImage: "bookmark") { saving = true }
+                    Divider()
+                    Button("Show gesture hints again", systemImage: "hand.tap") {
+                        hintStep = 0
+                        Task { await runHints() }
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Text("ATMOSPHERICS")
+                        // A quiet vertical ⋮ so it reads as a menu.
+                        VStack(spacing: 2.5) {
+                            ForEach(0..<3, id: \.self) { _ in Circle().frame(width: 2.5, height: 2.5) }
+                        }
+                    }
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Menu")
+                .buttonStyle(.plain)
                 Spacer()
                 Button { showGlobe = true } label: {
                     HStack(spacing: 6) {
@@ -28,7 +78,7 @@ struct NowPlayingView: View {
             .tracking(1.3)
             .foregroundStyle(Theme.mono)
 
-            Carousel(showLibrary: $showLibrary, dragX: $dragX, hasSwiped: $hasSwiped)
+            Carousel(showLibrary: $showLibrary, dragX: $dragX, openMixer: { showMixer = true })
                 .frame(minHeight: 420, maxHeight: .infinity)
 
             // Away: a quiet way home. At home but edited: a way back to following the weather.
@@ -64,34 +114,48 @@ struct NowPlayingView: View {
 
             Spacer().frame(height: 18)
 
-            VStack(spacing: 18) {
+            VStack(spacing: 14) {
                 PlayButton()
-
-                // Three evenly spaced tools under the play button.
-                HStack(spacing: 0) {
-                    Button { showLibrary = true } label: {
-                        ToolIcon(glyph: .library)
-                    }
-                    .accessibilityLabel("Library")
-
-                    Button { mixer.cycleTimer() } label: {
-                        ToolIcon(glyph: .timer, badge: mixer.timer == .off ? nil : mixer.timer.label)
-                    }
-                    .accessibilityLabel("Sleep timer, \(mixer.timer.label). Tap to change.")
-                    .sensoryFeedback(.selection, trigger: mixer.timer)
-
-                    NavigationLink(value: Route.mixer) {
-                        ToolIcon(glyph: .mixer)
-                    }
-                    .accessibilityLabel("Mixer")
-                }
+                Text(mixer.timer == .off ? " " : mixer.timer.label)
+                    .font(Theme.mono(10))
+                    .foregroundStyle(Theme.mono.opacity(0.7))
+                    .frame(height: 14)
+                    .contentTransition(.opacity)
+                    .animation(.smooth, value: mixer.timer)
             }
-            .foregroundStyle(Theme.mono)
-            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, 28)
         .padding(.top, 18)
         .padding(.bottom, 12)
+        .contentShape(Rectangle())
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 30).onEnded { g in
+                let up = -g.translation.height
+                if up > 80, up > abs(g.translation.width) * 1.5 {
+                    showLibrary = true
+                }
+            }
+        )
+        .accessibilityAction(named: "Library") { showLibrary = true }
+        .accessibilityAction(named: "Mixer") { showMixer = true }
+        .navigationDestination(isPresented: $showMixer) { MixerView() }
+        .overlay(alignment: .bottom) {
+            if let hint {
+                Text(hint)
+                    .font(Theme.mono(11))
+                    .foregroundStyle(Theme.text)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 16)
+                    .background(Capsule().fill(.ultraThinMaterial))
+                    .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                    .padding(.bottom, 130)
+                    .transition(.opacity.combined(with: .offset(y: 8)))
+                    .allowsHitTesting(false)
+            }
+        }
+        .saveMixPrompt(isPresented: $saving)
+        .task { await runHints() }
         .sheet(isPresented: $showLibrary) {
             LibraryView()
         }
@@ -105,68 +169,13 @@ struct NowPlayingView: View {
 
 enum Route: Hashable { case mixer }
 
-/// Hairline glyphs drawn to match the app's thin type, instead of stock symbols.
-enum Glyph { case library, timer, mixer }
-
-private struct ToolIcon: View {
-    let glyph: Glyph
-    var badge: String? = nil
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Canvas { ctx, size in
-                let s = min(size.width, size.height)
-                let o = CGPoint(x: (size.width - s) / 2, y: (size.height - s) / 2)
-                func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: o.x + x * s, y: o.y + y * s) }
-                let line = StrokeStyle(lineWidth: 1.2, lineCap: .round)
-                var path = Path()
-                switch glyph {
-                case .library:
-                    // Book spines on a shelf: three upright, one leaning.
-                    for x in [0.26, 0.4, 0.54] {
-                        path.move(to: p(x, 0.24))
-                        path.addLine(to: p(x, 0.8))
-                    }
-                    path.move(to: p(0.66, 0.8))
-                    path.addLine(to: p(0.82, 0.28))
-                    ctx.stroke(path, with: .foreground, style: line)
-                case .timer:
-                    // A thin crescent: a disc with an offset disc cut out of it.
-                    ctx.drawLayer { layer in
-                        layer.fill(Path(ellipseIn: CGRect(origin: p(0.16, 0.16), size: CGSize(width: s * 0.68, height: s * 0.68))),
-                                   with: .foreground)
-                        layer.blendMode = .destinationOut
-                        layer.fill(Path(ellipseIn: CGRect(origin: p(0.3, 0.06), size: CGSize(width: s * 0.64, height: s * 0.64))),
-                                   with: .color(.black))
-                    }
-                case .mixer:
-                    // The field in miniature: the ring, its centre point, and one light drifting in it.
-                    path.addEllipse(in: CGRect(origin: p(0.14, 0.14), size: CGSize(width: s * 0.72, height: s * 0.72)))
-                    ctx.stroke(path, with: .foreground, style: StrokeStyle(lineWidth: 1, lineCap: .round))
-                    for (x, y, r) in [(0.5, 0.5, 0.035), (0.36, 0.62, 0.085)] {
-                        ctx.fill(Path(ellipseIn: CGRect(x: o.x + (x - r) * s, y: o.y + (y - r) * s, width: 2 * r * s, height: 2 * r * s)),
-                                 with: .foreground)
-                    }
-                }
-            }
-            .frame(width: 22, height: 22)
-            if let badge {
-                Text(badge).font(Theme.mono(10))
-            }
-        }
-        .opacity(0.7)
-        .frame(maxWidth: .infinity, minHeight: 44)
-        .contentShape(Rectangle())
-    }
-}
-
 /// The halo, title, weather and layers as a page, with the previous and next places beside it.
 /// Drag follows the finger 1:1; let go past a quarter of the width (or flick) to land on the neighbour.
 private struct Carousel: View {
     @Environment(Mixer.self) private var mixer
     @Binding var showLibrary: Bool
     @Binding var dragX: CGFloat
-    @Binding var hasSwiped: Bool
+    let openMixer: () -> Void
     @State private var pastThreshold = false
     @State private var settling = false
     @State private var saving = false
@@ -197,15 +206,6 @@ private struct Carousel: View {
             .frame(width: w, height: proxy.size.height, alignment: .topLeading)
             .contentShape(Rectangle())
             .gesture(drag(width: w, step: step))
-            .overlay(alignment: .center) {
-                if !hasSwiped {
-                    Text("← swipe to travel →")
-                        .font(Theme.mono(10))
-                        .foregroundStyle(Theme.mono.opacity(0.7))
-                        .offset(y: proxy.size.height * 0.18)
-                        .allowsHitTesting(false)
-                }
-            }
         }
         .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.6), trigger: pastThreshold) { _, now in now }
         .accessibilityAction(named: "Travel somewhere new") { mixer.travel(forward: true) }
@@ -217,6 +217,10 @@ private struct Carousel: View {
         VStack(alignment: .leading, spacing: 0) {
             Halo(orbs: mixer.byVolume)
                 .frame(maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .onTapGesture { openMixer() }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel("Open the mixer")
             Button { showLibrary = true } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     PageTitle(text: mixer.title)
@@ -279,7 +283,6 @@ private struct Carousel: View {
                         dragX = 0
                     }
                     settling = false
-                    withAnimation { hasSwiped = true }
                 }
             }
     }
@@ -424,28 +427,48 @@ private struct Breathing<Content: View>: View {
 
 private struct PlayButton: View {
     @Environment(Mixer.self) private var mixer
+    @State private var choosingTimer = false
+    @State private var held = 0
 
     var body: some View {
-        Button { mixer.togglePlayback() } label: {
-            ZStack {
-                Circle().fill(Theme.text)
-                if mixer.isPlaying {
-                    HStack(spacing: 6) {
-                        RoundedRectangle(cornerRadius: 2).frame(width: 5, height: 20)
-                        RoundedRectangle(cornerRadius: 2).frame(width: 5, height: 20)
-                    }
-                } else {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 22))
-                        .offset(x: 2)
+        ZStack {
+            Circle().fill(Theme.text)
+            if mixer.isPlaying {
+                HStack(spacing: 6) {
+                    RoundedRectangle(cornerRadius: 2).frame(width: 5, height: 20)
+                    RoundedRectangle(cornerRadius: 2).frame(width: 5, height: 20)
+                }
+            } else {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 22))
+                    .offset(x: 2)
+            }
+        }
+        .foregroundStyle(Theme.background)
+        .frame(width: 68, height: 68)
+        .contentShape(Circle())
+        // Tap to play or pause; hold for a sleep timer.
+        .onTapGesture { mixer.togglePlayback() }
+        .onLongPressGesture(minimumDuration: 0.45) {
+            held += 1
+            choosingTimer = true
+        }
+        .confirmationDialog("Sleep timer", isPresented: $choosingTimer, titleVisibility: .visible) {
+            ForEach(Mixer.Timer.allCases, id: \.self) { t in
+                Button(t == .off ? "No timer" : "Stop after \(t.label)" + (t == mixer.timer ? "  ✓" : "")) {
+                    mixer.setTimer(t)
                 }
             }
-            .foregroundStyle(Theme.background)
-            .frame(width: 68, height: 68)
         }
-        .buttonStyle(.plain)
         .sensoryFeedback(.impact(weight: .medium), trigger: mixer.isPlaying)
+        .sensoryFeedback(.impact(weight: .heavy), trigger: held)
+        .sensoryFeedback(.selection, trigger: mixer.timer)
+        .accessibilityElement()
+        .accessibilityAddTraits(.isButton)
         .accessibilityLabel(mixer.isPlaying ? "Pause" : "Play")
+        .accessibilityHint("Hold for a sleep timer")
+        .accessibilityAction { mixer.togglePlayback() }
+        .accessibilityAction(named: "Sleep timer") { choosingTimer = true }
     }
 }
 

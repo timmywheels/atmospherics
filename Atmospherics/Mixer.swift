@@ -785,6 +785,11 @@ final class Mixer {
         endActivitySoon()
     }
 
+    func setTimer(_ t: Timer) {
+        timer = t
+        if isPlaying { scheduleTimer() }
+    }
+
     func cycleTimer() {
         let all = Timer.allCases
         timer = all[(all.firstIndex(of: timer)! + 1) % all.count]
