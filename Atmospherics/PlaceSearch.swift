@@ -41,36 +41,42 @@ final class PlaceSearch: NSObject, MKLocalSearchCompleterDelegate {
         let country = (mark.isoCountryCode == "US" ? mark.administrativeArea : mark.country) ?? completion.subtitle
         return Place(name: name, country: country, region: .yours,
                      latitude: coordinate.latitude, longitude: coordinate.longitude,
-                     signature: await signature(near: coordinate))
+                     signature: await Self.cast(near: coordinate))
     }
 
-    /// A beach nearby means ocean; several train stations means a city. Birds everywhere, softly.
-    private func signature(near c: CLLocationCoordinate2D) async -> [(SoundKind, Double)] {
+    /// What could be heard around a spot, worked out from what's nearby: a beach means surf,
+    /// a lake means lapping water, train stations mean a city, trees mean rustling leaves.
+    /// `Ecology` then decides which of these are in season and awake at any moment.
+    static func cast(near c: CLLocationCoordinate2D) async -> [(SoundKind, Double)] {
         async let beaches = count("beach", near: c, km: 15)
         async let stations = count("train station", near: c, km: 5)
         async let lakes = count("lake", near: c, km: 10)
         async let woods = count("forest", near: c, km: 10)
         async let cafes = count("cafe", near: c, km: 1)
-        let (b, s, l, f, k) = await (beaches, stations, lakes, woods, cafes)
-        var sig: [(SoundKind, Double)] = []
-        if b > 0 { sig.append((.ocean, 0.55)) }
-        if l > 0 && b == 0 { sig.append((.lake, 0.4)) }
-        if s >= 2 { sig.append((.cityHum, 0.4)) }
-        if s >= 5 { sig.append((.train, 0.15)) }
-        if k >= 5 { sig.append((.cafe, 0.2)) }
-        if f > 0 && s < 2 { sig.append((.leaves, 0.25)) }
-        if s < 2 && l == 0 && b == 0 { sig.append((.stream, 0.25)) }   // somewhere quieter: a little water
-        // Tropical places get jungle birds and tree frogs; elsewhere, ordinary birds.
-        if abs(c.latitude) < 23.5 {
-            sig.append((.jungleBirds, 0.25))
-            sig.append((.treeFrogs, 0.2))
+        async let churches = count("church", near: c, km: 1.5)
+        let (b, s, l, f, k, ch) = await (beaches, stations, lakes, woods, cafes, churches)
+        let tropical = abs(c.latitude) < 23.5
+        let urban = s >= 2
+
+        var cast: [(SoundKind, Double)] = []
+        if b > 0 { cast.append((.ocean, 0.55)) }
+        if l > 0 && b == 0 { cast.append((.lake, 0.35)) }
+        if urban { cast.append((.cityHum, 0.4)) } else if s == 1 { cast.append((.cityHum, 0.2)) }
+        if s >= 5 { cast.append((.train, 0.15)) }
+        if k >= 5 { cast.append((.cafe, 0.2)) }
+        if ch >= 2 { cast.append((.bells, 0.12)) }
+        if f > 0 || !urban { cast.append((.leaves, urban ? 0.15 : 0.3)) }
+        if !urban && l == 0 && b == 0 { cast.append((.stream, 0.2)) }
+        if tropical {
+            cast += [(.jungleBirds, 0.25), (.crickets, 0.25), (.treeFrogs, 0.2)]
         } else {
-            sig.append((.birds, 0.2))
+            cast += [(.birds, urban ? 0.12 : 0.2), (.crickets, urban ? 0.1 : 0.2)]
+            if !urban { cast += [(.owls, 0.15), (.frogs, l > 0 ? 0.2 : 0.1)] }
         }
-        return sig
+        return cast
     }
 
-    private func count(_ what: String, near c: CLLocationCoordinate2D, km: Double) async -> Int {
+    private static func count(_ what: String, near c: CLLocationCoordinate2D, km: Double) async -> Int {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = what
         request.region = MKCoordinateRegion(center: c, latitudinalMeters: km * 2000, longitudinalMeters: km * 2000)

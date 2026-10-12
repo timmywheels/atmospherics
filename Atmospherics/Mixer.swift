@@ -118,8 +118,8 @@ final class Mixer {
         var c = c
         switch timeOverride {
         case .live: break
-        case .day: c.isDay = true
-        case .night: c.isDay = false
+        case .day: c.isDay = true; c.forcedPhase = .day
+        case .night: c.isDay = false; c.forcedPhase = .night
         }
         switch skyOverride {
         case .live: break
@@ -218,6 +218,7 @@ final class Mixer {
         }
         apply()
         setUpSystemAudio()
+        startClock()
         PlayPauseIntent.handler = { [weak self] in self?.togglePlayback() }
     }
 
@@ -336,7 +337,7 @@ final class Mixer {
             default:
                 guard let home else { return WeatherSummary(place: "", temp: "", line: "", head: head) }
                 let line = following[.match] == true
-                    ? (isImagining ? imaginingLine(at: home.place) : "Following \(home.subject) outside") + (tweaks["home"] != nil ? " · tuned by you" : "")
+                    ? (isImagining ? imaginingLine(at: home.place) : "\(home.sceneDescription.capitalizedFirst) outside") + (tweaks["home"] != nil ? " · tuned by you" : "")
                     : "Your own mix, made here"
                 return WeatherSummary(place: home.place, temp: home.temperature, line: line, head: head)
             }
@@ -353,7 +354,7 @@ final class Mixer {
             if following[.escape] != true {
                 line = "Your own mix, made in \(escape.place.name)"
             } else if pinnedPlace != nil {
-                line = (isImagining ? imaginingLine(at: escape.place.name) : "\(c.mixName) in \(escape.place.name) right now")
+                line = (isImagining ? imaginingLine(at: escape.place.name) : "\(c.sceneDescription.capitalizedFirst) in \(escape.place.name)")
                     + (tweaks[escape.place.name] != nil ? " · tuned by you" : "")
             } else {
                 line = Self.escapeLine(c)
@@ -573,7 +574,7 @@ final class Mixer {
     /// What the weather alone gives this mode, before tweaks.
     private func baseMix(for mode: Mode) -> [(SoundKind, Double)]? {
         switch mode {
-        case .match: return home.map { WeatherMix.orbs(for: $0) }
+        case .match: return home.map { WeatherMix.orbs(for: $0, place: homePlace) }
         case .escape: return escape.map { WeatherMix.orbs(for: $0.conditions, place: $0.place) }
         }
     }
@@ -640,6 +641,7 @@ final class Mixer {
             let (coordinate, place) = try await location.current()
             homeCoordinate = coordinate
             liveHome = try await weatherService.conditions(at: coordinate, place: place)
+            await resolveHomePlace(coordinate, name: place)
             weatherState = .ready
         } catch {
             weatherState = location.isDenied ? .locationOff : .failed
@@ -661,6 +663,66 @@ final class Mixer {
 
         applyWeather(to: .match, animated: true)
         applyWeather(to: .escape, animated: true)
+    }
+
+    // MARK: Home's character
+
+    /// Home, as a place: what can be heard there through the year.
+    @ObservationIgnored private var homePlace: Place?
+
+    /// Near one of our places, home borrows its character; anywhere else, it listens to what's
+    /// around (coast, lakes, woods, a city). Cached so it only looks again after a move.
+    private func resolveHomePlace(_ c: CLLocationCoordinate2D, name: String) async {
+        let here = CLLocation(latitude: c.latitude, longitude: c.longitude)
+        func distance(_ p: Place) -> Double { here.distance(from: CLLocation(latitude: p.latitude, longitude: p.longitude)) }
+        if let near = Place.all.min(by: { distance($0) < distance($1) }), distance(near) < 40_000 {
+            homePlace = Place(name: name, country: near.country, region: .yours, latitude: c.latitude, longitude: c.longitude,
+                              signature: near.signature, climate: near.climate, wetMonths: near.wetMonths, seasonal: near.seasonal)
+            return
+        }
+        let key = String(format: "%.1f,%.1f", c.latitude, c.longitude)   // about 10 km
+        if let saved = defaults.dictionary(forKey: "homeCast"), saved["key"] as? String == key,
+           let dict = saved["place"] as? [String: Any], let place = Place(dictionary: dict) {
+            homePlace = place
+            return
+        }
+        let place = Place(name: name, country: "", region: .yours, latitude: c.latitude, longitude: c.longitude,
+                          signature: await PlaceSearch.cast(near: c))
+        homePlace = place
+        defaults.set(["key": key, "place": place.dictionary], forKey: "homeCast")
+    }
+
+    // MARK: The clock
+
+    /// Scenes follow the local clock as well as the weather: dawn brings the birds, the city
+    /// quiets after midnight, bells ring on the hour. Checked every minute; changes glide in.
+    @ObservationIgnored private var clock: Foundation.Timer?
+
+    private func startClock() {
+        clock = Foundation.Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.followClock() }
+        }
+    }
+
+    private func followClock() {
+        guard activePreset == nil, following[mode] == true, visualTarget == nil,
+              let target = weatherTarget(for: mode) else { return }
+        var now: [SoundKind: Double] = [:]
+        for o in orbs { now[o.kind] = max(now[o.kind] ?? 0, o.volume) }
+        let changed = Set(now.keys).union(target.map(\.0)).contains { kind in
+            abs((now[kind] ?? 0) - (target.first { $0.0 == kind }?.1 ?? 0)) > 0.03
+        }
+        if changed { applyWeather(to: mode, animated: true) }
+    }
+
+    /// What the weather and the clock make of a mode right now, with any tweaks.
+    private func weatherTarget(for mode: Mode) -> [(SoundKind, Double)]? {
+        switch mode {
+        case .match:
+            return home.map { Self.applying(tweaks["home"], to: WeatherMix.orbs(for: $0, place: homePlace)) }
+        case .escape:
+            return escape.map { Self.applying(tweaks[$0.place.name], to: WeatherMix.orbs(for: $0.conditions, place: $0.place)) }
+        }
     }
 
     /// Uses the pinned place if there is one, otherwise the place least like home.
@@ -818,15 +880,15 @@ final class Mixer {
         switch dest {
         case .home:
             guard let h = home else { return Page(title: "Home", line: "", layers: "", orbs: []) }
-            let o = Preset.layout(Self.applying(tweaks["home"], to: WeatherMix.orbs(for: h)))
-            return Page(title: h.mixName, line: isImagining ? imaginingLine(at: h.place) : "Following \(h.subject) outside",
+            let o = Preset.layout(Self.applying(tweaks["home"], to: WeatherMix.orbs(for: h, place: homePlace)))
+            return Page(title: h.mixName, line: isImagining ? imaginingLine(at: h.place) : "\(h.sceneDescription.capitalizedFirst) outside",
                         layers: layers(o), orbs: o)
         case .place(let p):
             let o: [Orb]
             let line: String
             if let c = placeConditions[p.name] {
                 o = Preset.layout(Self.applying(tweaks[p.name], to: WeatherMix.orbs(for: c, place: p)))
-                line = isImagining ? imaginingLine(at: p.name) : "\(c.mixName) in \(p.name) right now"
+                line = isImagining ? imaginingLine(at: p.name) : "\(c.sceneDescription.capitalizedFirst) in \(p.name)"
             } else {
                 o = Preset.layout(p.signature.compactMap { k, v in k.playable.map { ($0, v) } })
                 line = p.country
@@ -858,7 +920,7 @@ final class Mixer {
         switch mode {
         case .match:
             guard let home else { return }
-            target = Self.applying(tweaks["home"], to: WeatherMix.orbs(for: home))
+            target = Self.applying(tweaks["home"], to: WeatherMix.orbs(for: home, place: homePlace))
             name = home.mixName
         case .escape:
             guard let escape else { return }
@@ -929,7 +991,10 @@ final class Mixer {
     private func apply() {
         var levels = Dictionary(uniqueKeysWithValues: SoundKind.allCases.map { ($0, 0.0) })
         for orb in orbs { levels[orb.kind] = max(levels[orb.kind]!, orb.volume) }
-        for (kind, level) in levels { engine.setLevel(Float(level), for: kind) }
+        // Many layers at once add up; keep the total under a ceiling so nothing clips.
+        let total = sqrt(levels.values.map { $0 * $0 }.reduce(0, +))
+        let headroom = total > 1.2 ? 1.2 / total : 1
+        for (kind, level) in levels { engine.setLevel(Float(level * headroom), for: kind) }
 
         let encodable = Dictionary(uniqueKeysWithValues: fields.map { ($0.key.rawValue, $0.value) })
         if let data = try? JSONEncoder().encode(encodable) { defaults.set(data, forKey: "fields") }

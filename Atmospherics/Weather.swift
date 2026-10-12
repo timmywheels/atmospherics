@@ -10,6 +10,12 @@ struct Conditions: Equatable {
     var pressureHPA: Double
     var code: Int                   // WMO weather code
     var isDay: Bool
+    var latitude: Double = 0
+    var utcOffset: Int = 0           // seconds from UTC, for the local clock there
+    var sunrise: Int? = nil          // minutes after local midnight
+    var sunset: Int? = nil
+    var snowDepth: Double = 0        // metres of snow on the ground
+    var forcedPhase: DayPhase? = nil // a time-of-day override
 
     var isThunder: Bool { (95...99).contains(code) }
     var isSnow: Bool { (71...77).contains(code) || code == 85 || code == 86 }
@@ -36,33 +42,6 @@ struct Conditions: Equatable {
         default:
             return m.formatted(.measurement(width: .narrow, usage: .weather, numberFormatStyle: .number.precision(.fractionLength(0))))
         }
-    }
-
-    /// A short name for the mix this weather makes, e.g. "Light Rain".
-    var mixName: String {
-        if isThunder { return "Thunderstorm" }
-        if isSnow { return "Snowfall" }
-        if isRaining {
-            switch rainIntensity {
-            case .light: return [51, 53, 55].contains(code) ? "Drizzle" : "Light Rain"
-            case .moderate: return "Rain"
-            case .heavy: return "Downpour"
-            }
-        }
-        if isFog { return "Fog Bank" }
-        if windKMH > 30 { return isDay ? "Gusty Day" : "Windy Night" }
-        if code >= 2 { return isDay ? "Overcast" : "Cloudy Night" }
-        return isDay ? "Clear Sky" : "Clear Night"
-    }
-
-    /// What the sound is following, e.g. "the rain".
-    var subject: String {
-        if isThunder { return "the storm" }
-        if isSnow { return "the snow" }
-        if isRaining { return "the rain" }
-        if isFog { return "the fog" }
-        if windKMH > 30 { return "the wind" }
-        return isDay ? "the open sky" : "a quiet night"
     }
 }
 
@@ -103,8 +82,22 @@ struct WeatherService {
             let wind_gusts_10m: Double?
             let pressure_msl: Double
             let is_day: Int
+            let snow_depth: Double?
+        }
+        struct Daily: Decodable {
+            let sunrise: [String]
+            let sunset: [String]
         }
         let current: Current
+        let daily: Daily?
+        let utc_offset_seconds: Int?
+    }
+
+    /// "2026-10-12T06:54" → minutes after midnight.
+    private static func minutes(_ stamp: String?) -> Int? {
+        guard let stamp, let t = stamp.split(separator: "T").last else { return nil }
+        let parts = t.split(separator: ":").compactMap { Int($0) }
+        return parts.count >= 2 ? parts[0] * 60 + parts[1] : nil
     }
 
     private func openMeteo(_ points: [(Double, Double)]) async throws -> [Conditions] {
@@ -112,7 +105,10 @@ struct WeatherService {
         components.queryItems = [
             URLQueryItem(name: "latitude", value: points.map { String(format: "%.2f", $0.0) }.joined(separator: ",")),
             URLQueryItem(name: "longitude", value: points.map { String(format: "%.2f", $0.1) }.joined(separator: ",")),
-            URLQueryItem(name: "current", value: "temperature_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,pressure_msl,is_day"),
+            URLQueryItem(name: "current", value: "temperature_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,pressure_msl,is_day,snow_depth"),
+            URLQueryItem(name: "daily", value: "sunrise,sunset"),
+            URLQueryItem(name: "forecast_days", value: "1"),
+            URLQueryItem(name: "timezone", value: "auto"),
         ]
         let (data, response) = try await session.data(from: components.url!)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw WeatherError.badResponse }
@@ -120,11 +116,14 @@ struct WeatherService {
         let decoded: [OpenMeteoResponse] = points.count == 1
             ? [try JSONDecoder().decode(OpenMeteoResponse.self, from: data)]
             : try JSONDecoder().decode([OpenMeteoResponse].self, from: data)
-        return decoded.map { r in
+        return zip(decoded, points).map { r, point in
             let c = r.current
             return Conditions(place: "", temperatureC: c.temperature_2m, precipitationMM: c.precipitation,
                               windKMH: max(c.wind_speed_10m, (c.wind_gusts_10m ?? 0) * 0.7),
-                              pressureHPA: c.pressure_msl, code: c.weather_code, isDay: c.is_day == 1)
+                              pressureHPA: c.pressure_msl, code: c.weather_code, isDay: c.is_day == 1,
+                              latitude: point.0, utcOffset: r.utc_offset_seconds ?? 0,
+                              sunrise: Self.minutes(r.daily?.sunrise.first), sunset: Self.minutes(r.daily?.sunset.first),
+                              snowDepth: c.snow_depth ?? 0)
         }
     }
 }
@@ -132,120 +131,7 @@ struct WeatherService {
 /// Turns conditions into a field of sounds.
 enum WeatherMix {
     static func orbs(for c: Conditions, place: Place? = nil) -> [(SoundKind, Double)] {
-        var mix: [(SoundKind, Double)] = []
-
-        // A quiet noise floor under everything: deeper when pressure is low, brighter in fog.
-        // It's a floor, not the sound. At a place, the place leads and the floor nearly vanishes.
-        let lowPressure = c.pressureHPA < 1005
-        let floor = place == nil ? 1.0 : 0.45
-        if c.isFog {
-            mix.append((.white, 0.15 * floor))
-            mix.append((.brown, 0.25 * floor))
-        } else if c.isDay && !c.isRaining && !lowPressure {
-            mix.append((.pink, 0.25 * floor))
-        } else {
-            mix.append((.brown, (lowPressure || c.isSnow ? 0.35 : 0.28) * floor))
-        }
-
-        // Rain has flavors: a light patter, steady rain, or a rushing downpour.
-        if c.isRaining && !c.isSnow {
-            switch c.rainIntensity {
-            case .light: mix.append((.lightRain, 0.6))
-            case .moderate: mix.append((.rain, min(0.85, 0.45 + c.precipitationMM / 6)))
-            case .heavy:
-                mix.append((.heavyRain, 0.8))
-                mix.append((.rain, 0.25))
-            }
-        }
-        if c.isThunder {
-            mix.append((.thunder, 0.4))
-            mix.append((.lightning, 0.45))
-        }
-        let wind = min(0.8, max(0, (c.windKMH - 6) / 40))
-        if wind > 0.08 {
-            mix.append((.wind, c.isSnow ? wind * 0.6 : wind))
-        }
-        if c.isDay && !c.isRaining && c.code <= 3 {
-            mix.append((.birds, 0.2))
-        }
-        // Warm, dry nights get crickets; hot days get cicadas.
-        if !c.isDay && !c.isRaining && c.temperatureC >= 16 {
-            mix.append((.crickets, 0.3))
-        }
-        if c.isDay && !c.isRaining && c.temperatureC >= 25 {
-            mix.append((.cicadas, 0.25))
-        }
-        for (kind, signatureLevel) in place?.signature ?? [] {
-            if kind == .fire && c.temperatureC >= 12 { continue }
-            // The place's own sounds lead the mix.
-            let level = min(0.9, signatureLevel * 1.5) * weatherFactor(for: kind, in: c)
-            if level < 0.06 { continue }
-            if let i = mix.firstIndex(where: { $0.0 == kind }) {
-                mix[i].1 = max(mix[i].1, level)
-            } else {
-                mix.append((kind, level))
-            }
-        }
-        // In a city in the rain, the street is wet: tyres hiss, drops hit hard surfaces.
-        if c.isRaining && !c.isSnow, let i = mix.firstIndex(where: { $0.0 == .cityHum }) {
-            mix[i].0 = .rainyStreet
-        }
-        // In the tropics, rain lands on tin roofs.
-        if let place, abs(place.latitude) < 23.5, c.isRaining, !c.isSnow {
-            if let i = mix.firstIndex(where: { $0.0 == .rain || $0.0 == .lightRain }) {
-                mix[i] = (.tinRoof, c.rainIntensity == .light ? 0.5 : mix[i].1)
-            } else {
-                mix.append((.tinRoof, 0.5))
-            }
-        }
-
-        // Creatures keep their hours.
-        let offHours: Set<SoundKind> = c.isDay
-            ? [.crickets, .frogs, .treeFrogs, .owls, .wolves]
-            : [.birds, .cicadas, .jungleBirds, .parrots, .howlers, .canopy, .cafe, .bells]
-        mix = mix.filter { !offHours.contains($0.0) }
-
-        // A recording that isn't in the app falls back to the nearest synthesized sound.
-        var result: [(SoundKind, Double)] = []
-        for (kind, level) in mix {
-            guard let k = kind.playable else { continue }
-            if let i = result.firstIndex(where: { $0.0 == k }) {
-                result[i].1 = max(result[i].1, level)
-            } else {
-                result.append((k, level))
-            }
-        }
-        return result
-    }
-
-    /// How the weather right now changes a place's own sounds.
-    static func weatherFactor(for kind: SoundKind, in c: Conditions) -> Double {
-        let heavy = c.isThunder || c.precipitationMM > 2.5
-        let freezing = c.isSnow || c.temperatureC < 3
-        switch kind {
-        // Birds and insects shelter from rain, and stop altogether in a downpour or the cold.
-        case .birds, .jungleBirds, .parrots, .cicadas, .crickets, .howlers:
-            if freezing || heavy { return 0 }
-            return c.isRaining ? 0.3 : 1
-        // Frogs love rain; cold silences them.
-        case .frogs, .treeFrogs:
-            if freezing { return 0 }
-            return c.isRaining ? 1.4 : 1
-        // Wind roughens the sea and stirs the trees.
-        case .ocean, .lake:
-            return c.windKMH > 30 ? 1.3 : 1
-        case .leaves:
-            return c.windKMH > 30 ? 1.5 : c.windKMH < 8 ? 0.6 : 1
-        // Snow muffles a city; rain empties café terraces.
-        case .cityHum, .train:
-            return c.isSnow ? 0.6 : 1
-        case .cafe:
-            return heavy ? 0.5 : 1
-        case .whales:
-            return heavy ? 0.6 : 1
-        default:
-            return 1
-        }
+        Soundscape.compose(c, place: place)
     }
 
     /// The place whose weather is most unlike home's.
