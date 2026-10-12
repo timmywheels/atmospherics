@@ -1,0 +1,207 @@
+import SwiftUI
+
+/// Listening: the halo and the mix's name, with the places before and after beside it. Swipe
+/// with two fingers or press ← → to travel, click the light for its layers, click the name for
+/// the Library. Along the bottom, what's playing, the sleep timer and play.
+struct MacListen: View {
+    @Environment(Mixer.self) private var mixer
+    @Environment(MacNavigation.self) private var navigation
+    @State private var dragX: CGFloat = 0
+    @FocusState private var focused: Bool
+    @State private var hint: String?
+    /// How many of the one-time hints have been shown.
+    @AppStorage("macHintStep") private var hintStep = 0
+
+    private static let hints = [
+        "Swipe with two fingers, or press → to travel",
+        "Click the light to see its layers",
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Where you are and how warm, as on the phone; click for the World.
+            HStack {
+                Spacer()
+                Button { navigation.tab = .world } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "globe")
+                        Text(mixer.headerPlace)
+                    }
+                    .font(Theme.mono(11, .medium))
+                    .tracking(1.3)
+                    .foregroundStyle(Theme.mono)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("World  ⌘4")
+                .accessibilityLabel("World. \(mixer.headerPlace)")
+            }
+            .frame(height: 18)
+
+            Carousel(showLibrary: Binding(get: { false }, set: { if $0 { navigation.tab = .library } }),
+                     dragX: $dragX, openMixer: { navigation.tab = .layers })
+                .frame(minHeight: 340, maxHeight: .infinity)
+                .overlay { TravelArrows() }
+
+            Waveform()
+                .frame(height: 40)
+                .padding(.top, 6)
+
+            HStack(spacing: 14) {
+                LayerStrip(orbs: mixer.byVolume)
+                TimerMenu()
+                MacPlayButton()
+            }
+            .padding(.top, 14)
+        }
+        .padding(.horizontal, 28)
+        .padding(.bottom, 22)
+        .focusable()
+        .focusEffectDisabled()
+        .focused($focused)
+        .onKeyPress(.leftArrow) { mixer.requestTravel(forward: false); return .handled }
+        .onKeyPress(.rightArrow) { mixer.requestTravel(forward: true); return .handled }
+        .onAppear { focused = true }
+        .overlay(alignment: .bottom) {
+            if let hint {
+                Text(hint)
+                    .font(Theme.mono(11))
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 16)
+                    .background(Capsule().fill(.ultraThinMaterial))
+                    .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                    .padding(.bottom, 130)
+                    .transition(.opacity.combined(with: .offset(y: 8)))
+                    .allowsHitTesting(false)
+            }
+        }
+        .task { await runHints() }
+        .sensoryFeedback(.impact(weight: .medium), trigger: mixer.shuffleCount)
+    }
+
+    /// Shows each hint once, the first times the window opens.
+    private func runHints() async {
+        while hintStep < Self.hints.count {
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            withAnimation(.smooth(duration: 0.5)) { hint = Self.hints[hintStep] }
+            hintStep += 1
+            try? await Task.sleep(for: .seconds(3.5))
+            withAnimation(.smooth(duration: 0.5)) { hint = nil }
+        }
+    }
+}
+
+/// For a mouse: faint arrows at the edges of the halo while the pointer is over it, to travel
+/// back or on. (A trackpad swipes; the keyboard has ← →.)
+private struct TravelArrows: View {
+    @Environment(Mixer.self) private var mixer
+    @State private var hovering = false
+
+    var body: some View {
+        HStack {
+            arrow("chevron.left", label: "Go back", enabled: mixer.previous != nil) { mixer.requestTravel(forward: false) }
+            Spacer()
+            arrow("chevron.right", label: "Travel somewhere new", enabled: mixer.next != nil) { mixer.requestTravel(forward: true) }
+        }
+        .padding(.horizontal, -18)
+        .padding(.bottom, 80)   // level with the halo, above the title
+        .opacity(hovering ? 1 : 0)
+        .animation(.smooth(duration: 0.25), value: hovering)
+        .onContinuousHover { phase in
+            if case .active = phase { hovering = true } else { hovering = false }
+        }
+    }
+
+    private func arrow(_ symbol: String, label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Theme.text.opacity(0.75))
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(.white.opacity(0.07)))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .opacity(enabled ? 1 : 0)
+        .disabled(!enabled)
+        .help(label)
+        .accessibilityLabel(label)
+    }
+}
+
+/// The sleep timer beside play: a moon when there's none, otherwise how long it's set for.
+private struct TimerMenu: View {
+    @Environment(Mixer.self) private var mixer
+
+    var body: some View {
+        Menu {
+            Picker("Sleep timer", selection: Binding(get: { mixer.timer }, set: { mixer.setTimer($0) })) {
+                ForEach(Mixer.Timer.allCases, id: \.self) { t in
+                    Text(t == .off ? "No timer" : "Stop after \(t.label)").tag(t)
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            Group {
+                if mixer.timer == .off {
+                    Image(systemName: "moon").font(.system(size: 12))
+                } else {
+                    Text(mixer.timer.label).font(Theme.mono(11))
+                }
+            }
+            .foregroundStyle(Theme.mono)
+            .padding(6)
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Sleep timer")
+        .sensoryFeedback(.selection, trigger: mixer.timer)
+    }
+}
+
+/// A quiet ring rather than a big disc, so the scene stays the focus. Right-click for a timer.
+private struct MacPlayButton: View {
+    @Environment(Mixer.self) private var mixer
+    @State private var hovering = false
+
+    var body: some View {
+        Button { mixer.togglePlayback() } label: {
+            ZStack {
+                Circle().strokeBorder(Theme.text.opacity(hovering ? 1 : 0.8), lineWidth: 1.5)
+                if mixer.isPlaying {
+                    HStack(spacing: 5) {
+                        RoundedRectangle(cornerRadius: 1.5).frame(width: 4, height: 17)
+                        RoundedRectangle(cornerRadius: 1.5).frame(width: 4, height: 17)
+                    }
+                } else {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 18))
+                        .offset(x: 1.5)
+                }
+            }
+            .foregroundStyle(Theme.text)
+            .frame(width: 56, height: 56)
+            .background(Circle().fill(.white.opacity(hovering ? 0.06 : 0)))
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.smooth(duration: 0.15), value: hovering)
+        .help(mixer.isPlaying ? "Pause  (Space)" : "Play  (Space)")
+        .contextMenu {
+            Picker("Sleep timer", selection: Binding(get: { mixer.timer }, set: { mixer.setTimer($0) })) {
+                ForEach(Mixer.Timer.allCases, id: \.self) { t in
+                    Text(t == .off ? "No timer" : "Stop after \(t.label)").tag(t)
+                }
+            }
+            .pickerStyle(.inline)
+        }
+        .sensoryFeedback(.impact(weight: .medium), trigger: mixer.isPlaying)
+        .accessibilityLabel(mixer.isPlaying ? "Pause" : "Play")
+    }
+}

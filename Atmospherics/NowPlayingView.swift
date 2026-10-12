@@ -1,6 +1,8 @@
 import SwiftUI
 
+#if os(iOS)
 /// Home screen: a breathing halo of the current sounds, the mix name, and the main controls.
+/// (The Mac's window, `MacListen`, is built from the same parts below.)
 struct NowPlayingView: View {
     @Environment(Mixer.self) private var mixer
     @State private var showLibrary = false
@@ -211,10 +213,12 @@ struct NowPlayingView: View {
 }
 
 enum Route: Hashable { case mixer }
+#endif
 
 /// The halo, title, weather and layers as a page, with the previous and next places beside it.
 /// Drag follows the finger 1:1; let go past a quarter of the width (or flick) to land on the neighbour.
-private struct Carousel: View {
+/// On a Mac, two fingers on the trackpad do the same, and the keyboard and menus slide it too.
+struct Carousel: View {
     @Environment(Mixer.self) private var mixer
     @Binding var showLibrary: Bool
     @Binding var dragX: CGFloat
@@ -249,7 +253,17 @@ private struct Carousel: View {
             .frame(width: w, height: proxy.size.height, alignment: .topLeading)
             .contentShape(Rectangle())
             .gesture(drag(width: w, step: step))
+            #if os(macOS)
+            .background(TrackpadSwipe(changed: { follow($0, width: w) },
+                                      ended: { release(projected: $0, width: w, step: step) }))
+            #endif
+            .onChange(of: mixer.travelRequest) { _, request in
+                guard let request, !settling else { return }
+                land(forward: request.forward, step: step, duration: 0.55)
+            }
         }
+        .onAppear { mixer.carouselShowing = true }
+        .onDisappear { mixer.carouselShowing = false }
         .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.6), trigger: pastThreshold) { _, now in now }
         .accessibilityAction(named: "Travel somewhere new") { mixer.travel(forward: true) }
         .accessibilityAction(named: "Go back") { mixer.travel(forward: false) }
@@ -286,47 +300,60 @@ private struct Carousel: View {
     private func drag(width: CGFloat, step: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 10)
             .onChanged { g in
-                guard !settling, abs(g.translation.width) > abs(g.translation.height) else { return }
-                var x = g.translation.width
-                // Resist past an edge with nothing beyond it.
-                if (x < 0 && mixer.next == nil) || (x > 0 && mixer.previous == nil) { x = 40 * tanh(x / 120) }
-                dragX = x
-                pastThreshold = abs(x) > width * 0.25
+                guard abs(g.translation.width) > abs(g.translation.height) else { return }
+                follow(g.translation.width, width: width)
             }
-            .onEnded { g in
-                guard !settling else { return }
-                let projected = g.predictedEndTranslation.width
-                let forward = dragX < 0
-                // Travel only if the finger ends up past a quarter of the way, or flicks onward;
-                // pulling back toward the start cancels, it never sends you the other way.
-                let sameWay = dragX != 0 && (projected < 0) == forward
-                let commit = sameWay && (abs(dragX) > width * 0.25 || abs(projected) > width * 0.6)
-                    && (forward ? mixer.next != nil : mixer.previous != nil)
-                pastThreshold = false
-                guard commit else {
-                    withAnimation(.spring(duration: 0.4, bounce: 0.2)) { dragX = 0 }
-                    return
-                }
-                settling = true
-                // Snapshot both pages, then switch the sound right away.
-                let outgoing = Mixer.Page(title: mixer.title, line: mixer.weather.line, orbs: mixer.byVolume)
-                if let dest = forward ? mixer.next : mixer.previous {
-                    frozen = (outgoing, mixer.page(for: dest), forward)
-                }
-                mixer.travel(forward: forward)
-                withAnimation(.spring(duration: 0.3, bounce: 0)) {
-                    dragX = forward ? -step : step
-                } completion: {
-                    // The destination is centred and is already the live page: swap without a jump.
-                    var t = Transaction()
-                    t.disablesAnimations = true
-                    withTransaction(t) {
-                        frozen = nil
-                        dragX = 0
-                    }
-                    settling = false
-                }
+            .onEnded { g in release(projected: g.predictedEndTranslation.width, width: width, step: step) }
+    }
+
+    /// The pages follow the finger.
+    private func follow(_ translation: CGFloat, width: CGFloat) {
+        guard !settling else { return }
+        var x = translation
+        // Resist past an edge with nothing beyond it.
+        if (x < 0 && mixer.next == nil) || (x > 0 && mixer.previous == nil) { x = 40 * tanh(x / 120) }
+        dragX = x
+        pastThreshold = abs(x) > width * 0.25
+    }
+
+    /// Let go: `projected` is where a flick would carry the pages.
+    private func release(projected: CGFloat, width: CGFloat, step: CGFloat) {
+        guard !settling else { return }
+        let forward = dragX < 0
+        // Travel only if the finger ends up past a quarter of the way, or flicks onward;
+        // pulling back toward the start cancels, it never sends you the other way.
+        let sameWay = dragX != 0 && (projected < 0) == forward
+        let commit = sameWay && (abs(dragX) > width * 0.25 || abs(projected) > width * 0.6)
+            && (forward ? mixer.next != nil : mixer.previous != nil)
+        pastThreshold = false
+        guard commit else {
+            withAnimation(.spring(duration: 0.4, bounce: 0.2)) { dragX = 0 }
+            return
+        }
+        land(forward: forward, step: step)
+    }
+
+    /// Slides the rest of the way to the neighbour, switching the sound as it goes.
+    private func land(forward: Bool, step: CGFloat, duration: Double = 0.3) {
+        settling = true
+        // Snapshot both pages, then switch the sound right away.
+        let outgoing = Mixer.Page(title: mixer.title, line: mixer.weather.line, orbs: mixer.byVolume)
+        if let dest = forward ? mixer.next : mixer.previous {
+            frozen = (outgoing, mixer.page(for: dest), forward)
+        }
+        mixer.travel(forward: forward)
+        withAnimation(.spring(duration: duration, bounce: 0)) {
+            dragX = forward ? -step : step
+        } completion: {
+            // The destination is centred and is already the live page: swap without a jump.
+            var t = Transaction()
+            t.disablesAnimations = true
+            withTransaction(t) {
+                frozen = nil
+                dragX = 0
             }
+            settling = false
+        }
     }
 }
 
@@ -548,7 +575,7 @@ private struct PlayButton: View {
 
 /// A slim, calm wave under the readout. Its height follows how loud the mix is (smoothed over
 /// about half a second) and it drifts slowly sideways, so it feels alive without twitching.
-private struct Waveform: View {
+struct Waveform: View {
     @Environment(Mixer.self) private var mixer
     @State private var level: Double = 0
 

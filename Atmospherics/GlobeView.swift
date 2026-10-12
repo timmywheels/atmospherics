@@ -2,6 +2,9 @@ import SwiftUI
 
 /// The world: a glowing globe to spin and pick a place from, or a list by region.
 struct GlobeView: View {
+    /// Where to go once a place is chosen, when the World is part of a window (on the Mac)
+    /// rather than presented over everything.
+    var done: (() -> Void)? = nil
     @Environment(Mixer.self) private var mixer
     @Environment(\.dismiss) private var dismiss
     @State private var showList = false
@@ -16,14 +19,16 @@ struct GlobeView: View {
                     .font(Theme.display(30))
                     .tracking(-0.6)
                 Spacer()
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 15, weight: .semibold))
-                        .frame(width: 36, height: 36)
-                        .background(Circle().fill(.white.opacity(0.08)))
+                if done == nil {
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(width: 36, height: 36)
+                            .background(Circle().fill(.white.opacity(0.08)))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Close")
             }
             .padding(.horizontal, 24)
 
@@ -41,10 +46,10 @@ struct GlobeView: View {
 
             if !search.query.isEmpty {
                 SearchResults(search: search) { place in
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    Haptics.tap()
                     Task {
                         await mixer.addAndSelect(place)
-                        dismiss()
+                        close()
                     }
                 }
                 .padding(.top, 8)
@@ -66,9 +71,13 @@ struct GlobeView: View {
     }
 
     private func listen(_ place: Place) {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        Haptics.tap()
         mixer.select(place)
-        dismiss()
+        close()
+    }
+
+    private func close() {
+        if let done { done() } else { dismiss() }
     }
 
     private func pill(_ label: String, selected: Bool, action: @escaping () -> Void) -> some View {
@@ -458,8 +467,11 @@ private struct SearchField: View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass").foregroundStyle(Theme.mono)
             TextField("", text: $text, prompt: Text("Search any town or city").foregroundStyle(Theme.mono))
+                .textFieldStyle(.plain)
                 .focused(focused)
+                #if os(iOS)
                 .textInputAutocapitalization(.words)
+                #endif
                 .autocorrectionDisabled()
                 .submitLabel(.search)
             if !text.isEmpty {

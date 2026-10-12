@@ -21,6 +21,8 @@ xcodegen generate
 open Atmospherics.xcodeproj
 ```
 
+Two apps share one codebase: the `Atmospherics` scheme is the iPhone app, `AtmosphericsMac` the Mac app (macOS 14+). The Mac app is one window (Listen, Layers, Library, World) plus a control in the menu bar, and keeps playing when the window is closed. A two-finger swipe or ← → travels, Space plays and pauses, and the media keys work once something has played.
+
 Weather comes from [Open-Meteo](https://open-meteo.com) (free, no API key).
 
 ## Releasing
@@ -35,6 +37,13 @@ xcodebuild -exportArchive -archivePath build/Atmospherics.xcarchive -exportOptio
 
 App Store screenshots: `design/screenshots/make-upload.sh`.
 
+The Mac app has its own build number (`CURRENT_PROJECT_VERSION` under `AtmosphericsMac`) and uploads to the same App Store Connect app, once macOS has been added there as a platform:
+
+```bash
+xcodebuild -project Atmospherics.xcodeproj -scheme AtmosphericsMac -configuration Release -destination 'generic/platform=macOS' -archivePath build/AtmosphericsMac.xcarchive -allowProvisioningUpdates archive
+xcodebuild -exportArchive -archivePath build/AtmosphericsMac.xcarchive -exportOptionsPlist ExportOptions.plist -exportPath build/export-mac -allowProvisioningUpdates
+```
+
 ## Layout
 
 - `Atmospherics/` app source
@@ -42,6 +51,7 @@ App Store screenshots: `design/screenshots/make-upload.sh`.
   - `Mixer.swift` app state, weather following, playback
   - `Weather.swift` Open-Meteo client and weather-to-mix rules
   - `NowPlayingView.swift`, `MixerView.swift`, `LibraryView.swift` the three screens
+- `Mac/` the Mac app: its window, menu bar panel, menus and trackpad swipes, built on the shared views above
 - `design/icon/` icon source and render scripts
 - `archive/pentagon/` an earlier UI direction, kept for reference
 

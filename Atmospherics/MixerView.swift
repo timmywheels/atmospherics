@@ -1,9 +1,10 @@
 import SwiftUI
 
+#if os(iOS)
 /// Layers: a landscape of what's playing, washed in the colors of the mix. Each sound raises a
 /// hill where it sits, as high as it is loud, and you're at the center: drag a sound closer to
 /// hear more of it, out past the rim to let it go, and drag the ground to turn the landscape.
-/// The sections below add a sound or take it away.
+/// The sections below add a sound or take it away. (On the Mac, `MacLayers` shows the same parts.)
 struct MixerView: View {
     @Environment(Mixer.self) private var mixer
     @State private var saving = false
@@ -48,6 +49,7 @@ struct MixerView: View {
         .saveMixPrompt(isPresented: $saving)
     }
 }
+#endif
 
 /// How the landscape is seen: turned (yaw), tilted (pitch, 0 is side on), in perspective.
 /// The ground is the field's disc, radius 1 at the rim, with height going up.
@@ -111,7 +113,7 @@ private struct Terrain {
 
 /// The landscape: contour lines over the disc, lit in each sound's color around its hill, with
 /// the rim dashed and you marked at the center. Drag the ground to turn and tilt it.
-private struct TerrainField: View {
+struct TerrainField: View {
     @Environment(Mixer.self) private var mixer
     @State private var yaw = -0.4
     @State private var pitch = 0.82
@@ -355,7 +357,7 @@ private struct TerrainOrb: View {
 /// Every sound as a pill, in sections: this place's own sounds first, then by kind, with noise
 /// last. Each section scrolls sideways; a pill is lit while its sound is playing, and tapping
 /// adds it or takes it away. Pills keep their places, so nothing jumps when you tap.
-private struct SoundSections: View {
+struct SoundSections: View {
     @Environment(Mixer.self) private var mixer
 
     private static let order: [SoundKind.Category] = [.water, .nature, .night, .jungle, .city, .calm, .tones, .noise]
@@ -402,7 +404,7 @@ private struct SoundSections: View {
 
     private func pill(_ kind: SoundKind, on: Bool) -> some View {
         Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Haptics.tap(.light)
             withAnimation(.snappy) {
                 if on {
                     for orb in mixer.orbs where orb.kind == kind { mixer.remove(orb.id) }

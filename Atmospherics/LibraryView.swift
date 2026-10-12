@@ -4,6 +4,9 @@ import SwiftUI
 /// Your own mixes come first: swipe left to delete, right to rename, hold and drag to reorder.
 /// It opens on the mix that's playing, under its own filter.
 struct LibraryView: View {
+    /// Where to go once a mix is chosen, when the Library is part of a window (on the Mac)
+    /// rather than a sheet.
+    var done: (() -> Void)? = nil
     @Environment(Mixer.self) private var mixer
     @Environment(\.dismiss) private var dismiss
     @State private var filter: Preset.Tag?
@@ -14,8 +17,9 @@ struct LibraryView: View {
     @State private var showingScience = false
     private let current: Preset?
 
-    init(current: Preset? = nil) {
+    init(current: Preset? = nil, done: (() -> Void)? = nil) {
         self.current = current
+        self.done = done
         _filter = State(initialValue: current?.tag)
         _showingYours = State(initialValue: current?.isSaved == true)
     }
@@ -70,6 +74,13 @@ struct LibraryView: View {
                                 Button("Rename", systemImage: "pencil") { newName = mix.name; renaming = mix }
                                     .tint(Color(white: 0.35))
                             }
+                            #if os(macOS)
+                            // With a mouse, the same through a right click.
+                            .contextMenu {
+                                Button("Rename…") { newName = mix.name; renaming = mix }
+                                Button("Delete", role: .destructive) { delete(mix) }
+                            }
+                            #endif
                     }
                     .onMove { mixer.moveSavedMixes(from: $0, to: $1) }
                     ForEach(builtIn) { item($0) }
@@ -94,7 +105,12 @@ struct LibraryView: View {
             Button("Cancel", role: .cancel) {}
             Button("Save") { if let r = renaming { mixer.rename(r, to: newName) } }
         }
-        .sheet(isPresented: $showingScience) { FocusScienceView() }
+        .sheet(isPresented: $showingScience) {
+            FocusScienceView()
+                #if os(macOS)
+                .frame(width: 540, height: 680)
+                #endif
+        }
         .sensoryFeedback(.selection, trigger: filter)
         .sensoryFeedback(.impact(weight: .medium), trigger: deletes)
         .sensoryFeedback(.selection, trigger: mixer.savedMixes.map(\.id))
@@ -103,9 +119,9 @@ struct LibraryView: View {
     /// One row of the list: tap to play it.
     private func item(_ preset: Preset) -> some View {
         Button {
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            Haptics.tap()
             mixer.load(preset)
-            dismiss()
+            if let done { done() } else { dismiss() }
         } label: {
             row(preset)
         }

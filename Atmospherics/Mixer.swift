@@ -1,7 +1,9 @@
 import CoreLocation
+#if os(iOS)
 import ActivityKit
-import AVFoundation
 import WidgetKit
+#endif
+import AVFoundation
 import MediaPlayer
 import SwiftUI
 import Observation
@@ -240,6 +242,7 @@ final class Mixer {
     @ObservationIgnored private var resumeAfterInterruption = false
 
     private func setUpSystemAudio() {
+        #if os(iOS)
         // No system Now Playing panel: the Live Activity is the lock-screen control.
         // (Registering remote commands or Now Playing info makes iOS show its own panel too.)
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
@@ -269,11 +272,14 @@ final class Mixer {
                   isPlaying else { return }
             stop()
         }
+        #endif
     }
 
     // MARK: Widget and Live Activity
 
+    #if os(iOS)
     @ObservationIgnored private var activity: Activity<SoundscapeActivity>?
+    #endif
     @ObservationIgnored private var lastSnapshot: NowPlayingSnapshot?
     @ObservationIgnored private var lastSnapshotSave = Date.distantPast
 
@@ -292,6 +298,9 @@ final class Mixer {
         guard changedForWidget || Date().timeIntervalSince(lastSnapshotSave) > 1 else { return }
         lastSnapshotSave = Date()
         lastSnapshot = snapshot
+        #if os(macOS)
+        if changedForWidget { showInNowPlaying(snapshot) }
+        #else
         snapshot.save()
         if changedForWidget { WidgetCenter.shared.reloadAllTimelines() }
 
@@ -304,8 +313,10 @@ final class Mixer {
         } else if let activity, changedForWidget {
             Task { await activity.update(.init(state: state, staleDate: nil)) }
         }
+        #endif
     }
 
+    #if os(iOS)
     /// Ends any Live Activity left from an earlier version.
     private func endAllActivities() {
         guard !Activity<SoundscapeActivity>.activities.isEmpty else { return }
@@ -322,6 +333,50 @@ final class Mixer {
             self.activity = nil
         }
     }
+    #endif
+
+    #if os(macOS)
+    // MARK: Now Playing on the Mac
+
+    /// Set once something has played here. Until then the media keys and Now Playing stay with
+    /// whatever app had them: just opening this one shouldn't take them.
+    @ObservationIgnored private var hasPlayed = false
+    @ObservationIgnored private var artwork: (hues: [Double], image: MPMediaItemArtwork)?
+
+    /// The Mac has no Live Activity: the system's Now Playing (Control Center, the media keys,
+    /// AirPods) shows and controls what's playing, and the forward and back keys travel.
+    private func setUpRemoteCommands() {
+        let commands = MPRemoteCommandCenter.shared()
+        commands.togglePlayPauseCommand.addTarget { [weak self] _ in self?.togglePlayback(); return .success }
+        commands.playCommand.addTarget { [weak self] _ in self?.play(); return .success }
+        commands.pauseCommand.addTarget { [weak self] _ in self?.stop(); return .success }
+        commands.nextTrackCommand.addTarget { [weak self] _ in self?.requestTravel(forward: true); return .success }
+        commands.previousTrackCommand.addTarget { [weak self] _ in self?.requestTravel(forward: false); return .success }
+    }
+
+    private func showInNowPlaying(_ snapshot: NowPlayingSnapshot) {
+        guard hasPlayed else { return }
+        let hues = snapshot.lights.map(\.hue)
+        if artwork?.hues != hues {
+            let halo = HaloArt(lights: snapshot.lights).frame(width: 320, height: 320).background(Theme.background)
+            let renderer = ImageRenderer(content: halo)
+            renderer.scale = 2
+            if let image = renderer.nsImage {
+                artwork = (hues, MPMediaItemArtwork(boundsSize: image.size) { _ in image })
+            }
+        }
+        var info: [String: Any] = [
+            MPMediaItemPropertyTitle: snapshot.title,
+            MPMediaItemPropertyArtist: snapshot.temperature.isEmpty ? snapshot.place : "\(snapshot.place) \(snapshot.temperature)",
+            MPNowPlayingInfoPropertyIsLiveStream: true,
+            MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
+        ]
+        if let artwork { info[MPMediaItemPropertyArtwork] = artwork.image }
+        let center = MPNowPlayingInfoCenter.default()
+        center.nowPlayingInfo = info
+        center.playbackState = snapshot.isPlaying ? .playing : .paused
+    }
+    #endif
 
     private func updateNowPlaying() {
         publishToWidgets()
@@ -884,6 +939,22 @@ final class Mixer {
         upcomingBack = pickRandom(excluding: upcoming.map { [$0] } ?? [])
     }
 
+    /// A slide for the carousel to make, asked for from outside it (the keyboard, the menus,
+    /// the menu bar, the media keys), so traveling looks the same as swiping.
+    struct TravelRequest: Equatable {
+        let id = UUID()
+        let forward: Bool
+    }
+    private(set) var travelRequest: TravelRequest?
+    /// Whether a carousel is on screen to take travel requests.
+    @ObservationIgnored var carouselShowing = false
+
+    /// Travels forward or back, sliding the carousel there if it's on screen.
+    func requestTravel(forward: Bool) {
+        guard forward ? next != nil : previous != nil else { return }
+        if carouselShowing { travelRequest = TravelRequest(forward: forward) } else { travel(forward: forward) }
+    }
+
     /// Swipe left (forward) to a new place, or right (back) through where you've been.
     func travel(forward: Bool) {
         guard let dest = forward ? next : previous else { return }
@@ -1039,6 +1110,12 @@ final class Mixer {
     func play() {
         do {
             try engine.play()
+            #if os(macOS)
+            if !hasPlayed {
+                hasPlayed = true
+                setUpRemoteCommands()
+            }
+            #endif
             isPlaying = true
             scheduleTimer()
             updateNowPlaying()
@@ -1052,7 +1129,9 @@ final class Mixer {
         isPlaying = false
         timerWork?.cancel()
         updateNowPlaying()
+        #if os(iOS)
         endActivitySoon()
+        #endif
     }
 
     func setTimer(_ t: Timer) {

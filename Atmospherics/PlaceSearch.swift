@@ -91,8 +91,8 @@ final class PlaceSearch: NSObject, MKLocalSearchCompleterDelegate {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = what
         request.region = MKCoordinateRegion(center: c, latitudinalMeters: km * 2000, longitudinalMeters: km * 2000)
-        if #available(iOS 18, *) { request.regionPriority = .required }
-        // Before iOS 18 results can spill outside the region, so count only those inside it.
+        if #available(iOS 18, macOS 15, *) { request.regionPriority = .required }
+        // Before iOS 18 (macOS 15) results can spill outside the region, so count only those inside it.
         let items = (try? await MKLocalSearch(request: request).start().mapItems) ?? []
         let center = CLLocation(latitude: c.latitude, longitude: c.longitude)
         return items.filter { $0.placemark.location.map { $0.distance(from: center) <= km * 1000 } ?? false }.count
