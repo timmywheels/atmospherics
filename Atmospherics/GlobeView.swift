@@ -6,6 +6,8 @@ struct GlobeView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showList = false
     @State private var focused: Place?
+    @State private var search = PlaceSearch()
+    @FocusState private var searching: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -25,6 +27,10 @@ struct GlobeView: View {
             }
             .padding(.horizontal, 24)
 
+            SearchField(text: $search.query, focused: $searching)
+                .padding(.horizontal, 24)
+                .padding(.top, 14)
+
             HStack(spacing: 8) {
                 pill("Globe", selected: !showList) { showList = false }
                 pill("List", selected: showList) { showList = true }
@@ -37,7 +43,16 @@ struct GlobeView: View {
             .padding(.horizontal, 24)
             .padding(.top, 14)
 
-            if showList {
+            if !search.query.isEmpty {
+                SearchResults(search: search) { place in
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    Task {
+                        await mixer.addAndSelect(place)
+                        dismiss()
+                    }
+                }
+                .padding(.top, 8)
+            } else if showList {
                 PlaceList { listen($0) }
                     .padding(.top, 12)
             } else {
@@ -192,7 +207,7 @@ private struct GlobeCanvas: View {
     }
 
     private func shuffle() {
-        let options = Place.all.filter { $0 != focused }
+        let options = mixer.allPlaces.filter { $0 != focused }
         guard let place = options.randomElement() else { return }
         shuffles += 1
         fly(to: place)
@@ -211,7 +226,7 @@ private struct GlobeCanvas: View {
 
     private func nearestToCenter() -> Place? {
         var best: (Place, Double)?
-        for place in Place.all {
+        for place in mixer.allPlaces {
             let (_, z) = project(lat: place.latitude, lon: place.longitude, center: .zero, radius: 1)
             if z > 0.94, z > (best?.1 ?? 0) { best = (place, z) }
         }
@@ -219,7 +234,7 @@ private struct GlobeCanvas: View {
     }
 
     private func hit(_ point: CGPoint, center: CGPoint, radius: CGFloat) -> Place? {
-        Place.all
+        mixer.allPlaces
             .map { p -> (Place, CGPoint, Double) in
                 let (s, z) = project(lat: p.latitude, lon: p.longitude, center: center, radius: radius)
                 return (p, s, z)
@@ -267,7 +282,7 @@ private struct GlobeCanvas: View {
         // skipping any that would collide with one already placed.
         var labeled: [CGPoint] = []
         var showLabel: Set<String> = []
-        let byDepth = Place.all
+        let byDepth = mixer.allPlaces
             .map { ($0, project(lat: $0.latitude, lon: $0.longitude, center: center, radius: radius)) }
             .filter { $0.1.1 > 0.75 }
             .sorted { a, b in (a.0 == focused ? 2 : a.1.1) > (b.0 == focused ? 2 : b.1.1) }
@@ -277,7 +292,7 @@ private struct GlobeCanvas: View {
         }
 
         // Cities.
-        for place in Place.all {
+        for place in mixer.allPlaces {
             let (p, z) = project(lat: place.latitude, lon: place.longitude, center: center, radius: radius)
             guard z > 0 else { continue }
             let isFocused = place == focused
@@ -300,7 +315,7 @@ private struct GlobeCanvas: View {
         // Labels last, so no city's glow or dot covers them; a dark shadow keeps them legible over land.
         var labels = ctx
         labels.addFilter(.shadow(color: .black.opacity(0.9), radius: 3))
-        for place in Place.all where showLabel.contains(place.name) {
+        for place in mixer.allPlaces where showLabel.contains(place.name) {
             let (p, z) = project(lat: place.latitude, lon: place.longitude, center: center, radius: radius)
             let isFocused = place == focused
             labels.draw(Text(place.title)
@@ -369,7 +384,7 @@ private struct PlaceList: View {
             LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                 ForEach(Place.Region.allCases, id: \.self) { region in
                     Section {
-                        ForEach(Place.all.filter { $0.region == region }) { place in
+                        ForEach(mixer.allPlaces.filter { $0.region == region }) { place in
                             Button { listen(place) } label: { row(place) }
                                 .buttonStyle(.plain)
                         }
@@ -416,5 +431,74 @@ private struct PlaceList: View {
         .contentShape(Rectangle())
         .overlay(alignment: .bottom) { Rectangle().fill(.white.opacity(0.07)).frame(height: 1) }
         .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: Search
+
+private struct SearchField: View {
+    @Binding var text: String
+    var focused: FocusState<Bool>.Binding
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass").foregroundStyle(Theme.mono)
+            TextField("", text: $text, prompt: Text("Search any town or city").foregroundStyle(Theme.mono))
+                .focused(focused)
+                .textInputAutocapitalization(.words)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+            if !text.isEmpty {
+                Button { text = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.mono)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .font(Theme.body(15))
+        .padding(.vertical, 11)
+        .padding(.horizontal, 14)
+        .background(Capsule().fill(.white.opacity(0.06)))
+        .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+    }
+}
+
+private struct SearchResults: View {
+    let search: PlaceSearch
+    let pick: (Place) -> Void
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(search.results, id: \.self) { result in
+                    Button {
+                        Task { if let place = await search.resolve(result) { pick(place) } }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(result.title).font(Theme.body(17))
+                            if !result.subtitle.isEmpty {
+                                Text(result.subtitle).font(Theme.mono(11)).foregroundStyle(Theme.mono)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 12)
+                        .contentShape(Rectangle())
+                        .overlay(alignment: .bottom) { Rectangle().fill(.white.opacity(0.07)).frame(height: 1) }
+                    }
+                    .buttonStyle(.plain)
+                }
+                if search.resolving {
+                    HStack(spacing: 8) {
+                        ProgressView().tint(Theme.mono)
+                        Text("Listening for what’s nearby…").font(Theme.mono(11)).foregroundStyle(Theme.mono)
+                    }
+                    .padding(.vertical, 14)
+                }
+            }
+            .padding(.horizontal, 24)
+        }
+        .scrollDismissesKeyboard(.immediately)
+        .scrollIndicators(.hidden)
     }
 }

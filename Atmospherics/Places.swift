@@ -4,6 +4,7 @@ import Foundation
 /// makes it that place. Fire only joins in when it's actually cold there.
 struct Place: Identifiable, Hashable {
     enum Region: String, CaseIterable {
+        case yours = "Your places"
         case americas = "Americas", europe = "Europe", africa = "Africa & Middle East", asia = "Asia", oceania = "Oceania"
     }
 
@@ -26,6 +27,13 @@ struct Place: Identifiable, Hashable {
     func hash(into hasher: inout Hasher) { hasher.combine(name) }
 
     static func named(_ name: String) -> Place? { all.first { $0.name == name } }
+
+    // MARK: Saved places (from search)
+
+    var dictionary: [String: Any] {
+        ["name": name, "country": country, "lat": latitude, "lon": longitude,
+         "signature": signature.map { ["kind": $0.0.rawValue, "level": $0.1] }]
+    }
 
     static let all: [Place] = [
         // Americas
@@ -120,4 +128,18 @@ struct Place: Identifiable, Hashable {
         Place(name: "Queenstown", country: "New Zealand", region: .oceania, latitude: -45.03, longitude: 168.66,
               signature: [(.stream, 0.4), (.wind, 0.35), (.birds, 0.15)]),
     ]
+}
+
+extension Place {
+    init?(dictionary d: [String: Any]) {
+        guard let name = d["name"] as? String, let country = d["country"] as? String,
+              let lat = d["lat"] as? Double, let lon = d["lon"] as? Double,
+              let sig = d["signature"] as? [[String: Any]] else { return nil }
+        self.init(name: name, country: country, region: .yours, latitude: lat, longitude: lon,
+                  signature: sig.compactMap { e in
+                      guard let raw = e["kind"] as? String, let kind = SoundKind(rawValue: raw),
+                            let level = e["level"] as? Double else { return nil }
+                      return (kind, level)
+                  })
+    }
 }

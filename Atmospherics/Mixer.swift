@@ -59,6 +59,10 @@ final class Mixer {
     private(set) var placeConditions: [String: Conditions] = [:]
     /// A place the user chose. When nil, Escape picks the place least like home.
     private(set) var pinnedPlace: Place?
+    /// Places found through search, newest first.
+    private(set) var customPlaces: [Place] = []
+    var allPlaces: [Place] { customPlaces + Place.all }
+
     /// Bumps on every random jump, so views can animate and play a haptic.
     private(set) var shuffleCount = 0
     /// Whether each mode's field is following the weather, or the user has taken over.
@@ -95,7 +99,8 @@ final class Mixer {
             .escape: defaults.object(forKey: "following.escape") as? Bool ?? true,
         ]
         if let raw = defaults.string(forKey: "mode"), let saved = Mode(rawValue: raw) { mode = saved }
-        pinnedPlace = defaults.string(forKey: "pinnedPlace").flatMap(Place.named)
+        customPlaces = (defaults.array(forKey: "customPlaces") as? [[String: Any]] ?? []).compactMap(Place.init(dictionary:))
+        pinnedPlace = defaults.string(forKey: "pinnedPlace").flatMap { name in allPlaces.first { $0.name == name } }
         apply()
         setUpSystemAudio()
     }
@@ -322,8 +327,9 @@ final class Mixer {
             weatherState = location.isDenied ? .locationOff : .failed
         }
 
-        if let options = try? await weatherService.places() {
-            placeConditions = Dictionary(uniqueKeysWithValues: zip(Place.all.map(\.name), options))
+        let places = allPlaces
+        if let options = try? await weatherService.conditions(for: places) {
+            placeConditions = Dictionary(zip(places.map(\.name), options), uniquingKeysWith: { a, _ in a })
             chooseEscape()
         } else {
             // Don't wait 20 minutes for the next try if places didn't load.
@@ -344,7 +350,7 @@ final class Mixer {
             escape = (pinned, c)
             return
         }
-        let options = Place.all.compactMap { p in placeConditions[p.name].map { (p, $0) } }
+        let options = Place.all.compactMap { p in placeConditions[p.name].map { (p, $0) } }   // curated places only
         guard !options.isEmpty else { return }
         let i = WeatherMix.bestEscape(from: home, options: options.map(\.1))
         escape = options[i]
@@ -372,6 +378,24 @@ final class Mixer {
         applyWeather(to: .escape, animated: true)
         updateNowPlaying()
         if !isPlaying { play() }
+    }
+
+    /// Saves a searched place, fetches its weather, and goes there.
+    func addAndSelect(_ place: Place) async {
+        customPlaces.removeAll { $0.name == place.name }
+        customPlaces.insert(place, at: 0)
+        customPlaces = Array(customPlaces.prefix(8))
+        defaults.set(customPlaces.map(\.dictionary), forKey: "customPlaces")
+        if let c = try? await weatherService.conditions(for: [place]).first {
+            placeConditions[place.name] = c
+        }
+        select(place)
+    }
+
+    func removeCustom(_ place: Place) {
+        customPlaces.removeAll { $0.name == place.name }
+        defaults.set(customPlaces.map(\.dictionary), forKey: "customPlaces")
+        if pinnedPlace == place { unpinPlace() }
     }
 
     /// Comes back from a place to the local weather.
@@ -407,7 +431,7 @@ final class Mixer {
 
     /// Jumps to a random place other than the current one.
     func shuffle() {
-        let others = Place.all.filter { $0 != escape?.place && placeConditions[$0.name] != nil && !isNearHome($0) }
+        let others = allPlaces.filter { $0 != escape?.place && placeConditions[$0.name] != nil && !isNearHome($0) }
         guard let place = others.randomElement() ?? Place.all.randomElement() else { return }
         shuffleCount += 1
         select(place)

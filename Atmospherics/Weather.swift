@@ -62,10 +62,10 @@ struct WeatherService {
         return result
     }
 
-    /// Conditions at every place, in `Place.all` order, from one request.
-    func places() async throws -> [Conditions] {
-        var all = try await openMeteo(Place.all.map { ($0.latitude, $0.longitude) })
-        for i in all.indices { all[i].place = Place.all[i].name }
+    /// Conditions at each place, in order, from one request.
+    func conditions(for places: [Place]) async throws -> [Conditions] {
+        var all = try await openMeteo(places.map { ($0.latitude, $0.longitude) })
+        for i in all.indices { all[i].place = places[i].name }
         return all
     }
 

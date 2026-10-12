@@ -277,14 +277,14 @@ private struct Waveform: View {
             let t = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 10_000)
             Canvas { ctx, size in
                 let mid = size.height / 2
-                let amplitude = mid * 0.85 * min(1, level * 4)
+                let amplitude = mid * 0.45 * min(1, level * 4)
                 var path = Path()
                 let samples = 90
                 for i in 0...samples {
                     let x = Double(i) / Double(samples)
                     let edge = sin(x * .pi)   // taper into the edges
                     // Two slow waves at different speeds give a soft, organic shape.
-                    let y = 0.65 * sin(x * 2 * .pi * 2.2 - t * 1.1) + 0.35 * sin(x * 2 * .pi * 3.7 + t * 0.7)
+                    let y = 0.65 * sin(x * 2 * .pi * 2.2 - t * 1.8) + 0.35 * sin(x * 2 * .pi * 3.7 + t * 1.2)
                     let p = CGPoint(x: x * size.width, y: mid - y * amplitude * edge)
                     i == 0 ? path.move(to: p) : path.addLine(to: p)
                 }
@@ -302,7 +302,7 @@ private struct Waveform: View {
             .onChange(of: timeline.date) { _, _ in
                 let peaks = mixer.isPlaying ? mixer.scope.snapshot() : []
                 let rms = peaks.isEmpty ? 0 : sqrt(peaks.map { Double($0 * $0) }.reduce(0, +) / Double(peaks.count))
-                level += (rms - level) * 0.06
+                level += (rms - level) * 0.03   // slow, so loudness changes never jolt the height
             }
         }
         .accessibilityHidden(true)
