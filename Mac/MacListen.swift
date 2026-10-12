@@ -15,6 +15,7 @@ struct MacListen: View {
     private static let hints = [
         "Swipe with two fingers, or press → to travel",
         "Click the light to see its layers",
+        "Click the name to choose where to go",
     ]
 
     var body: some View {
@@ -38,8 +39,8 @@ struct MacListen: View {
             }
             .frame(height: 18)
 
-            Carousel(showLibrary: Binding(get: { false }, set: { if $0 { navigation.tab = .library } }),
-                     dragX: $dragX, openMixer: { navigation.tab = .layers })
+            Carousel(dragX: $dragX, openMixer: { navigation.tab = .layers }, chooseWhere: { navigation.choosing = true },
+                     openLibrary: { navigation.tab = .library })
                 .frame(minHeight: 340, maxHeight: .infinity)
                 .overlay { TravelArrows() }
 

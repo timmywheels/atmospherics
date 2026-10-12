@@ -122,4 +122,6 @@ final class MacNavigation {
     var tab: Tab = .listen
     /// Set to ask the window for the save prompt (from the menu bar or the Playback menu).
     var saving = false
+    /// Set to open Where To in the window.
+    var choosing = false
 }

@@ -16,6 +16,8 @@ struct Conditions: Equatable {
     var sunset: Int? = nil
     var snowDepth: Double = 0        // metres of snow on the ground
     var forcedPhase: DayPhase? = nil // a time-of-day override
+    var forcedHour: Int? = nil       // an imagined scene's hour, instead of the clock's
+    var forcedMonth: Int? = nil      // an imagined scene's month, for its season
 
     var isThunder: Bool { (95...99).contains(code) }
     var isSnow: Bool { (71...77).contains(code) || code == 85 || code == 86 }

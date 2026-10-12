@@ -9,6 +9,7 @@ struct NowPlayingView: View {
     @State private var showGlobe = false
     @State private var dragX: CGFloat = 0
     @State private var showMixer = false
+    @State private var showWhere = false
     @State private var saving = false
     @State private var hint: String?
     /// How many of the one-time hints have been shown.
@@ -22,13 +23,15 @@ struct NowPlayingView: View {
         "Swipe up for your library",
         "Swipe down to change the weather",
         "Hold play for a sleep timer",
+        "Tap the name to choose where to go",
     ]
 
     @State private var weatherToastTask: Task<Void, Never>?
 
     private func showWeatherToast() {
         weatherToastTask?.cancel()
-        let label = mixer.skyOverride == .live ? "Live weather" : mixer.skyOverride.rawValue
+        let label = inAtmosphere ? (mixer.atmosphere?.sky.name ?? "")
+            : mixer.skyOverride == .live ? "Live weather" : mixer.skyOverride.rawValue
         withAnimation(.smooth(duration: 0.25)) { hint = label }
         weatherToastTask = Task {
             try? await Task.sleep(for: .seconds(1.4))
@@ -49,6 +52,9 @@ struct NowPlayingView: View {
         }
     }
 
+    /// Playing an atmosphere (not a Library mix started from one): its own weather and time apply.
+    private var inAtmosphere: Bool { mixer.mode == .atmosphere && mixer.activePreset == nil }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
@@ -57,7 +63,7 @@ struct NowPlayingView: View {
                         Button("Back to \(mixer.presetReturnName)", systemImage: "arrow.uturn.backward") {
                             withAnimation(.smooth(duration: 0.35)) { mixer.leavePreset() }
                         }
-                    } else if mixer.mode == .escape {
+                    } else if mixer.mode != .match {
                         Button("Home · \(mixer.homeName)", systemImage: "house") {
                             withAnimation(.smooth(duration: 0.35)) { mixer.goHome() }
                         }
@@ -70,6 +76,7 @@ struct NowPlayingView: View {
                         }
                         Divider()
                     }
+                    Button("Where to…", systemImage: "signpost.right") { showWhere = true }
                     Button("Layers", systemImage: "square.3.layers.3d") { showMixer = true }
                     Button("Library", systemImage: "books.vertical") { showLibrary = true }
                     Button("World", systemImage: "globe") { showGlobe = true }
@@ -78,14 +85,28 @@ struct NowPlayingView: View {
                             Button(t == .off ? "No timer" : "Stop after \(t.label)") { mixer.setTimer(t) }
                         }
                     }
-                    Menu("Weather · \(mixer.skyOverride.rawValue)", systemImage: "cloud.sun") {
-                        Picker("Weather", selection: Binding(get: { mixer.skyOverride }, set: { mixer.setSky($0) })) {
-                            ForEach(Mixer.SkyOverride.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    if inAtmosphere, let a = mixer.atmosphere {
+                        // An atmosphere's own weather and time, from those that suit it.
+                        Menu("Weather · \(a.sky.name)", systemImage: "cloud.sun") {
+                            Picker("Weather", selection: Binding(get: { a.sky }, set: { mixer.setAtmosphereSky($0) })) {
+                                ForEach(a.setting.info.skies, id: \.self) { Text($0.name).tag($0) }
+                            }
                         }
-                    }
-                    Menu("Time of day · \(mixer.timeOverride.rawValue)", systemImage: "sun.and.horizon") {
-                        Picker("Time of day", selection: Binding(get: { mixer.timeOverride }, set: { mixer.setTime($0) })) {
-                            ForEach(Mixer.TimeOverride.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        Menu("Time of day · \(a.time.name)", systemImage: "sun.and.horizon") {
+                            Picker("Time of day", selection: Binding(get: { a.time }, set: { mixer.setAtmosphereTime($0) })) {
+                                ForEach(a.setting.info.times, id: \.self) { Text($0.name).tag($0) }
+                            }
+                        }
+                    } else {
+                        Menu("Weather · \(mixer.skyOverride.rawValue)", systemImage: "cloud.sun") {
+                            Picker("Weather", selection: Binding(get: { mixer.skyOverride }, set: { mixer.setSky($0) })) {
+                                ForEach(Mixer.SkyOverride.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                            }
+                        }
+                        Menu("Time of day · \(mixer.timeOverride.rawValue)", systemImage: "sun.and.horizon") {
+                            Picker("Time of day", selection: Binding(get: { mixer.timeOverride }, set: { mixer.setTime($0) })) {
+                                ForEach(Mixer.TimeOverride.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                            }
                         }
                     }
                     Menu("Temperature · \(tempUnitLabel)", systemImage: "thermometer.medium") {
@@ -139,7 +160,8 @@ struct NowPlayingView: View {
             .tracking(1.3)
             .foregroundStyle(Theme.mono)
 
-            Carousel(showLibrary: $showLibrary, dragX: $dragX, openMixer: { showMixer = true })
+            Carousel(dragX: $dragX, openMixer: { showMixer = true }, chooseWhere: { showWhere = true },
+                     openLibrary: { showLibrary = true })
                 .frame(minHeight: 420, maxHeight: .infinity)
 
             .sensoryFeedback(.selection, trigger: mixer.mode)
@@ -174,14 +196,15 @@ struct NowPlayingView: View {
                 if up > 0 {
                     showLibrary = true
                 } else {
-                    // Swipe down: change the weather.
-                    withAnimation(.smooth) { mixer.cycleSky() }
+                    // Swipe down: change the weather (an atmosphere's own, or the place's).
+                    withAnimation(.smooth) { inAtmosphere ? mixer.cycleAtmosphereSky() : mixer.cycleSky() }
                     showWeatherToast()
                 }
             }
         )
         .accessibilityAction(named: "Library") { showLibrary = true }
-        .accessibilityAction(named: "Change the weather") { mixer.cycleSky() }
+        .accessibilityAction(named: "Where to") { showWhere = true }
+        .accessibilityAction(named: "Change the weather") { inAtmosphere ? mixer.cycleAtmosphereSky() : mixer.cycleSky() }
         .accessibilityAction(named: "Layers") { showMixer = true }
         .navigationDestination(isPresented: $showMixer) { MixerView() }
         .overlay(alignment: .bottom) {
@@ -203,11 +226,15 @@ struct NowPlayingView: View {
         .sheet(isPresented: $showLibrary) {
             LibraryView(current: mixer.activePreset)
         }
+        .sheet(isPresented: $showWhere) {
+            WhereToView(start: mixer.mode == .atmosphere ? mixer.atmosphere : nil)
+        }
         .fullScreenCover(isPresented: $showGlobe) {
             GlobeView()
         }
         .sensoryFeedback(.impact(weight: .medium), trigger: mixer.shuffleCount)
         .sensoryFeedback(.impact(flexibility: .soft), trigger: mixer.skyOverride)
+        .sensoryFeedback(.impact(flexibility: .soft), trigger: mixer.atmosphere?.sky)
     }
 
 }
@@ -220,9 +247,11 @@ enum Route: Hashable { case mixer }
 /// On a Mac, two fingers on the trackpad do the same, and the keyboard and menus slide it too.
 struct Carousel: View {
     @Environment(Mixer.self) private var mixer
-    @Binding var showLibrary: Bool
     @Binding var dragX: CGFloat
     let openMixer: () -> Void
+    /// Tapping the name: choose where to go.
+    let chooseWhere: () -> Void
+    let openLibrary: () -> Void
     @State private var pastThreshold = false
     @State private var settling = false
     @State private var saving = false
@@ -269,7 +298,7 @@ struct Carousel: View {
         .accessibilityAction(named: "Go back") { mixer.travel(forward: false) }
     }
 
-    /// The live page: the real mix, with the title opening the Library.
+    /// The live page: the real mix, with the name opening Where To.
     private var currentPage: some View {
         VStack(alignment: .leading, spacing: 0) {
             Halo(orbs: mixer.byVolume)
@@ -278,19 +307,15 @@ struct Carousel: View {
                 .onTapGesture { openMixer() }
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel("Open layers")
-            Button { showLibrary = true } label: {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    PageTitle(text: mixer.title)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Theme.mono)
-                }
+            Button { chooseWhere() } label: {
+                PageTitle(lines: mixer.titleLines)
             }
             .buttonStyle(.plain)
-            .accessibilityHint("Opens the library")
+            .accessibilityHint("Choose where to go")
             .contextMenu {
+                Button("Where to…", systemImage: "signpost.right") { chooseWhere() }
                 Button("Save this mix", systemImage: "bookmark") { saving = true }
-                Button("Library", systemImage: "books.vertical") { showLibrary = true }
+                Button("Library", systemImage: "books.vertical") { openLibrary() }
             }
             .saveMixPrompt(isPresented: $saving)
             PageLines(line: mixer.weather.line)
@@ -337,7 +362,7 @@ struct Carousel: View {
     private func land(forward: Bool, step: CGFloat, duration: Double = 0.3) {
         settling = true
         // Snapshot both pages, then switch the sound right away.
-        let outgoing = Mixer.Page(title: mixer.title, line: mixer.weather.line, orbs: mixer.byVolume)
+        let outgoing = Mixer.Page(title: mixer.title, line: mixer.weather.line, orbs: mixer.byVolume, lines: mixer.titleLines)
         if let dest = forward ? mixer.next : mixer.previous {
             frozen = (outgoing, mixer.page(for: dest), forward)
         }
@@ -365,13 +390,7 @@ private struct PageView: View {
         VStack(alignment: .leading, spacing: 0) {
             Halo(orbs: page.orbs.sorted { $0.volume > $1.volume })
                 .frame(maxHeight: .infinity)
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                PageTitle(text: page.title)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Theme.mono)
-                    .hidden()
-            }
+            PageTitle(lines: page.lines ?? [page.title], chevron: false)
             PageLines(line: page.line)
         }
         .allowsHitTesting(false)
@@ -379,14 +398,33 @@ private struct PageView: View {
     }
 }
 
+/// The page's name, large: an atmosphere's over two lines ("A log cabin / in a snowstorm"),
+/// with a chevron after the last line to say it opens Where To (kept, hidden, on neighbouring
+/// pages so their titles sit the same).
 private struct PageTitle: View {
-    let text: String
+    let lines: [String]
+    var chevron = true
+
     var body: some View {
-        Text(text)
-            .font(Theme.display(44))
-            .tracking(-1.3)
-            .lineLimit(1)
-            .minimumScaleFactor(0.6)
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(line)
+                        .font(Theme.display(lines.count > 1 ? 40 : 44))
+                        .tracking(lines.count > 1 ? -1.1 : -1.3)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                    if i == lines.count - 1 {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(Theme.mono)
+                            .opacity(chevron ? 1 : 0)
+                            .accessibilityHidden(true)
+                    }
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

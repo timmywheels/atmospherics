@@ -6,6 +6,7 @@ Generated soundscapes for focus and sleep that follow the weather outside.
 
 Sounds are lights on a field. Drag one toward the center to hear more of it, push it to the rim to fade it out.
 
+- **Atmospheres** are scenes by name: "a log cabin in a snowstorm", "a rainy night in the city". Swipe through them, or build one in Where To ("Take me to a tent in a thunderstorm at night") or say it in your own words. When it's really like that somewhere right now, the scene follows that place's live weather. (`Atmospherics/Atmospheres.swift`)
 - **Match outside** builds a mix from your local weather: rain follows precipitation, wind follows gusts, brown noise deepens as pressure drops.
 - **Escape outside** plays somewhere else, picking the place whose weather is most unlike yours.
 - **Library** has hand-made mixes for sleep, focus and relaxing.

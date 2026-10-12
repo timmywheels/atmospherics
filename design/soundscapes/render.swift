@@ -8,6 +8,9 @@
 //                                                      engine gains, mixed as the app mixes them
 //   /tmp/render scene <sounds dir> <out.wav> <seconds> <place> <month> <hour> <°C> <weather code> <rain mm> <wind km/h> [minute]
 //                                                      a place's scene, composed and mixed as the app does
+//   /tmp/render atmosphere <sounds dir> <out.wav> <seconds> <setting.sky.time> [hour]
+//                                                      an atmosphere, imagined, at an hour of today (for "now" ones)
+// (Add Atmospherics/Atmospheres.swift to the swiftc line for the atmosphere mode.)
 import AVFoundation
 
 @main
@@ -46,8 +49,22 @@ struct Render {
                 .joined(separator: ", "))
             try write(mixdown(gains.map { ($0.key, $0.value) }, from: URL(fileURLWithPath: args[1]),
                               seconds: Double(args[3])!, calibrated: true), to: URL(fileURLWithPath: args[2]))
+        case "atmosphere":
+            let parts = args[4].split(separator: ".").map(String.init)
+            guard parts.count == 3, let setting = Setting(rawValue: parts[0]), let sky = Sky(rawValue: parts[1]),
+                  let time = TimeOfDay(rawValue: parts[2]) else { print("no atmosphere \(args[4])"); return }
+            let a = Atmosphere(setting, sky, time)
+            let hour = args.count > 5 ? Int(args[5])! : 22
+            let now = Calendar.current.date(bySettingHour: hour, minute: 20, second: 0, of: Date())!
+            let c = a.imagined(now: now)
+            let levels = a.mix(in: c, now: now, playableOnly: false)
+            let gains = Mix.gains(Dictionary(levels, uniquingKeysWith: max))
+            print(a.title(in: c, at: now) + ": " + levels.map { "\($0.0.rawValue) \(Int(Mix.loudness($0.0, $0.1).rounded())) LUFS" }
+                .joined(separator: ", "))
+            try write(mixdown(gains.map { ($0.key, $0.value) }, from: URL(fileURLWithPath: args[1]),
+                              seconds: Double(args[3])!, calibrated: true), to: URL(fileURLWithPath: args[2]))
         default:
-            print("usage: render synth <dir> | render mix … | render scene …  (see the top of render.swift)")
+            print("usage: render synth <dir> | render mix … | render scene … | render atmosphere …  (see the top of render.swift)")
         }
     }
 

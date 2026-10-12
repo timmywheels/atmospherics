@@ -8,6 +8,8 @@ struct MacWindow: View {
     @Environment(\.openWindow) private var openWindow
     /// Read so temperatures redraw when the unit changes in Settings.
     @AppStorage("tempUnit") private var tempUnit = "auto"
+    /// The window's size, so sheets fit inside it.
+    @State private var size = CGSize(width: 480, height: 760)
 
     var body: some View {
         @Bindable var navigation = navigation
@@ -33,11 +35,22 @@ struct MacWindow: View {
                 .ignoresSafeArea()
         }
         .frame(minWidth: 440, minHeight: 640)
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { size = proxy.size }
+                    .onChange(of: proxy.size) { _, new in size = new }
+            }
+        }
         .foregroundStyle(Theme.text)
         .tint(Theme.text)
         .preferredColorScheme(.dark)
         .animation(.smooth(duration: 0.3), value: navigation.tab)
         .saveMixPrompt(isPresented: $navigation.saving)
+        .sheet(isPresented: $navigation.choosing) {
+            WhereToView(start: mixer.mode == .atmosphere ? mixer.atmosphere : nil, onGo: { navigation.tab = .listen })
+                .frame(width: max(380, min(480, size.width - 40)), height: max(520, min(760, size.height - 60)))
+        }
         .alert("Audio error", isPresented: .constant(mixer.errorMessage != nil)) {
             Button("OK") { mixer.errorMessage = nil }
         } message: {

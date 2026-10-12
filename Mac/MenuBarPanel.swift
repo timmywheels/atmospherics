@@ -149,6 +149,15 @@ struct MenuBarPanel: View {
                         if !mixer.isPlaying { mixer.play() }
                     }
                     .padding(.top, 6)
+                    header("Atmospheres")
+                    ForEach(Atmosphere.curated) { a in
+                        let page = mixer.page(for: .atmosphere(a))
+                        let top = page.orbs.max { $0.volume < $1.volume }?.kind
+                        placeRow(id: a.id, name: page.title, temperature: mixer.liveSource(for: a)?.conditions.temperature,
+                                 color: top?.orb ?? Theme.text, current: isCurrent(a)) {
+                            mixer.go(to: a)
+                        }
+                    }
                     ForEach(Place.Region.allCases, id: \.self) { region in
                         let inRegion = mixer.allPlaces.filter { $0.region == region }
                         if !inRegion.isEmpty {
@@ -161,14 +170,7 @@ struct MenuBarPanel: View {
                                     }
                                 }
                             } header: {
-                                Text(region.rawValue.uppercased())
-                                    .font(Theme.mono(10, .medium))
-                                    .tracking(1.2)
-                                    .foregroundStyle(Theme.mono)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 18)
-                                    .padding(.top, 12)
-                                    .padding(.bottom, 4)
+                                header("Places · \(region.rawValue)")
                             }
                         }
                     }
@@ -178,12 +180,28 @@ struct MenuBarPanel: View {
             .scrollIndicators(.never)
             .onAppear {
                 if let place = mixer.escape?.place, mixer.mode == .escape { proxy.scrollTo(place.name, anchor: .center) }
+                if let a = mixer.atmosphere, mixer.mode == .atmosphere { proxy.scrollTo(a.id, anchor: .center) }
             }
         }
     }
 
+    private func header(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(Theme.mono(10, .medium))
+            .tracking(1.2)
+            .foregroundStyle(Theme.mono)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 18)
+            .padding(.top, 12)
+            .padding(.bottom, 4)
+    }
+
     private func isCurrent(_ place: Place) -> Bool {
         mixer.activePreset == nil && mixer.mode == .escape && mixer.escape?.place == place
+    }
+
+    private func isCurrent(_ atmosphere: Atmosphere) -> Bool {
+        mixer.activePreset == nil && mixer.mode == .atmosphere && mixer.atmosphere == atmosphere
     }
 
     private func placeRow(id: String, name: String, temperature: String?, color: Color, current: Bool,
@@ -226,6 +244,13 @@ struct MenuBarPanel: View {
                 open(navigation.tab)
             } label: {
                 footerRow("Open Atmospherics", shortcut: nil)
+            }
+            .buttonStyle(MenuRowStyle(corner: 6))
+            Button {
+                open(navigation.tab)
+                navigation.choosing = true
+            } label: {
+                footerRow("Where To…", shortcut: "⌘K")
             }
             .buttonStyle(MenuRowStyle(corner: 6))
             Button {

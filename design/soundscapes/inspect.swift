@@ -1,9 +1,12 @@
 // Prints what each place sounds like: right now (live weather), and across seasons and hours.
 // Build and run from the repo root:
 //   swiftc -parse-as-library -o /tmp/inspect Atmospherics/Sound.swift Atmospherics/Mix.swift Atmospherics/Places.swift \
-//     Atmospherics/Weather.swift Atmospherics/Ecology.swift Shared/Color+OKLCH.swift design/soundscapes/inspect.swift
+//     Atmospherics/Weather.swift Atmospherics/Ecology.swift Atmospherics/Atmospheres.swift Shared/Color+OKLCH.swift \
+//     design/soundscapes/inspect.swift
 // Each sound shows its estimated loudness in LUFS; the scene's total is in brackets.
-//   /tmp/inspect [live|seasons]
+//   /tmp/inspect [live|seasons|atmospheres]
+// `atmospheres` shows each hand-picked atmosphere imagined at dawn, afternoon and night, then
+// which are live from a real place right now.
 import Foundation
 
 @main
@@ -15,8 +18,37 @@ struct Inspect {
         return "\(pad) \(c.mixName(at: now).padding(toLength: 18, withPad: " ", startingAt: 0)) [\(Int(Mix.loudness(scene).rounded()))] \(mix)"
     }
 
+    static func atmospheres() async {
+        var cal = Calendar.current
+        cal.timeZone = .current
+        let today = cal.startOfDay(for: Date())
+        for a in Atmosphere.curated {
+            print("\n\(a.id)")
+            for hour in a.time == .now ? [6, 15, 23] : [15] {
+                let now = cal.date(byAdding: .hour, value: hour, to: today)!.addingTimeInterval(20 * 60)
+                let c = a.imagined(now: now)
+                let scene = a.mix(in: c, now: now, playableOnly: false)
+                let mix = scene.map { "\($0.0.short) \(Int(Mix.loudness($0.0, $0.1).rounded()))" }.joined(separator: " · ")
+                let name = a.title(in: c, at: now).padding(toLength: 38, withPad: " ", startingAt: 0)
+                print("  \(String(format: "%02d", hour))h \(name) [\(Int(Mix.loudness(scene).rounded()))] \(Int(c.temperatureC))°C  \(mix)")
+            }
+        }
+        let places = Place.all
+        guard let all = try? await WeatherService().conditions(for: places) else { print("weather failed"); return }
+        let conditions = Dictionary(zip(places.map(\.name), all), uniquingKeysWith: { a, _ in a })
+        print("\nLive right now:")
+        for a in Atmosphere.curated {
+            let line = a.liveSource(among: places, conditions: conditions).map { a.sky.live(in: $0.place.name) } ?? "imagined"
+            print("  \(a.id.padding(toLength: 28, withPad: " ", startingAt: 0)) \(line)")
+        }
+    }
+
     static func main() async {
         let mode = CommandLine.arguments.dropFirst().first ?? "live"
+        if mode == "atmospheres" {
+            await atmospheres()
+            return
+        }
         if mode == "live" {
             let places = Place.all
             guard let all = try? await WeatherService().conditions(for: places) else { print("weather failed"); return }

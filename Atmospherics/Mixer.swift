@@ -213,11 +213,14 @@ final class Mixer {
         titles = [
             .match: defaults.string(forKey: "title.match") ?? "Attic Rain",
             .escape: defaults.string(forKey: "title.escape") ?? "Warm Night",
+            .atmosphere: defaults.string(forKey: "title.atmosphere") ?? "",
         ]
         following = [
             .match: defaults.object(forKey: "following.match") as? Bool ?? true,
             .escape: defaults.object(forKey: "following.escape") as? Bool ?? true,
+            .atmosphere: defaults.object(forKey: "following.atmosphere") as? Bool ?? true,
         ]
+        atmosphere = defaults.data(forKey: "atmosphere").flatMap { try? JSONDecoder().decode(Atmosphere.self, from: $0) }
         if let raw = defaults.string(forKey: "mode"), let saved = Mode(rawValue: raw) { mode = saved }
         customPlaces = (defaults.array(forKey: "customPlaces") as? [[String: Any]] ?? []).compactMap(Place.init(dictionary:)).map(Self.refreshed)
         pinnedPlace = defaults.string(forKey: "pinnedPlace").flatMap { name in allPlaces.first { $0.name == name } }
@@ -231,7 +234,10 @@ final class Mixer {
         activePreset = defaults.string(forKey: "activePreset").flatMap { id in
             Preset.all.first { $0.id == id } ?? savedMixes.first { $0.id.uuidString == id }?.preset
         }
+        if mode == .atmosphere && atmosphere == nil { mode = .match }
+        refreshUpcoming()
         apply()
+        if mode == .atmosphere { applyWeather(to: .atmosphere, animated: false) }
         setUpSystemAudio()
         startClock()
         PlayPauseIntent.handler = { [weak self] in self?.togglePlayback() }
@@ -286,7 +292,7 @@ final class Mixer {
     /// Shares what's playing with the widget, and keeps the Live Activity in step.
     private func publishToWidgets() {
         // Away, the title is the place's name, so show its weather as the title instead.
-        let conditions = mode == .escape ? escape?.conditions : home
+        let conditions = mode == .escape ? escape?.conditions : mode == .atmosphere ? atmosphereConditions : home
         let displayTitle = (title == weather.place || title == escape?.place.name) ? (conditions?.mixName ?? title) : title
         let snapshot = NowPlayingSnapshot(
             title: displayTitle, place: weather.place, temperature: weather.temp, isPlaying: isPlaying,
@@ -429,7 +435,81 @@ final class Mixer {
             }
             return WeatherSummary(place: escape.place.title, temp: c.temperature, line: line,
                                   head: "Escaping to \(escape.place.name)")
+        case .atmosphere:
+            guard let a = atmosphere else { return WeatherSummary(place: "", temp: "", line: "", head: "Atmosphere") }
+            let source = atmosphereSource
+            let line = following[.atmosphere] != true ? "Your own mix, made from \(a.setting.info.name.lowercased())"
+                : atmosphereLine(a, source: source) + (tweaks[a.tweakKey] != nil ? " · tuned by you" : "")
+            return WeatherSummary(place: source?.place.title ?? a.setting.info.name, temp: source?.conditions.temperature ?? "",
+                                  line: line, head: "Atmosphere")
         }
+    }
+
+    // MARK: Atmospheres
+
+    /// The atmosphere playing in Atmosphere mode.
+    private(set) var atmosphere: Atmosphere?
+
+    /// A real place where it's like the atmosphere right now, if there is one.
+    var atmosphereSource: (place: Place, conditions: Conditions)? { atmosphere.flatMap(liveSource(for:)) }
+
+    func liveSource(for a: Atmosphere) -> (place: Place, conditions: Conditions)? {
+        a.liveSource(among: allPlaces, conditions: livePlaceConditions)
+    }
+
+    /// The atmosphere's weather: live from somewhere, or imagined.
+    var atmosphereConditions: Conditions? {
+        guard let a = atmosphere else { return nil }
+        return atmosphereSource?.conditions ?? a.imagined()
+    }
+
+    /// Under the name: "Snowing in Lofoten right now · −3°", or what it's like there.
+    func atmosphereLine(_ a: Atmosphere, source: (place: Place, conditions: Conditions)?) -> String {
+        guard let source else { return a.setting.info.line }
+        return "\(a.sky.live(in: source.place.name)) · \(source.conditions.temperature)"
+    }
+
+    /// The title as the page shows it: an atmosphere's name over two lines.
+    var titleLines: [String] {
+        guard activePreset == nil, mode == .atmosphere, let a = atmosphere, let c = atmosphereConditions,
+              title == a.title(in: c) else { return [title] }
+        return a.lines(in: c)
+    }
+
+    /// Goes to an atmosphere, gliding there, and plays it unless told not to.
+    func go(to atmosphere: Atmosphere, play shouldPlay: Bool = true) {
+        setActivePreset(nil)
+        self.atmosphere = atmosphere
+        if let data = try? JSONEncoder().encode(atmosphere) { defaults.set(data, forKey: "atmosphere") }
+        traveling = true
+        if mode != .atmosphere {
+            transition?.cancel()
+            // Start from what's playing, so the sound crossfades into the scene.
+            fields[.atmosphere] = visualTarget ?? orbs
+            mode = .atmosphere
+            defaults.set(Mode.atmosphere.rawValue, forKey: "mode")
+        }
+        setFollowing(true, for: .atmosphere)
+        applyWeather(to: .atmosphere, animated: true)
+        updateNowPlaying()
+        if shouldPlay && !isPlaying { play() }
+    }
+
+    /// The same setting in other weather: swipe down, or the Weather menu.
+    func setAtmosphereSky(_ sky: Sky) {
+        guard let a = atmosphere, a.sky != sky else { return }
+        go(to: Atmosphere(a.setting, sky, a.time), play: false)
+    }
+
+    func cycleAtmosphereSky() {
+        guard let a = atmosphere else { return }
+        let skies = a.setting.info.skies
+        setAtmosphereSky(skies[((skies.firstIndex(of: a.sky) ?? 0) + 1) % skies.count])
+    }
+
+    func setAtmosphereTime(_ time: TimeOfDay) {
+        guard let a = atmosphere, a.time != time else { return }
+        go(to: Atmosphere(a.setting, a.sky, time), play: false)
     }
 
     private static func escapeLine(_ c: Conditions) -> String {
@@ -516,6 +596,7 @@ final class Mixer {
         if let p = activePreset, title == p.name { return "\(p.name) (mine)" }
         if title == "Your mix" { return "My mix \(savedMixes.count + 1)" }
         if mode == .escape, let e = escape { return "\(e.place.title), \(e.conditions.mixName.lowercased())" }
+        if mode == .atmosphere, atmosphere != nil { return title }
         if let h = home { return "\(h.place), \(h.mixName.lowercased())" }
         return title
     }
@@ -525,6 +606,7 @@ final class Mixer {
         if let p = activePreset { return title == p.name ? "Copy of \(p.name), \(date)" : "Started from \(p.name), \(date)" }
         if title == "Your mix" { return "Made in Layers, \(date)" }
         if mode == .escape, let e = escape { return "Saved from \(e.place.name)'s \(e.conditions.mixName.lowercased()), \(date)" }
+        if mode == .atmosphere, atmosphere != nil { return "Saved from \(title.prefix(1).lowercased() + title.dropFirst()), \(date)" }
         if let h = home { return "Saved from \(h.mixName.lowercased()) in \(h.place), \(date)" }
         return "Saved \(date)"
     }
@@ -573,6 +655,10 @@ final class Mixer {
 
     /// The top-right place label: where you are, or during a Library mix, where you came from.
     var headerPlace: String {
+        if mode == .atmosphere {
+            // Where its weather is live from, or the World to go and find a real place.
+            return atmosphereSource.map { "\($0.place.title) \($0.conditions.temperature)" } ?? "World"
+        }
         guard activePreset != nil else {
             return weather.temp.isEmpty ? weather.place : "\(weather.place) \(weather.temp)"
         }
@@ -584,6 +670,7 @@ final class Mixer {
     /// Where "Back to …" returns from a Library mix: the place you were in, or home.
     var presetReturnName: String {
         if mode == .escape, let p = escape?.place { return p.name }
+        if mode == .atmosphere, let a = atmosphere { return a.setting.info.name.lowercased() }
         return homeName
     }
 
@@ -633,6 +720,7 @@ final class Mixer {
     private var tweakKey: String? {
         guard activePreset == nil else { return nil }
         if mode == .escape { return escape?.place.name }
+        if mode == .atmosphere { return atmosphere?.tweakKey }
         return "home"
     }
 
@@ -641,7 +729,7 @@ final class Mixer {
     /// The sounds that belong to where you are, to suggest first in Layers.
     var currentCast: [SoundKind] {
         guard activePreset == nil else { return [] }
-        let place = mode == .escape ? escape?.place : homePlace
+        let place = mode == .escape ? escape?.place : mode == .atmosphere ? atmosphere?.setting.place : homePlace
         var seen = Set<SoundKind>()
         return (place?.signature.compactMap { $0.0.playable } ?? []).filter { seen.insert($0).inserted }
     }
@@ -649,15 +737,23 @@ final class Mixer {
     /// Where those sounds are from, e.g. "Lisbon".
     var currentCastPlace: String? {
         guard activePreset == nil else { return nil }
+        if mode == .atmosphere { return atmosphere?.setting.info.name }
         return mode == .escape ? escape?.place.name : home?.place
     }
-    var currentPlaceName: String { mode == .escape ? (escape?.place.name ?? "this place") : "home" }
+    var currentPlaceName: String {
+        switch mode {
+        case .escape: escape?.place.name ?? "this place"
+        case .atmosphere: "this scene"
+        case .match: "home"
+        }
+    }
 
     /// What the weather alone gives this mode, before tweaks.
     private func baseMix(for mode: Mode) -> [(SoundKind, Double)]? {
         switch mode {
         case .match: return home.map { WeatherMix.orbs(for: $0, place: homePlace) }
         case .escape: return escape.map { WeatherMix.orbs(for: $0.conditions, place: $0.place) }
+        case .atmosphere: return atmosphere.flatMap { a in atmosphereConditions.map { a.mix(in: $0) } }
         }
     }
 
@@ -736,7 +832,6 @@ final class Mixer {
         if let options = await placeWeather {
             livePlaceConditions = Dictionary(zip(places.map(\.name), options), uniquingKeysWith: { a, _ in a })
             chooseEscape()
-            if upcoming == nil { refreshUpcoming() }
         } else {
             // Don't wait 20 minutes for the next try if places didn't load.
             lastWeatherFetch = nil
@@ -748,6 +843,7 @@ final class Mixer {
 
         applyWeather(to: .match, animated: true)
         applyWeather(to: .escape, animated: true)
+        applyWeather(to: .atmosphere, animated: true)
     }
 
     // MARK: Home's character
@@ -792,6 +888,11 @@ final class Mixer {
     private func followClock() {
         guard activePreset == nil, following[mode] == true, visualTarget == nil,
               let target = weatherTarget(for: mode) else { return }
+        // "A rainy afternoon" becomes "a rainy evening" as the light goes.
+        if mode == .atmosphere, let a = atmosphere, let c = atmosphereConditions, title != a.title(in: c) {
+            applyWeather(to: mode, animated: true)
+            return
+        }
         var now: [SoundKind: Double] = [:]
         for o in orbs { now[o.kind] = max(now[o.kind] ?? 0, o.volume) }
         let changed = Set(now.keys).union(target.map(\.0)).contains { kind in
@@ -807,6 +908,9 @@ final class Mixer {
             return home.map { Self.applying(tweaks["home"], to: WeatherMix.orbs(for: $0, place: homePlace)) }
         case .escape:
             return escape.map { Self.applying(tweaks[$0.place.name], to: WeatherMix.orbs(for: $0.conditions, place: $0.place)) }
+        case .atmosphere:
+            guard let a = atmosphere, let c = atmosphereConditions else { return nil }
+            return Self.applying(tweaks[a.tweakKey], to: a.mix(in: c))
         }
     }
 
@@ -911,32 +1015,36 @@ final class Mixer {
     enum Destination: Equatable {
         case home
         case place(Place)
+        case atmosphere(Atmosphere)
     }
 
     /// Where the field is now.
     var here: Destination {
         if mode == .escape, let p = escape?.place { return .place(p) }
+        if mode == .atmosphere, let a = atmosphere { return .atmosphere(a) }
         return .home
     }
 
-    /// Picked ahead of time so the carousel can show it peeking in before you arrive.
-    private(set) var upcoming: Place?
-    private(set) var upcomingBack: Place?
+    /// Swiping travels through atmospheres, picked ahead of time so the carousel can show them
+    /// peeking in before you arrive. Back goes through where you've been.
+    private(set) var upcoming: Atmosphere?
+    private(set) var upcomingBack: Atmosphere?
     private(set) var backStack: [Destination] = []
+    /// The hand-picked atmospheres, shuffled, so you hear them all before any comes round again.
+    @ObservationIgnored private var deck: [Atmosphere] = []
 
-    var next: Destination? { (upcoming ?? pickRandom()).map { .place($0) } }
-    var previous: Destination? { backStack.last ?? upcomingBack.map { .place($0) } }
+    var next: Destination? { upcoming.map { .atmosphere($0) } }
+    var previous: Destination? { backStack.last ?? upcomingBack.map { .atmosphere($0) } }
 
-    private func pickRandom(excluding: [Place] = []) -> Place? {
-        let current: Place? = { if case .place(let p) = here { return p }; return nil }()
-        return allPlaces.filter { p in
-            p != current && !excluding.contains(p) && placeConditions[p.name] != nil && !isNearHome(p)
-        }.randomElement()
+    private func draw(excluding: [Atmosphere?]) -> Atmosphere {
+        if deck.isEmpty { deck = Atmosphere.curated.shuffled() }
+        let i = deck.firstIndex { a in !excluding.contains(a) } ?? 0
+        return deck.remove(at: i)
     }
 
     private func refreshUpcoming() {
-        upcoming = pickRandom()
-        upcomingBack = pickRandom(excluding: upcoming.map { [$0] } ?? [])
+        upcoming = draw(excluding: [atmosphere])
+        upcomingBack = draw(excluding: [atmosphere, upcoming])
     }
 
     /// A slide for the carousel to make, asked for from outside it (the keyboard, the menus,
@@ -967,6 +1075,7 @@ final class Mixer {
         switch dest {
         case .home: goHome()
         case .place(let p): select(p)
+        case .atmosphere(let a): go(to: a)
         }
         refreshUpcoming()
     }
@@ -976,6 +1085,8 @@ final class Mixer {
         var title: String
         var line: String
         var orbs: [Orb]
+        /// The title over more than one line (an atmosphere's name).
+        var lines: [String]? = nil
     }
 
     func page(for dest: Destination) -> Page {
@@ -996,6 +1107,11 @@ final class Mixer {
                 line = p.country
             }
             return Page(title: p.title, line: line, orbs: o)
+        case .atmosphere(let a):
+            let source = liveSource(for: a)
+            let c = source?.conditions ?? a.imagined()
+            return Page(title: a.title(in: c), line: atmosphereLine(a, source: source),
+                        orbs: Preset.layout(Self.applying(tweaks[a.tweakKey], to: a.mix(in: c))), lines: a.lines(in: c))
         }
     }
 
@@ -1028,6 +1144,10 @@ final class Mixer {
             guard let escape else { return }
             target = Self.applying(tweaks[escape.place.name], to: WeatherMix.orbs(for: escape.conditions, place: escape.place))
             name = escape.place.title
+        case .atmosphere:
+            guard let a = atmosphere, let c = atmosphereConditions else { return }
+            target = Self.applying(tweaks[a.tweakKey], to: a.mix(in: c))
+            name = a.title(in: c)
         }
         setTitle(name, for: mode)
         let orbs = Preset.layout(target)
