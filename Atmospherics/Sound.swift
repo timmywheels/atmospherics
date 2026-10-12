@@ -22,7 +22,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .howlers, .jungleBirds, .parrots, .canopy, .treeFrogs, .owls, .loons, .wolves, .leaves,
              .waterfall, .caveDrips, .tentRain, .tinRoof, .whales, .lake,
              .cafe, .library, .cabin, .bells, .typing, .clock, .cityHum, .rainyStreet,
-             .rain, .lightRain, .heavyRain, .thunder, .fire, .crickets, .ocean, .birds, .stream, .train, .wind, .cicadas, .frogs,
+             .rain, .lightRain, .heavyRain, .thunder, .lightning, .fire, .crickets, .ocean, .birds, .stream, .train, .wind, .cicadas, .frogs,
              .winterBirds, .gulls, .foghorn, .peepers, .geese, .traffic, .highway, .planes,
              .lapping, .palms, .rocks, .buoy, .halyards, .tram, .motorbikes, .fountain, .templeBell, .bazaar: true
         default: false
@@ -32,6 +32,23 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
     /// One-off events (a plane passing over, geese flying by, a tram, a temple bell) play through once from the start
     /// when they come on, instead of looping.
     var isEvent: Bool { [.planes, .geese, .tram, .templeBell].contains(self) }
+
+    /// Sounds heard as separate strikes rather than a loop: one of a few recordings at a time, with a
+    /// quiet spell of some seconds between, so a storm never repeats itself. Thunder rolls in from
+    /// the distance; lightning cracks close by (and lights up the screen just before you hear it).
+    var strikes: (clips: Int, gap: ClosedRange<Double>)? {
+        switch self {
+        case .thunder: (5, 9...35)
+        case .lightning: (5, 14...48)
+        default: nil
+        }
+    }
+
+    /// The recordings that make this sound: `rain.m4a`, or for strikes `thunder1.m4a`, `thunder2.m4a`…
+    var recordings: [String] {
+        guard let strikes else { return [rawValue] }
+        return (1...strikes.clips).map { "\(rawValue)\($0)" }
+    }
 
     /// This sound if the app has it, otherwise the closest synthesized one (or nothing).
     var playable: SoundKind? {
@@ -58,7 +75,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
 
     /// Recorded sounds whose file is actually in the app. Ones without a file are hidden.
     static let available: [SoundKind] = allCases.filter {
-        !$0.isRecorded || Bundle.main.url(forResource: $0.rawValue, withExtension: "m4a") != nil
+        !$0.isRecorded || Bundle.main.url(forResource: $0.recordings[0], withExtension: "m4a") != nil
     }
 
     var id: String { rawValue }

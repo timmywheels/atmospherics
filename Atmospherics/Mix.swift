@@ -91,7 +91,6 @@ extension SoundKind {
         case .fan: measured = -12.4
         case .chimes: measured = -22.7
         case .drone: measured = -22.4
-        case .lightning: measured = -15.1
         case .betaBeats: measured = -12.7
         case .gammaBeats: measured = -12.6
         case .betaPulse: measured = -12.8

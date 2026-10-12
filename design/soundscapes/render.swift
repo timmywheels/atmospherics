@@ -72,6 +72,24 @@ struct Render {
     static func mixdown(_ gains: [(SoundKind, Double)], from dir: URL, seconds: Double, calibrated: Bool) throws -> [[Float]] {
         var out = synth(gains.filter { !$0.0.isRecorded }, seconds: seconds, calibrated: calibrated)
         for (kind, gain) in gains where kind.isRecorded && gain > 0 {
+            if let strikes = kind.strikes {
+                // Strikes, as SampleBank plays them: one recording at a time (never the same twice
+                // running), from a random side and strength, with a quiet spell between.
+                let clips = try kind.recordings.map { try decode(dir.appendingPathComponent("\($0).m4a")) }
+                var t = Int(Double.random(in: 2...6) * rate), last = -1
+                while t < out[0].count {
+                    var pick = Int.random(in: 0..<clips.count)
+                    if pick == last && clips.count > 1 { pick = (pick + 1) % clips.count }
+                    last = pick
+                    let clip = clips[pick], g = Float(gain) * Float.random(in: 0.7...1), pan = Float.random(in: -0.6...0.6)
+                    let side: [Float] = [g * min(1, 1 - pan), g * min(1, 1 + pan)]
+                    for c in 0..<2 {
+                        for i in 0..<clip[c].count where t + i < out[c].count { out[c][t + i] += side[c] * clip[c][i] }
+                    }
+                    t += clip[0].count + Int(Double.random(in: strikes.gap) * rate)
+                }
+                continue
+            }
             let loop = try decode(dir.appendingPathComponent("\(kind.rawValue).m4a"))
             // Events (a plane passing) play once from the start; everything else loops from a random point.
             let start = kind.isEvent ? 0 : Int(Double.random(in: 0..<0.8) * Double(loop[0].count))
