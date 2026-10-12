@@ -185,9 +185,13 @@ enum Ecology {
             return by(0.8, 1, 0.4, 0) * month([9: 0.3, 10: 0.8, 11: 1, 12: 1, 1: 1, 2: 1, 3: 0.6])
         case .gulls:
             return by(0.8, 1, 0.6, 0.05)
-        // Geese pass over now and then in migration season: a few minutes, twice an hour.
+        // A skein of geese passes over now and then in migration season: in about half the hours,
+        // at a different minute each time.
         case .geese:
-            guard [12, 13, 41, 42].contains(t.minute) else { return 0 }
+            let hour = Int(now.timeIntervalSince1970 / 3600)
+            let seed = Self.seed("\(place?.name ?? "here")·geese")
+            let start = 5 + Int(noise(seed, hour &* 31 &+ 7) * 50)
+            guard noise(seed, hour) < 0.5, (start...start + 1).contains(t.minute) else { return 0 }
             return by(1, 0.7, 1, 0.1) * month([3: 0.8, 4: 0.5, 9: 0.3, 10: 1, 11: 0.8])
         case .jungleBirds:
             return by(1, 0.7, 0.5, 0)
@@ -315,6 +319,46 @@ enum Ecology {
         }
     }
 
+    /// Scenes never sit still. Each of a place's living sounds wanders on its own slow path,
+    /// closer and farther over several minutes, and now and then falls quiet for a while, so an
+    /// hour in one place keeps changing. The air of a place (surf, rain, the city's hum, a stream)
+    /// only breathes a little; events and sounds on a clock keep their own time. The path is
+    /// seeded by the place and the sound, so it's the same on every device at the same moment.
+    static func drift(of kind: SoundKind, at place: Place?, now: Date) -> Double {
+        let depth: Double, rests: Bool
+        switch kind {
+        case .planes, .geese, .bells, .foghorn, .thunder, .lightning, .whales:
+            return 1
+        case .ocean, .rain, .lightRain, .heavyRain, .tinRoof, .tentRain, .rainyStreet, .cityHum, .stream, .waterfall,
+             .lake, .wind, .highway, .cabin, .fan, .caveDrips, .drone, .brown, .pink, .white, .green, .grey, .blue, .violet:
+            (depth, rests) = (0.15, false)
+        default:
+            (depth, rests) = (0.5, true)
+        }
+        let seed = Self.seed("\(place?.name ?? "here")·\(kind.rawValue)")
+        let period = 4 + Double(seed % 6)   // minutes between turns
+        let x = now.timeIntervalSince1970 / 60 / period
+        let step = Int(x.rounded(.down)), f = x - x.rounded(.down)
+        let s = f * f * (3 - 2 * f)
+        let v = noise(seed, step) * (1 - s) + noise(seed, step + 1) * s   // 0…1, smooth
+        let level = 1 - depth / 2 + depth * v
+        // About one stretch in eight, a living sound rests.
+        return rests ? level * min(1, max(0, (v - 0.04) / 0.12)) : level
+    }
+
+    private static func seed(_ text: String) -> UInt64 {
+        text.utf8.reduce(0xcbf29ce484222325) { ($0 ^ UInt64($1)) &* 0x100000001b3 }   // FNV-1a
+    }
+
+    /// A stable number in 0..<1 for a seed and a step (SplitMix64).
+    private static func noise(_ seed: UInt64, _ step: Int) -> Double {
+        var x = seed &+ UInt64(bitPattern: Int64(step)) &* 0x9E3779B97F4A7C15
+        x = (x ^ (x >> 30)) &* 0xBF58476D1CE4E5B9
+        x = (x ^ (x >> 27)) &* 0x94D049BB133111EB
+        x ^= x >> 31
+        return Double(x >> 11) / Double(UInt64(1) << 53)
+    }
+
     /// How the weather right now changes one of a place's sounds.
     static func weatherFactor(for kind: SoundKind, in c: Conditions) -> Double {
         let heavy = c.isThunder || c.precipitationMM > 2.5
@@ -409,6 +453,7 @@ enum Soundscape {
         let seasonal = (place?.climate ?? Climate.of(latitude: c.latitude)).hasSeasons
         func level(_ kind: SoundKind, _ base: Double) -> Double {
             base * 1.5 * Ecology.activity(of: kind, at: place, in: c, now: now) * Ecology.weatherFactor(for: kind, in: c)
+                * Ecology.drift(of: kind, at: place, now: now)
         }
         for (kind, base) in cast {
             add(kind, level(kind, base))
