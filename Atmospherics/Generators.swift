@@ -22,6 +22,8 @@ func makeGenerator(for kind: SoundKind, sampleRate sr: Float, seed: UInt32) -> S
     case .fan: return Fan(sr: sr)
     case .chimes: return Chimes(sr: sr)
     case .drone: return Drone(sr: sr, variation: variation)
+    // One channel strikes; the other echoes it, so strikes aren't doubled.
+    case .lightning: return Lightning(sr: sr, leads: seed < 5000)
     default: return nil
     }
 }
@@ -379,5 +381,66 @@ final class Drone: SoundGenerator {
         }
         breath += 0.02 * (w - breath)
         return out * 0.055 + breath * 0.05
+    }
+}
+
+// MARK: Storm
+
+/// Counts lightning strikes so the UI can flash. Written on the audio thread, read on main.
+enum LightningFlash {
+    static let strikes: UnsafeMutablePointer<Int32> = {
+        let p = UnsafeMutablePointer<Int32>.allocate(capacity: 1)
+        p.initialize(to: 0)
+        return p
+    }()
+    /// Pending strike delay, shared so both channels strike together.
+    static let next: UnsafeMutablePointer<Int32> = {
+        let p = UnsafeMutablePointer<Int32>.allocate(capacity: 1)
+        p.initialize(to: 0)
+        return p
+    }()
+}
+
+/// A close strike every 12–35 s: a bright crack, a burst of crackle, then a low roll of about a second.
+final class Lightning: SoundGenerator {
+    private let sr: Float, leads: Bool
+    private var countdown: Int, seen: Int32 = 0
+    private var crack: Float = 0, crackle: Float = 0, roll: Float = 0
+    private var hp: Float = 0, lp: Float = 0, lp2: Float = 0
+
+    init(sr: Float, leads: Bool) {
+        self.sr = sr
+        self.leads = leads
+        countdown = Int(sr * 6)
+    }
+
+    func next(_ v: Voice, _ w: Float) -> Float {
+        if leads {
+            countdown -= 1
+            if countdown <= 0 {
+                countdown = Int(sr * (12 + 23 * v.random01()))
+                LightningFlash.strikes.pointee &+= 1
+            }
+        }
+        let strikes = LightningFlash.strikes.pointee
+        if strikes != seen {
+            seen = strikes
+            crack = 1; crackle = 1; roll = 0.0001
+        }
+        // Crack: high-passed noise, gone in ~60 ms.
+        let high = w - hp
+        hp += 0.2 * high
+        let c = high * crack
+        crack *= 1 - 1 / (0.06 * sr)
+        // Crackle: sparse sharp clicks over the first ~0.6 s.
+        let click: Float = v.random01() < 900 * crackle / sr ? (v.white() > 0 ? 1 : -1) : 0
+        crackle *= 1 - 1 / (0.6 * sr)
+        // Roll: a low rumble that fades with the crackle.
+        if roll > 0 { roll = min(1, roll * 1.0004) }
+        let env = roll * (1 - min(1, Float(1 - crackle) * 1.2)) + roll * crackle * 0.3
+        lp += 0.02 * (v.brown(w) - lp)
+        lp2 += 0.02 * (lp - lp2)
+        let r = lp2 * 6 * env
+        return c * 0.9 + click * 0.35 + r
     }
 }

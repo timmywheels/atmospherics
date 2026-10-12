@@ -185,6 +185,8 @@ enum Route: Hashable { case mixer }
 struct Halo: View {
     let orbs: [Orb]
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var flash: Double = 0
+    @State private var seenStrikes: Int32 = 0
 
     var body: some View {
         GeometryReader { proxy in
@@ -215,10 +217,29 @@ struct Halo: View {
                     }
                 }
                 .compositingGroup()
+                .overlay {
+                    // A lightning strike lights the halo for a moment.
+                    Circle()
+                        .fill(RadialGradient(colors: [.white.opacity(0.55 * flash), .clear],
+                                             center: .center, startRadius: 0, endRadius: proxy.size.width * 0.55))
+                        .blendMode(.plusLighter)
+                        .allowsHitTesting(false)
+                }
+                .onChange(of: timeline.date) { _, _ in
+                    let strikes = LightningFlash.strikes.pointee
+                    if strikes != seenStrikes {
+                        seenStrikes = strikes
+                        if hasLightning { flash = 1 }
+                    } else if flash > 0 {
+                        flash = max(0, flash - 0.08)
+                    }
+                }
             }
         }
         .accessibilityHidden(true)
     }
+
+    private var hasLightning: Bool { orbs.contains { $0.kind == .lightning && $0.volume > 0.05 } }
 }
 
 /// Slowly scales its content between 1 and 1.08, like the design's `breathe` keyframes.

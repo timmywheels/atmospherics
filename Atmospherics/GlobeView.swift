@@ -101,6 +101,8 @@ private final class GlobeMotion {
     var dragging = false
     var lastFrame: Date?
     var idleSince = Date()
+    var zoom: Double = 1             // 1…3
+    var zoomTarget: Double?          // eased toward on double-tap
 }
 
 private struct GlobeCanvas: View {
@@ -109,24 +111,45 @@ private struct GlobeCanvas: View {
     @State private var motion = GlobeMotion()
     @State private var dragStart: (lon: Double, lat: Double)?
     @State private var shuffles = 0
+    @State private var pinchStart: Double?
+    @State private var zoomTaps = 0
 
     var body: some View {
         GeometryReader { proxy in
             let size = proxy.size
-            let radius = min(size.width, size.height) / 2 * 0.86
+            let baseRadius = min(size.width, size.height) / 2 * 0.86
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
+            let radius = { () -> CGFloat in baseRadius * CGFloat(motion.zoom) }
 
             ZStack(alignment: .bottomTrailing) {
                 TimelineView(.animation) { timeline in
                     Canvas { ctx, _ in
-                        draw(&ctx, center: center, radius: radius, time: timeline.date.timeIntervalSinceReferenceDate)
+                        draw(&ctx, center: center, radius: radius(), time: timeline.date.timeIntervalSinceReferenceDate)
                     }
                     .onChange(of: timeline.date) { _, now in step(now) }
                 }
+                .clipped()
                 .contentShape(Rectangle())
                 .gesture(drag(radius: radius))
+                // Pinch to zoom, 1× to 3×.
+                .simultaneousGesture(MagnifyGesture()
+                    .onChanged { g in
+                        if pinchStart == nil { pinchStart = motion.zoom; motion.zoomTarget = nil }
+                        motion.zoom = max(1, min(3, pinchStart! * g.magnification))
+                    }
+                    .onEnded { _ in pinchStart = nil; motion.idleSince = Date() })
+                // Double-tap a city to fly in close; double-tap empty space to zoom back out.
+                .simultaneousGesture(SpatialTapGesture(count: 2).onEnded { tap in
+                    if let place = hit(tap.location, center: center, radius: radius()) {
+                        fly(to: place)
+                        motion.zoomTarget = 2.4
+                    } else {
+                        motion.zoomTarget = motion.zoom > 1.3 ? 1 : 2
+                    }
+                    zoomTaps += 1
+                })
                 .simultaneousGesture(SpatialTapGesture().onEnded { tap in
-                    if let place = hit(tap.location, center: center, radius: radius) { fly(to: place) }
+                    if let place = hit(tap.location, center: center, radius: radius()) { fly(to: place) }
                 })
 
                 Button { shuffle() } label: {
@@ -142,6 +165,7 @@ private struct GlobeCanvas: View {
         }
         .sensoryFeedback(.selection, trigger: focused)
         .sensoryFeedback(.impact(weight: .medium), trigger: shuffles)
+        .sensoryFeedback(.impact(flexibility: .soft), trigger: zoomTaps)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Globe. Use the list for VoiceOver.")
         .onAppear {
@@ -158,6 +182,10 @@ private struct GlobeCanvas: View {
     private func step(_ now: Date) {
         let dt = min(1 / 20, now.timeIntervalSince(motion.lastFrame ?? now))
         motion.lastFrame = now
+        if let zt = motion.zoomTarget {
+            motion.zoom += (zt - motion.zoom) * min(1, dt * 5)
+            if abs(zt - motion.zoom) < 0.01 { motion.zoom = zt; motion.zoomTarget = nil }
+        }
         if let target = motion.target {
             // Ease toward a chosen city, taking the short way round.
             var dLon = (target.lon - motion.longitude).truncatingRemainder(dividingBy: 360)
@@ -170,14 +198,15 @@ private struct GlobeCanvas: View {
             motion.velocity *= pow(0.12, dt)   // momentum fades over about a second
             // After a few seconds idle, turn slowly on its own.
             if abs(motion.velocity) < 1 && now.timeIntervalSince(motion.idleSince) > 4 {
-                motion.longitude += 3 * dt
+                motion.longitude += 3 * dt / motion.zoom
             }
         }
         // While spinning freely, whichever city passes under the center becomes the focus.
         if motion.target == nil, let nearest = nearestToCenter(), nearest != focused { focused = nearest }
     }
 
-    private func drag(radius: CGFloat) -> some Gesture {
+    /// `radius` is read live, so dragging gets finer as you zoom in.
+    private func drag(radius: @escaping () -> CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 2)
             .onChanged { g in
                 if dragStart == nil {
@@ -186,12 +215,12 @@ private struct GlobeCanvas: View {
                     motion.target = nil
                 }
                 // Moving a finger across the full radius turns the globe about 90°.
-                let degreesPerPoint = 90 / Double(radius)
+                let degreesPerPoint = 90 / Double(radius())
                 motion.longitude = dragStart!.lon - Double(g.translation.width) * degreesPerPoint
                 motion.latitude = max(-60, min(60, dragStart!.lat + Double(g.translation.height) * degreesPerPoint))
             }
             .onEnded { g in
-                let degreesPerPoint = 90 / Double(radius)
+                let degreesPerPoint = 90 / Double(radius())
                 motion.velocity = Double(g.velocity.width) * degreesPerPoint
                 motion.dragging = false
                 motion.idleSince = Date()
@@ -267,10 +296,15 @@ private struct GlobeCanvas: View {
         }
 
         // Land, as dots.
-        for (lat, lon) in LandMask.points {
+        // Zoomed in, switch to the finer map so coastlines stay readable; skip what's off screen.
+        let fine = motion.zoom > 1.6
+        let bounds = CGRect(x: center.x - radius * 1.05, y: center.y - radius * 1.05, width: radius * 2.1, height: radius * 2.1)
+        let screen = CGRect(origin: .zero, size: CGSize(width: center.x * 2, height: center.y * 2)).intersection(bounds)
+        let dotScale = fine ? 0.75 : 1.0
+        for (lat, lon) in fine ? LandMaskFine.points : LandMask.points {
             let (p, z) = project(lat: Double(lat), lon: Double(lon), center: center, radius: radius)
-            guard z > 0 else { continue }
-            let r = 1.1 + 0.6 * z
+            guard z > 0, screen.contains(p) else { continue }
+            let r = (1.1 + 0.6 * z) * dotScale
             ctx.fill(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)),
                      with: .color(.white.opacity(0.10 + 0.32 * z)))
         }
@@ -465,13 +499,39 @@ private struct SearchField: View {
 }
 
 private struct SearchResults: View {
+    @Environment(Mixer.self) private var mixer
     let search: PlaceSearch
     let pick: (Place) -> Void
+
+    private var builtIn: [Place] {
+        mixer.allPlaces.filter {
+            $0.name.localizedCaseInsensitiveContains(search.query) || $0.country.localizedCaseInsensitiveContains(search.query)
+        }
+    }
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(search.results, id: \.self) { result in
+                // Hand-tuned places first: their sounds are better than a guess.
+                ForEach(builtIn) { place in
+                    Button { pick(place) } label: {
+                        HStack(spacing: 12) {
+                            Circle().fill(place.accent.orb).frame(width: 8, height: 8)
+                                .shadow(color: place.accent.glow, radius: 5)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(place.title).font(Theme.body(17))
+                                Text(place.signature.map(\.0.short).joined(separator: " · "))
+                                    .font(Theme.mono(11)).foregroundStyle(Theme.mono)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 12)
+                        .contentShape(Rectangle())
+                        .overlay(alignment: .bottom) { Rectangle().fill(.white.opacity(0.07)).frame(height: 1) }
+                    }
+                    .buttonStyle(.plain)
+                }
+                ForEach(search.results.filter { r in !builtIn.contains { $0.name.localizedCaseInsensitiveCompare(r.title) == .orderedSame } }, id: \.self) { result in
                     Button {
                         Task { if let place = await search.resolve(result) { pick(place) } }
                     } label: {

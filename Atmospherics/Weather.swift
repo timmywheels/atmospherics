@@ -127,6 +127,7 @@ enum WeatherMix {
         }
         if c.isThunder {
             mix.append((.thunder, 0.4))
+            mix.append((.lightning, 0.45))
         }
         let wind = min(0.8, max(0, (c.windKMH - 6) / 40))
         if wind > 0.08 {
@@ -150,7 +151,9 @@ enum WeatherMix {
                 mix.append((kind, level))
             }
         }
-        return mix
+        // Creatures keep their hours: birds and cicadas by day, crickets and frogs by night.
+        let offHours: Set<SoundKind> = c.isDay ? [.crickets, .frogs] : [.birds, .cicadas]
+        return mix.filter { !offHours.contains($0.0) }
     }
 
     /// The place whose weather is most unlike home's.

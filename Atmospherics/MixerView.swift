@@ -17,7 +17,7 @@ struct MixerView: View {
             }
             .padding(.horizontal, 8)
 
-            Text("Drag closer to hear more. Double-tap to remove.")
+            Text("Drag closer to hear more. Drag off the edge to remove.")
                 .font(Theme.body(14))
                 .foregroundStyle(Theme.secondary)
                 .padding(.horizontal, 8)
@@ -114,43 +114,72 @@ private struct OrbView: View {
     let orb: Orb
     let fieldSize: CGFloat
     @State private var dragging = false
+    /// Where the finger is, in field units, while it's dragged past the rim.
+    @State private var outside: CGPoint?
+
+    /// Past this distance from center (the rim is 0.5), letting go removes the sound.
+    private static let removeDistance = 0.68
+
+    private var removing: Bool {
+        guard let p = outside else { return false }
+        return hypot(p.x - 0.5, p.y - 0.5) > Self.removeDistance
+    }
 
     var body: some View {
         let v = orb.volume
         let size = 20 + v * 40
         let pct = Int((v * 100).rounded())
+        let at = outside ?? CGPoint(x: orb.x, y: orb.y)
 
         Circle()
-            .fill(orb.kind.orb)
+            .fill(removing ? Theme.mono.opacity(0.5) : orb.kind.orb)
             .frame(width: size, height: size)
-            .shadow(color: orb.kind.glow, radius: (16 + v * 44) / 2)
-            .scaleEffect(dragging ? 1.12 : 1)
+            .shadow(color: removing ? .clear : orb.kind.glow, radius: (16 + v * 44) / 2)
+            .overlay {
+                if removing {
+                    Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.background)
+                }
+            }
+            .scaleEffect(removing ? 0.8 : dragging ? 1.12 : 1)
             .overlay(alignment: .top) {
-                Text("\(orb.kind.short) \(pct)")
+                Text(removing ? "Release to remove" : outside != nil ? "Drag further to remove" : "\(orb.kind.short) \(pct)")
                     .font(Theme.mono(10, .medium))
-                    .foregroundStyle(Theme.orbLabel)
+                    .foregroundStyle(removing ? Theme.text : Theme.orbLabel)
                     .fixedSize()
                     .offset(y: size + 6)
                     .allowsHitTesting(false)
             }
             .frame(width: max(size, 44), height: max(size, 44))   // comfortable touch target
             .contentShape(Circle())
-            .position(x: orb.x * fieldSize, y: orb.y * fieldSize)
+            .position(x: at.x * fieldSize, y: at.y * fieldSize)
             .gesture(
                 DragGesture(minimumDistance: 2, coordinateSpace: .named("field"))
                     .onChanged { g in
                         dragging = true
-                        mixer.move(orb.id, toX: g.location.x / fieldSize, y: g.location.y / fieldSize)
+                        let p = CGPoint(x: g.location.x / fieldSize, y: g.location.y / fieldSize)
+                        // Inside the circle the light moves the sound; past the rim it follows
+                        // the finger out (the sound sits silent at the rim) so it can be thrown away.
+                        outside = hypot(p.x - 0.5, p.y - 0.5) > 0.5 ? p : nil
+                        mixer.move(orb.id, toX: p.x, y: p.y)
                     }
-                    .onEnded { _ in dragging = false }
+                    .onEnded { _ in
+                        if removing {
+                            withAnimation(.snappy) { mixer.remove(orb.id) }
+                        } else {
+                            withAnimation(.spring(duration: 0.35, bounce: 0.35)) { outside = nil }
+                        }
+                        dragging = false
+                    }
             )
             .onTapGesture(count: 2) {
                 withAnimation(.snappy) { mixer.remove(orb.id) }
             }
             .animation(.snappy(duration: 0.2), value: dragging)
-            // A soft tap when you pick a light up, and a tick for every 10% of volume as you drag.
+            .animation(.snappy(duration: 0.18), value: removing)
+            // A soft tap on pickup, a tick per 10% of volume, and a firm snap when it's ready to remove.
             .sensoryFeedback(.impact(flexibility: .soft), trigger: dragging) { _, isDragging in isDragging }
-            .sensoryFeedback(.selection, trigger: pct / 10) { _, _ in dragging }
+            .sensoryFeedback(.selection, trigger: pct / 10) { _, _ in dragging && outside == nil }
+            .sensoryFeedback(.impact(weight: .heavy), trigger: removing) { _, now in now }
             .zIndex(dragging ? 1 : 0)
             .accessibilityElement()
             .accessibilityLabel(orb.kind.name)

@@ -3,7 +3,7 @@ import SwiftUI
 /// Every sound Atmospherics can play. All are synthesized live in `NoiseEngine`.
 enum SoundKind: String, CaseIterable, Identifiable, Codable {
     case brown, pink, white, green, rain, ocean, wind, thunder, fire, birds
-    case grey, blue, violet, crickets, cicadas, frogs, stream, cityHum, train, fan, chimes, drone
+    case grey, blue, violet, crickets, cicadas, frogs, stream, cityHum, train, fan, chimes, drone, lightning
 
     var id: String { rawValue }
 
@@ -14,7 +14,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
     var category: Category {
         switch self {
         case .brown, .pink, .white, .green, .grey, .blue, .violet: .noise
-        case .rain, .ocean, .stream, .wind, .thunder: .water
+        case .rain, .ocean, .stream, .wind, .thunder, .lightning: .water
         case .birds, .crickets, .cicadas, .frogs, .fire: .nature
         case .cityHum, .train, .fan: .city
         case .chimes, .drone: .calm
@@ -61,6 +61,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .fan: 220
         case .chimes: 345
         case .drone: 275
+        case .lightning: 95
         }
     }
 
