@@ -24,6 +24,10 @@ func makeGenerator(for kind: SoundKind, sampleRate sr: Float, seed: UInt32) -> S
     case .drone: return Drone(sr: sr, variation: variation)
     // One channel strikes; the other echoes it, so strikes aren't doubled.
     case .lightning: return Lightning(sr: sr, leads: seed < 5000)
+    // Left and right voices are told apart by their seeds, as for lightning.
+    case .betaBeats: return BinauralBeat(sr: sr, carrier: 200, beat: 16, left: seed < 5000)
+    case .gammaBeats: return BinauralBeat(sr: sr, carrier: 240, beat: 40, left: seed < 5000)
+    case .betaPulse: return Pulse(sr: sr, rate: 16, depth: 0.5)
     default: return nil
     }
 }
@@ -442,5 +446,48 @@ final class Lightning: SoundGenerator {
         lp2 += 0.02 * (lp - lp2)
         let r = lp2 * 6 * env
         return c * 0.9 + click * 0.35 + r
+    }
+}
+
+// MARK: Focus tones
+
+/// Two pure tones a few hertz apart, one in each ear; the brain hears their difference as a
+/// beat (a binaural beat), so it needs headphones. The tone eases in and out slowly so it never
+/// sits as a hard edge under the noise.
+final class BinauralBeat: SoundGenerator {
+    private let step: Float
+    private let swellStep: Float
+    private var phase: Float = 0, swell: Float = 0
+
+    init(sr: Float, carrier: Float, beat: Float, left: Bool) {
+        step = 2 * .pi * (carrier + (left ? -beat : beat) / 2) / sr
+        swellStep = 2 * .pi / (sr * 23)
+    }
+
+    func next(_ v: Voice, _ w: Float) -> Float {
+        phase += step
+        wrap(&phase)
+        swell += swellStep
+        wrap(&swell)
+        return sinf(phase) * (0.85 + 0.15 * sinf(swell)) * 0.3
+    }
+}
+
+/// Pink noise whose loudness pulses at a steady rate (amplitude modulation), in both ears
+/// together, so it works on a speaker too.
+final class Pulse: SoundGenerator {
+    private let step: Float
+    private let depth: Float
+    private var phase: Float = 0
+
+    init(sr: Float, rate: Float, depth: Float) {
+        step = 2 * .pi * rate / sr
+        self.depth = depth
+    }
+
+    func next(_ v: Voice, _ w: Float) -> Float {
+        phase += step
+        wrap(&phase)
+        return v.pink(w) * (1 - depth * (0.5 + 0.5 * cosf(phase)))
     }
 }

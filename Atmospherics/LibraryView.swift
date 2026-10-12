@@ -11,6 +11,7 @@ struct LibraryView: View {
     @State private var renaming: SavedMix?
     @State private var newName = ""
     @State private var deletes = 0
+    @State private var showingScience = false
     private let current: Preset?
 
     init(current: Preset? = nil) {
@@ -43,6 +44,22 @@ struct LibraryView: View {
 
             ScrollViewReader { proxy in
                 List {
+                    if filter == .focus {
+                        Button { showingScience = true } label: {
+                            HStack(spacing: 6) {
+                                Text("How we chose these")
+                                Image(systemName: "arrow.up.right").font(.system(size: 10, weight: .semibold))
+                            }
+                            .font(Theme.mono(11, .medium))
+                            .foregroundStyle(Theme.secondary)
+                            .padding(.vertical, 6)
+                            .padding(.horizontal, 4)
+                        }
+                        .buttonStyle(.plain)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 4, trailing: 0))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                    }
                     ForEach(yours) { mix in
                         item(mix.preset)
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -77,6 +94,7 @@ struct LibraryView: View {
             Button("Cancel", role: .cancel) {}
             Button("Save") { if let r = renaming { mixer.rename(r, to: newName) } }
         }
+        .sheet(isPresented: $showingScience) { FocusScienceView() }
         .sensoryFeedback(.selection, trigger: filter)
         .sensoryFeedback(.impact(weight: .medium), trigger: deletes)
         .sensoryFeedback(.selection, trigger: mixer.savedMixes.map(\.id))
@@ -122,7 +140,8 @@ struct LibraryView: View {
     private func row(_ preset: Preset) -> some View {
         let current = preset.id == mixer.activePreset?.id
         return ColorCard(hues: preset.mix.prefix(3).map(\.0.hue),
-                         top: preset.tag.map { "\($0.rawValue) · \(preset.length)" } ?? "Yours",
+                         top: (preset.tag.map { "\($0.rawValue) · \(preset.length)" } ?? "Yours")
+                             + (preset.evidence.map { " · \($0.rawValue)" } ?? ""),
                          title: preset.name, subtitle: preset.description,
                          badge: current ? (mixer.isPlaying ? "Playing" : "Current") : nil, outlined: current)
     }

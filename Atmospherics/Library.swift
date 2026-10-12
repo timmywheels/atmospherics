@@ -3,6 +3,11 @@ import Foundation
 struct Preset: Identifiable {
     enum Tag: String, CaseIterable { case sleep = "Sleep", focus = "Focus", relax = "Relax" }
 
+    /// How well research backs a focus mix, in plain words (see FocusScienceView).
+    enum Evidence: String {
+        case strong = "Strong evidence", some = "Some evidence", early = "Early evidence", mixed = "Mixed evidence"
+    }
+
     let name: String
     let tag: Tag?          // nil for a mix you saved
     let length: String
@@ -11,11 +16,27 @@ struct Preset: Identifiable {
     /// A saved mix keeps its exact field instead of being laid out from `mix`.
     var savedOrbs: [Orb]? = nil
     var savedID: UUID? = nil
+    var evidence: Evidence? = nil
 
     var id: String { savedID?.uuidString ?? name }
     var isSaved: Bool { savedID != nil }
 
     static let all: [Preset] = [
+        // Focus mixes built on what research supports (design/focus/RESEARCH.md).
+        Preset(name: "Speech Shield", tag: .focus, length: "2 h", description: "Pink noise and a steady stream cover nearby voices",
+               mix: [(.pink, 0.55), (.stream, 0.55)], evidence: .strong),
+        Preset(name: "Steady Rain", tag: .focus, length: "2 h", description: "Rain that doesn't change, over a low hush",
+               mix: [(.rain, 0.7), (.brown, 0.25)], evidence: .strong),
+        Preset(name: "Restless Mind", tag: .focus, length: "1 h", description: "White and pink noise, for when your mind wanders",
+               mix: [(.pink, 0.55), (.white, 0.3)], evidence: .some),
+        Preset(name: "Beta Pulse", tag: .focus, length: "90 min", description: "Pink noise pulsing at 16 Hz, soft rain",
+               mix: [(.betaPulse, 0.6), (.lightRain, 0.3)], evidence: .early),
+        Preset(name: "Beta Beats", tag: .focus, length: "90 min", description: "16 Hz binaural beats in pink noise · headphones",
+               mix: [(.pink, 0.6), (.betaBeats, 0.7)], evidence: .mixed),
+        Preset(name: "Gamma Beats", tag: .focus, length: "1 h", description: "40 Hz binaural beats in brown noise · headphones",
+               mix: [(.brown, 0.6), (.gammaBeats, 0.7)], evidence: .mixed),
+        Preset(name: "Green Break", tag: .focus, length: "10 min", description: "Birdsong and a stream, between focus blocks",
+               mix: [(.birds, 0.55), (.stream, 0.5), (.leaves, 0.2)], evidence: .some),
         Preset(name: "Attic Rain", tag: .sleep, length: "8 h", description: "Brown noise, rain, distant thunder",
                mix: [(.brown, 0.8), (.rain, 0.6), (.thunder, 0.2)]),
         Preset(name: "Deep Work", tag: .focus, length: "90 min", description: "Pink noise, light wind",
@@ -32,7 +53,7 @@ struct Preset: Identifiable {
                mix: [(.train, 0.7), (.rain, 0.35), (.brown, 0.4)]),
         Preset(name: "Summer Porch", tag: .relax, length: "1 h", description: "Crickets, frogs, a light breeze",
                mix: [(.crickets, 0.6), (.frogs, 0.35), (.wind, 0.2)]),
-        Preset(name: "Temple Garden", tag: .focus, length: "45 min", description: "Stream, chimes, birds",
+        Preset(name: "Temple Garden", tag: .relax, length: "45 min", description: "Stream, chimes, birds",
                mix: [(.stream, 0.65), (.chimes, 0.3), (.birds, 0.2)]),
         Preset(name: "Grey Room", tag: .focus, length: "2 h", description: "Grey noise, a warm drone",
                mix: [(.grey, 0.7), (.drone, 0.3)]),
@@ -48,11 +69,12 @@ struct Preset: Identifiable {
                mix: [(.lake, 0.6), (.loons, 0.35), (.leaves, 0.3), (.owls, 0.2)]),
         Preset(name: "Wolf Moon", tag: .relax, length: "1 h", description: "Distant wolves, wind, a fire",
                mix: [(.wind, 0.5), (.wolves, 0.3), (.fire, 0.4)]),
-        Preset(name: "Reading Room", tag: .focus, length: "2 h", description: "Library, a ticking clock, rain",
-               mix: [(.library, 0.7), (.clock, 0.25), (.rain, 0.3)]),
-        Preset(name: "Coffee Shop", tag: .focus, length: "90 min", description: "Café murmur, rain on the window",
-               mix: [(.cafe, 0.75), (.rain, 0.25)]),
-        Preset(name: "Late Draft", tag: .focus, length: "90 min", description: "Typing, a clock, pink noise",
+        // No ticking clock: sounds that keep changing are the ones that pull attention away.
+        Preset(name: "Reading Room", tag: .focus, length: "2 h", description: "A library's hush, rain on the windows",
+               mix: [(.library, 0.7), (.rain, 0.3)]),
+        Preset(name: "Coffee Shop", tag: .focus, length: "90 min", description: "A lively café's murmur, for creative work",
+               mix: [(.cafe, 0.75), (.rain, 0.25)], evidence: .some),
+        Preset(name: "Late Draft", tag: .relax, length: "90 min", description: "Typing, a clock, pink noise",
                mix: [(.typing, 0.5), (.clock, 0.25), (.pink, 0.4)]),
         Preset(name: "Cave Retreat", tag: .relax, length: "1 h", description: "Cave drips, a warm drone",
                mix: [(.caveDrips, 0.7), (.drone, 0.3)]),

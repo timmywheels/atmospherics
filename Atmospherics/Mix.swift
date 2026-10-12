@@ -46,7 +46,7 @@ extension SoundKind {
         switch self {
         // Weather and water: the air of a scene.
         case .heavyRain, .brown: 0
-        case .rain, .thunder, .waterfall, .cabin, .fan, .pink, .green: -1
+        case .rain, .thunder, .waterfall, .cabin, .fan, .pink, .green, .betaPulse: -1
         case .ocean, .rocks, .rainyStreet, .cityHum, .grey: -2
         case .tentRain, .tinRoof, .wind, .stream: -3
         case .cafe, .train, .fire, .white, .blue, .lapping: -4
@@ -63,7 +63,8 @@ extension SoundKind {
         case .halyards, .templeBell: -7
         case .owls: -7
         case .wolves, .foghorn, .library, .planes: -8
-        case .leaves, .buoy: -9
+        // Binaural beats sit under the noise they ride on, but clear enough to hear the beat.
+        case .leaves, .buoy, .betaBeats, .gammaBeats: -9
         case .typing, .chimes: -10
         case .clock: -12
         }
@@ -89,6 +90,9 @@ extension SoundKind {
         case .chimes: measured = -22.7
         case .drone: measured = -22.4
         case .lightning: measured = -15.1
+        case .betaBeats: measured = -12.7
+        case .gammaBeats: measured = -12.6
+        case .betaPulse: measured = -12.8
         default: return 1
         }
         return pow(10, (Mix.reference - measured) / 20)

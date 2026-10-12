@@ -358,7 +358,7 @@ private struct TerrainOrb: View {
 private struct SoundSections: View {
     @Environment(Mixer.self) private var mixer
 
-    private static let order: [SoundKind.Category] = [.water, .nature, .night, .jungle, .city, .calm, .noise]
+    private static let order: [SoundKind.Category] = [.water, .nature, .night, .jungle, .city, .calm, .tones, .noise]
 
     var body: some View {
         let playing = Set(mixer.orbs.map(\.kind))

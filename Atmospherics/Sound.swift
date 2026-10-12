@@ -13,6 +13,8 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
     case traffic, highway, planes
     case lapping, palms, rocks, buoy, halyards
     case tram, motorbikes, fountain, templeBell, bazaar
+    // Synthesized focus tones
+    case betaBeats, gammaBeats, betaPulse
 
     /// Recorded sounds play from `Sounds/<rawValue>.m4a` instead of being synthesized.
     var isRecorded: Bool {
@@ -63,7 +65,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
 
     enum Category: String, CaseIterable {
         case noise = "Noise", water = "Water & weather", nature = "Nature", jungle = "Jungle", night = "Night & forest",
-             city = "Places & home", calm = "Calm"
+             city = "Places & home", calm = "Calm", tones = "Focus tones"
     }
 
     var category: Category {
@@ -85,6 +87,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .tram, .motorbikes, .bazaar: .city
         case .fountain: .water
         case .templeBell: .calm
+        case .betaBeats, .gammaBeats, .betaPulse: .tones
         }
     }
 
@@ -110,6 +113,9 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .buoy: "Bell buoy"
         case .halyards: "Sailboat rigging"
         case .templeBell: "Temple bell"
+        case .betaBeats: "Beta beats, 16 Hz"
+        case .gammaBeats: "Gamma beats, 40 Hz"
+        case .betaPulse: "Beta pulse, 16 Hz"
         default: short
         }
     }
@@ -131,6 +137,9 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .lapping: "Lapping"
         case .halyards: "Rigging"
         case .templeBell: "Temple bell"
+        case .betaBeats: "Beta beats"
+        case .gammaBeats: "Gamma beats"
+        case .betaPulse: "Beta pulse"
         default: rawValue.capitalized
         }
     }
@@ -191,6 +200,9 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .fountain: 190
         case .templeBell: 75
         case .bazaar: 32
+        case .betaBeats: 312
+        case .gammaBeats: 355
+        case .betaPulse: 15
         case .tinRoof: 240
         case .whales: 250
         case .lake: 210
