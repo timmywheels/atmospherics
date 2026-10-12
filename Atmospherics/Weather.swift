@@ -161,7 +161,7 @@ enum WeatherMix {
         // Creatures keep their hours.
         let offHours: Set<SoundKind> = c.isDay
             ? [.crickets, .frogs, .treeFrogs, .owls, .wolves]
-            : [.birds, .cicadas, .jungleBirds, .parrots, .howlers, .cafe, .bells]
+            : [.birds, .cicadas, .jungleBirds, .parrots, .howlers, .canopy, .cafe, .bells]
         mix = mix.filter { !offHours.contains($0.0) }
 
         // A recording that isn't in the app falls back to the nearest synthesized sound.

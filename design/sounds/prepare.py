@@ -31,7 +31,7 @@ def main():
         f"[seam][mid]concat=n=2:v=0:a=1,loudnorm=I=-23:TP=-2:LRA=11,aresample=44100[out]"
     )
     subprocess.run(
-        ["ffmpeg", "-v", "error", "-y", "-ss", str(a.start), "-t", str(L + F), "-i", a.src,
+        ["ffmpeg", "-nostdin", "-v", "error", "-y", "-ss", str(a.start), "-t", str(L + F), "-i", a.src,
          "-filter_complex", graph, "-map", "[out]", "-c:a", "aac", "-b:a", "96k", a.dst],
         check=True)
     probe = subprocess.run(
