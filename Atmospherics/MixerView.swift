@@ -94,7 +94,9 @@ private struct Terrain {
     }
 
     func height(_ x: Double, _ z: Double) -> Double {
-        peaks.reduce(0) { h, p in h + p.height * exp(-((x - p.x) * (x - p.x) + (z - p.z) * (z - p.z)) / 0.075) }
+        // The ground rolls gently, so even between hills there's a contour or two to read.
+        let ground = 0.018 + 0.014 * sin(4.3 * x + 0.8) * cos(3.7 * z - 0.4) + 0.008 * sin(9.1 * x - 6.3 * z)
+        return peaks.reduce(ground) { h, p in h + p.height * exp(-((x - p.x) * (x - p.x) + (z - p.z) * (z - p.z)) / 0.075) }
     }
 
     func owner(_ x: Double, _ z: Double) -> (index: Int, strength: Double)? {
@@ -107,7 +109,7 @@ private struct Terrain {
     }
 }
 
-/// The landscape: a fine mesh over the disc, lit in each sound's color around its hill, with
+/// The landscape: contour lines over the disc, lit in each sound's color around its hill, with
 /// the rim dashed and you marked at the center. Drag the ground to turn and tilt it.
 private struct TerrainField: View {
     @Environment(Mixer.self) private var mixer
@@ -151,61 +153,85 @@ private struct TerrainField: View {
         .sensoryFeedback(.impact(weight: .light), trigger: mixer.orbs.count)
     }
 
-    private func draw(_ terrain: Terrain, _ camera: Camera, in ctx: inout GraphicsContext) {
-        // A round mesh: rings around you and spokes out to the edge, so the hills bend the rings
-        // like contour lines and the ground ends in a clean circle.
-        let rings = 28, spokes = 56, e = Camera.extent
-        func spot(_ k: Int, _ m: Int) -> (x: Double, z: Double) {
-            let r = e * Double(k) / Double(rings), a = Double(m) / Double(spokes) * 2 * .pi
-            return (r * cos(a), r * sin(a))
-        }
-        var points = [CGPoint](repeating: .zero, count: (rings + 1) * spokes)
-        var heights = [Double](repeating: 0, count: (rings + 1) * spokes)
-        for k in 1...rings {
-            for m in 0..<spokes {
-                let (x, z) = spot(k, m), i = k * spokes + m
-                heights[i] = terrain.height(x, z)
-                points[i] = camera.project(x, heights[i], z).point
-            }
-        }
+    /// Which edges of a grid cell a contour crosses, for each pattern of corners above the
+    /// level (bit 0: the cell's first corner, then around: 1, 2, 3). Edges: 0 bottom, 1 right,
+    /// 2 top, 3 left.
+    private static let crossings: [[(Int, Int)]] = [
+        [], [(3, 0)], [(0, 1)], [(3, 1)], [(1, 2)], [(3, 0), (1, 2)], [(0, 2)], [(2, 3)],
+        [(2, 3)], [(0, 2)], [(0, 1), (2, 3)], [(1, 2)], [(1, 3)], [(0, 1)], [(3, 0)], [],
+    ]
 
-        // Plain ground in a faint line, fainter still toward the edge; around each hill, its
-        // sound's color, brighter higher up.
-        var plain = Path(), fringe = Path()
-        var lit = Array(repeating: Array(repeating: Path(), count: 4), count: terrain.peaks.count)
-        func edge(_ a: Int, _ b: Int, _ x: Double, _ z: Double, outer: Bool) {
-            if let owner = terrain.owner(x, z), owner.strength > 0.18 {
-                let level = min(3, Int((heights[a] + heights[b]) / 2 / 0.1))
-                lit[owner.index][level].move(to: points[a])
-                lit[owner.index][level].addLine(to: points[b])
-            } else if outer {
-                fringe.move(to: points[a])
-                fringe.addLine(to: points[b])
-            } else {
-                plain.move(to: points[a])
-                plain.addLine(to: points[b])
+    private func draw(_ terrain: Terrain, _ camera: Camera, in ctx: inout GraphicsContext) {
+        // Contour lines, as on a topographic map: closed loops of equal height, each drawn at its
+        // own height, so they stack up every hill. Faint ones trace the rolling ground between.
+        let n = 84, e = Camera.extent
+        func coordinate(_ i: Int) -> Double { -e + 2 * e * Double(i) / Double(n) }
+        var heights = [Double](repeating: 0, count: (n + 1) * (n + 1))
+        for i in 0...n {
+            for j in 0...n { heights[i * (n + 1) + j] = terrain.height(coordinate(i), coordinate(j)) }
+        }
+        let groundLevels = [0.012, 0.028]
+        let step = 0.045
+        let hillLevels = Array(stride(from: 0.06, through: 1.4, by: step))
+
+        var ground = Path()
+        // Per sound: four brightness bands (higher is brighter), and every fourth contour bolder.
+        var lit = Array(repeating: Array(repeating: Array(repeating: Path(), count: 2), count: 4), count: terrain.peaks.count)
+        for i in 0..<n {
+            for j in 0..<n {
+                let x0 = coordinate(i), x1 = coordinate(i + 1), z0 = coordinate(j), z1 = coordinate(j + 1)
+                // Only the disc: skip cells reaching past the ground's edge.
+                guard max(x0 * x0, x1 * x1) + max(z0 * z0, z1 * z1) <= e * e else { continue }
+                let corners = [(x0, z0, heights[i * (n + 1) + j]), (x1, z0, heights[(i + 1) * (n + 1) + j]),
+                               (x1, z1, heights[(i + 1) * (n + 1) + j + 1]), (x0, z1, heights[i * (n + 1) + j + 1])]
+                let low = corners.map(\.2).min()!, high = corners.map(\.2).max()!
+                func contour(at level: Double, into add: (CGPoint, CGPoint, Double, Double) -> Void) {
+                    guard low < level, high >= level else { return }
+                    var pattern = 0
+                    for (bit, c) in corners.enumerated() where c.2 >= level { pattern |= 1 << bit }
+                    func crossing(_ edge: Int) -> (x: Double, z: Double) {
+                        let a = corners[edge], b = corners[(edge + 1) % 4]
+                        let t = (level - a.2) / (b.2 - a.2)
+                        return (a.0 + t * (b.0 - a.0), a.1 + t * (b.1 - a.1))
+                    }
+                    for (from, to) in Self.crossings[pattern] {
+                        let p = crossing(from), q = crossing(to)
+                        add(camera.project(p.x, level, p.z).point, camera.project(q.x, level, q.z).point,
+                            (p.x + q.x) / 2, (p.z + q.z) / 2)
+                    }
+                }
+                for level in groundLevels {
+                    contour(at: level) { a, b, _, _ in ground.move(to: a); ground.addLine(to: b) }
+                }
+                for (index, level) in hillLevels.enumerated() where level <= high {
+                    contour(at: level) { a, b, x, z in
+                        if let owner = terrain.owner(x, z), owner.strength > 0.18 {
+                            let band = min(3, Int(level / 0.16)), bold = index % 4 == 3 ? 1 : 0
+                            lit[owner.index][band][bold].move(to: a)
+                            lit[owner.index][band][bold].addLine(to: b)
+                        } else {
+                            ground.move(to: a)
+                            ground.addLine(to: b)
+                        }
+                    }
+                }
             }
         }
-        for k in 1...rings {
-            for m in 0..<spokes {
-                let (x, z) = spot(k, m), i = k * spokes + m
-                edge(i, k * spokes + (m + 1) % spokes, x, z, outer: k > rings - 3)
-                // Spokes start a little way out, so they don't crowd together around you.
-                if k >= 5 && k < rings { edge(i, (k + 1) * spokes + m, x, z, outer: k + 1 > rings - 3) }
-            }
-        }
-        ctx.stroke(plain, with: .color(.white.opacity(0.09)), lineWidth: 0.6)
-        ctx.stroke(fringe, with: .color(.white.opacity(0.045)), lineWidth: 0.6)
+        ctx.stroke(ground, with: .color(.white.opacity(0.1)), lineWidth: 0.7)
         ctx.drawLayer { glow in
             glow.addFilter(.blur(radius: 5))
-            for (i, paths) in lit.enumerated() {
-                for level in 2..<4 { glow.stroke(paths[level], with: .color(terrain.peaks[i].kind.glow.opacity(0.7)), lineWidth: 2.5) }
+            for (i, bands) in lit.enumerated() {
+                for band in 2..<4 {
+                    for bold in 0..<2 { glow.stroke(bands[band][bold], with: .color(terrain.peaks[i].kind.glow.opacity(0.6)), lineWidth: 2.5) }
+                }
             }
         }
-        for (i, paths) in lit.enumerated() {
-            for level in 0..<4 {
-                ctx.stroke(paths[level], with: .color(terrain.peaks[i].kind.orb.opacity([0.28, 0.45, 0.65, 0.9][level])),
-                           lineWidth: [0.7, 0.85, 1, 1.2][level])
+        for (i, bands) in lit.enumerated() {
+            for band in 0..<4 {
+                for bold in 0..<2 {
+                    ctx.stroke(bands[band][bold], with: .color(terrain.peaks[i].kind.orb.opacity([0.35, 0.55, 0.75, 0.95][band])),
+                               lineWidth: (bold == 1 ? 1.5 : 0.85) + Double(band) * 0.1)
+                }
             }
         }
 
