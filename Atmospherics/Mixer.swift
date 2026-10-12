@@ -603,7 +603,7 @@ final class Mixer {
         setTitle(name, for: mode)
         let orbs = Preset.layout(target)
         if animated && mode == self.mode {
-            glide(to: orbs, duration: traveling ? 3 : 6)
+            glide(to: orbs, duration: traveling ? 1.5 : 6)
             traveling = false
         } else {
             fields[mode] = orbs

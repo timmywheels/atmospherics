@@ -115,6 +115,9 @@ private struct Carousel: View {
     @Binding var hasSwiped: Bool
     @State private var pastThreshold = false
     @State private var settling = false
+    /// While a swipe lands, the two pages are drawn from a snapshot so the sound can switch at
+    /// release without the sliding pages changing under the finger.
+    @State private var frozen: (outgoing: Mixer.Page, incoming: Mixer.Page, forward: Bool)?
 
     private let gap: CGFloat = 56
 
@@ -123,12 +126,17 @@ private struct Carousel: View {
             let w = proxy.size.width
             let step = w + gap
             ZStack(alignment: .topLeading) {
-                if let prev = mixer.previous {
-                    PageView(page: mixer.page(for: prev)).frame(width: w).offset(x: -step + dragX)
-                }
-                currentPage.frame(width: w).offset(x: dragX)
-                if let next = mixer.next {
-                    PageView(page: mixer.page(for: next)).frame(width: w).offset(x: step + dragX)
+                if let f = frozen {
+                    PageView(page: f.outgoing).frame(width: w).offset(x: dragX)
+                    PageView(page: f.incoming).frame(width: w).offset(x: (f.forward ? step : -step) + dragX)
+                } else {
+                    if let prev = mixer.previous {
+                        PageView(page: mixer.page(for: prev)).frame(width: w).offset(x: -step + dragX)
+                    }
+                    currentPage.frame(width: w).offset(x: dragX)
+                    if let next = mixer.next {
+                        PageView(page: mixer.page(for: next)).frame(width: w).offset(x: step + dragX)
+                    }
                 }
             }
             .frame(width: w, height: proxy.size.height, alignment: .topLeading)
@@ -193,14 +201,21 @@ private struct Carousel: View {
                     return
                 }
                 settling = true
-                withAnimation(.spring(duration: 0.38, bounce: 0.05)) {
+                // Snapshot both pages, then switch the sound right away.
+                let outgoing = Mixer.Page(title: mixer.title, line: mixer.weather.line,
+                                          layers: mixer.layersLine, orbs: mixer.byVolume)
+                if let dest = forward ? mixer.next : mixer.previous {
+                    frozen = (outgoing, mixer.page(for: dest), forward)
+                }
+                mixer.travel(forward: forward)
+                withAnimation(.spring(duration: 0.3, bounce: 0)) {
                     dragX = forward ? -step : step
                 } completion: {
-                    // The neighbour is now centred: make it the live page without any visible jump.
+                    // The destination is centred and is already the live page: swap without a jump.
                     var t = Transaction()
                     t.disablesAnimations = true
                     withTransaction(t) {
-                        mixer.travel(forward: forward)
+                        frozen = nil
                         dragX = 0
                     }
                     settling = false

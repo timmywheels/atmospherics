@@ -38,25 +38,39 @@ final class SampleBank {
         players.values.forEach { if !$0.isPlaying { $0.play() } }
     }
 
+    private var files: [SoundKind: AVAudioFile] = [:]
+
+    /// Streams the recording from disk: a random starting segment, then whole-file repeats queued
+    /// one ahead, so it starts instantly, loops without gaps, and never holds the decoded audio in memory.
     private func ensurePlayer(_ kind: SoundKind) {
         guard players[kind] == nil,
               let url = Bundle.main.url(forResource: kind.rawValue, withExtension: "m4a"),
-              let file = try? AVAudioFile(forReading: url),
-              let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)),
-              (try? file.read(into: buffer)) != nil else { return }
+              let file = try? AVAudioFile(forReading: url), file.length > 0 else { return }
         let player = AVAudioPlayerNode()
         engine.attach(player)
-        engine.connect(player, to: bus, format: buffer.format)
+        engine.connect(player, to: bus, format: file.processingFormat)
         player.volume = 0
-        // Start somewhere random so a sound doesn't always begin at the same moment.
-        let start = AVAudioFramePosition(Double.random(in: 0..<0.8) * Double(buffer.frameLength))
-        if let head = buffer.slice(from: AVAudioFrameCount(start)) {
-            player.scheduleBuffer(head, at: nil)
-        }
-        player.scheduleBuffer(buffer, at: nil, options: .loops)
         players[kind] = player
+        files[kind] = file
         current[kind] = 0
+
+        // Start somewhere random so a sound doesn't always begin at the same moment.
+        let start = AVAudioFramePosition(Double.random(in: 0..<0.8) * Double(file.length))
+        player.scheduleSegment(file, startingFrame: start, frameCount: AVAudioFrameCount(file.length - start), at: nil)
+        queueRepeat(kind, player: player)
+        queueRepeat(kind, player: player)
         if engine.isRunning && masterTarget > 0 { player.play() }
+    }
+
+    /// Queues one more pass of the file; when it's consumed, queues another.
+    private func queueRepeat(_ kind: SoundKind, player: AVAudioPlayerNode) {
+        guard let file = files[kind] else { return }
+        player.scheduleFile(file, at: nil, completionCallbackType: .dataConsumed) { [weak self, weak player] _ in
+            DispatchQueue.main.async {
+                guard let self, let player, self.players[kind] === player else { return }
+                self.queueRepeat(kind, player: player)
+            }
+        }
     }
 
     private func startTimer() {
@@ -73,7 +87,7 @@ final class SampleBank {
         for (kind, player) in players {
             let target = targets[kind] ?? 0
             var v = current[kind] ?? 0
-            v += (target - v) * 0.12
+            v += (target - v) * 0.2
             if abs(target - v) < 0.002 { v = target } else { settled = false }
             current[kind] = v
             player.volume = v
@@ -83,9 +97,10 @@ final class SampleBank {
                 let since = silentSince[kind] ?? Date()
                 silentSince[kind] = since
                 if Date().timeIntervalSince(since) > 10 {
+                    players[kind] = nil
+                    files[kind] = nil
                     player.stop()
                     engine.detach(player)
-                    players[kind] = nil
                     silentSince[kind] = nil
                 } else { settled = false }
             } else {
@@ -93,19 +108,5 @@ final class SampleBank {
             }
         }
         if settled { timer?.invalidate(); timer = nil }
-    }
-}
-
-private extension AVAudioPCMBuffer {
-    /// A copy of this buffer from `frame` to the end.
-    func slice(from frame: AVAudioFrameCount) -> AVAudioPCMBuffer? {
-        guard frame < frameLength,
-              let out = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameLength - frame),
-              let src = floatChannelData, let dst = out.floatChannelData else { return nil }
-        out.frameLength = frameLength - frame
-        for ch in 0..<Int(format.channelCount) {
-            dst[ch].update(from: src[ch] + Int(frame), count: Int(out.frameLength))
-        }
-        return out
     }
 }
