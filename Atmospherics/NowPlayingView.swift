@@ -70,14 +70,14 @@ struct NowPlayingView: View {
                 Spacer()
                 Button { showGlobe = true } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: mixer.activePreset == nil ? "globe" : "books.vertical")
-                        Text(mixer.weather.temp.isEmpty ? mixer.weather.place : "\(mixer.weather.place) \(mixer.weather.temp)")
+                        Image(systemName: "globe")
+                        Text(mixer.headerPlace)
                     }
                     .padding(.vertical, 6)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("World. \(mixer.weather.place)")
+                .accessibilityLabel("World. \(mixer.headerPlace)")
             }
             .font(Theme.mono(11, .medium))
             .tracking(1.3)

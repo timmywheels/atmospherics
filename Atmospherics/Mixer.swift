@@ -405,6 +405,16 @@ final class Mixer {
         defaults.set(preset?.id, forKey: "activePreset")
     }
 
+    /// The top-right place label: where you are, or during a Library mix, where you came from.
+    var headerPlace: String {
+        guard activePreset != nil else {
+            return weather.temp.isEmpty ? weather.place : "\(weather.place) \(weather.temp)"
+        }
+        if mode == .escape, let e = escape { return "\(e.place.title) \(e.conditions.temperature)" }
+        if let h = home { return "\(h.place) \(h.temperature)" }
+        return "World"
+    }
+
     /// Where "Back to …" returns from a Library mix: the place you were in, or home.
     var presetReturnName: String {
         if mode == .escape, let p = escape?.place { return p.name }
