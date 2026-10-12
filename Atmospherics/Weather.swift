@@ -153,6 +153,13 @@ enum WeatherMix {
         if c.isDay && !c.isRaining && c.code <= 3 {
             mix.append((.birds, 0.2))
         }
+        // Warm, dry nights get crickets; hot days get cicadas.
+        if !c.isDay && !c.isRaining && c.temperatureC >= 16 {
+            mix.append((.crickets, 0.3))
+        }
+        if c.isDay && !c.isRaining && c.temperatureC >= 25 {
+            mix.append((.cicadas, 0.25))
+        }
         for (kind, level) in escape?.signature ?? [] {
             if kind == .fire && c.temperatureC >= 12 { continue }
             if let i = mix.firstIndex(where: { $0.0 == kind }) {

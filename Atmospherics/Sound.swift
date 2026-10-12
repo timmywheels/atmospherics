@@ -3,17 +3,38 @@ import SwiftUI
 /// Every sound Atmospherics can play. All are synthesized live in `NoiseEngine`.
 enum SoundKind: String, CaseIterable, Identifiable, Codable {
     case brown, pink, white, green, rain, ocean, wind, thunder, fire, birds
+    case grey, blue, violet, crickets, cicadas, frogs, stream, cityHum, train, fan, chimes, drone
 
     var id: String { rawValue }
 
+    enum Category: String, CaseIterable {
+        case noise = "Noise", water = "Water & weather", nature = "Nature", city = "City & home", calm = "Calm"
+    }
+
+    var category: Category {
+        switch self {
+        case .brown, .pink, .white, .green, .grey, .blue, .violet: .noise
+        case .rain, .ocean, .stream, .wind, .thunder: .water
+        case .birds, .crickets, .cicadas, .frogs, .fire: .nature
+        case .cityHum, .train, .fan: .city
+        case .chimes, .drone: .calm
+        }
+    }
+
     var name: String {
         switch self {
-        case .brown, .pink, .white, .green: "\(short) noise"
+        case .brown, .pink, .white, .green, .grey, .blue, .violet: "\(short) noise"
+        case .cityHum: "City hum"
         default: short
         }
     }
 
-    var short: String { rawValue.capitalized }
+    var short: String {
+        switch self {
+        case .cityHum: "City"
+        default: rawValue.capitalized
+        }
+    }
 
     /// OKLCH hue from the design.
     var hue: Double {
@@ -28,15 +49,38 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .thunder: 290
         case .fire: 35
         case .birds: 100
+        case .grey: 250
+        case .blue: 265
+        case .violet: 300
+        case .crickets: 120
+        case .cicadas: 85
+        case .frogs: 150
+        case .stream: 195
+        case .cityHum: 325
+        case .train: 245
+        case .fan: 220
+        case .chimes: 345
+        case .drone: 275
+        }
+    }
+
+    /// How saturated the color is, relative to the design's default. Grey and the
+    /// mechanical sounds stay muted; blue leans vivid so it isn't mistaken for white.
+    private var chroma: Double {
+        switch self {
+        case .grey: 0.1
+        case .fan, .train: 0.4
+        case .blue: 1.3
+        default: 1
         }
     }
 
     /// The orb color on the mixer field.
-    var orb: Color { .oklch(0.8, 0.12, hue) }
+    var orb: Color { .oklch(0.8, 0.12 * chroma, hue) }
     /// The orb's glow.
-    var glow: Color { .oklch(0.7, 0.16, hue) }
+    var glow: Color { .oklch(0.7, 0.16 * chroma, hue) }
     /// The soft halo on Now Playing.
-    var halo: Color { .oklch(0.6, 0.14, hue) }
+    var halo: Color { .oklch(0.6, 0.14 * chroma, hue) }
 }
 
 extension Color {

@@ -100,10 +100,12 @@ final class NoiseEngine {
 }
 
 /// One sound generator. Only ever touched by the audio thread.
-private final class Voice {
+/// The original ten sounds live here; newer ones are `SoundGenerator`s in Generators.swift.
+final class Voice {
     let kind: SoundKind
     let sr: Float
     var rng: UInt32
+    private let generator: SoundGenerator?
 
     // Shared building blocks
     var p0: Float = 0, p1: Float = 0, p2: Float = 0, p3: Float = 0, p4: Float = 0, p5: Float = 0, p6: Float = 0
@@ -139,6 +141,7 @@ private final class Voice {
         gb2 = -alpha / a0
         ga1 = -2 * cosf(w0) / a0
         ga2 = (1 - alpha) / a0
+        generator = makeGenerator(for: kind, sampleRate: sampleRate, seed: seed)
         phase = random01()   // desynchronize slow cycles between channels
         countdown = Int(sampleRate * (1 + 4 * random01()))
     }
@@ -202,6 +205,8 @@ private final class Voice {
             return fire(w)
         case .birds:
             return birds()
+        default:
+            return generator?.next(self, w) ?? 0
         }
     }
 

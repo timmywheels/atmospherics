@@ -30,6 +30,7 @@ struct LibraryView: View {
                 VStack(spacing: 0) {
                     ForEach(presets) { preset in
                         Button {
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                             mixer.load(preset)
                             dismiss()
                         } label: {
@@ -47,6 +48,7 @@ struct LibraryView: View {
         .presentationBackground(Theme.background)
         .presentationDragIndicator(.visible)
         .animation(.smooth(duration: 0.25), value: filter)
+        .sensoryFeedback(.selection, trigger: filter)
     }
 
     private func chip(_ label: String, selected: Bool, action: @escaping () -> Void) -> some View {

@@ -24,6 +24,16 @@ struct Preset: Identifiable {
                mix: [(.white, 0.5), (.ocean, 0.5)]),
         Preset(name: "Ember", tag: .relax, length: "30 min", description: "Fire, brown noise, birds",
                mix: [(.fire, 0.7), (.brown, 0.4), (.birds, 0.15)]),
+        Preset(name: "Night Train", tag: .sleep, length: "8 h", description: "Train, rain on the windows, brown noise",
+               mix: [(.train, 0.7), (.rain, 0.35), (.brown, 0.4)]),
+        Preset(name: "Summer Porch", tag: .relax, length: "1 h", description: "Crickets, frogs, a light breeze",
+               mix: [(.crickets, 0.6), (.frogs, 0.35), (.wind, 0.2)]),
+        Preset(name: "Temple Garden", tag: .focus, length: "45 min", description: "Stream, chimes, birds",
+               mix: [(.stream, 0.65), (.chimes, 0.3), (.birds, 0.2)]),
+        Preset(name: "Grey Room", tag: .focus, length: "2 h", description: "Grey noise, a warm drone",
+               mix: [(.grey, 0.7), (.drone, 0.3)]),
+        Preset(name: "Box Fan", tag: .sleep, length: "8 h", description: "Fan, brown noise",
+               mix: [(.fan, 0.75), (.brown, 0.3)]),
     ]
 
     /// Places each sound at the distance from center that gives its volume,

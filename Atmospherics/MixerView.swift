@@ -36,24 +36,25 @@ struct MixerView: View {
                         .font(Theme.mono(11, .medium))
                         .tracking(1.3)
                         .foregroundStyle(Theme.mono)
-                    FlowLayout(spacing: 8) {
-                        ForEach(mixer.unusedSounds) { kind in
-                            Button {
-                                withAnimation(.snappy) { mixer.add(kind) }
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Circle().fill(kind.orb).frame(width: 8, height: 8)
-                                    Text(kind.short).font(Theme.body(13))
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 14) {
+                            ForEach(SoundKind.Category.allCases, id: \.self) { category in
+                                let kinds = mixer.unusedSounds.filter { $0.category == category }
+                                if !kinds.isEmpty {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text(category.rawValue)
+                                            .font(Theme.mono(10))
+                                            .foregroundStyle(Theme.mono.opacity(0.8))
+                                        FlowLayout(spacing: 8) {
+                                            ForEach(kinds) { kind in chip(kind) }
+                                        }
+                                    }
                                 }
-                                .padding(.vertical, 10)
-                                .padding(.horizontal, 14)
-                                .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
-                                .contentShape(Capsule())
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Add \(kind.name)")
                         }
                     }
+                    .scrollIndicators(.hidden)
+                    .frame(maxHeight: 230)
                 }
                 .padding(.horizontal, 8)
             }
@@ -64,6 +65,24 @@ struct MixerView: View {
         .foregroundStyle(Theme.text)
         .background(Theme.background.ignoresSafeArea())
         .toolbarBackground(.hidden, for: .navigationBar)
+    }
+
+    private func chip(_ kind: SoundKind) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            withAnimation(.snappy) { mixer.add(kind) }
+        } label: {
+            HStack(spacing: 8) {
+                Circle().fill(kind.orb).frame(width: 8, height: 8)
+                Text(kind.short).font(Theme.body(13))
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 14)
+            .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Add \(kind.name)")
     }
 }
 
@@ -129,6 +148,9 @@ private struct OrbView: View {
                 withAnimation(.snappy) { mixer.remove(orb.id) }
             }
             .animation(.snappy(duration: 0.2), value: dragging)
+            // A soft tap when you pick a light up, and a tick for every 10% of volume as you drag.
+            .sensoryFeedback(.impact(flexibility: .soft), trigger: dragging) { _, isDragging in isDragging }
+            .sensoryFeedback(.selection, trigger: pct / 10) { _, _ in dragging }
             .zIndex(dragging ? 1 : 0)
             .accessibilityElement()
             .accessibilityLabel(orb.kind.name)

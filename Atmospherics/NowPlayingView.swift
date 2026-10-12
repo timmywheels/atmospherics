@@ -75,6 +75,7 @@ struct NowPlayingView: View {
                         .contentShape(Rectangle())
                 }
                 .accessibilityLabel("Sleep timer, \(mixer.timer.label). Tap to change.")
+                .sensoryFeedback(.selection, trigger: mixer.timer)
             }
             .font(Theme.mono(12))
             .foregroundStyle(Theme.mono)
@@ -92,35 +93,41 @@ struct NowPlayingView: View {
 enum Route: Hashable { case mixer }
 
 /// Soft blurred lights, one per sound. Louder sounds are bigger and sit nearer the center.
-private struct Halo: View {
+/// Each light wanders slowly on its own path, and the whole halo drifts, so it feels alive.
+struct Halo: View {
     let orbs: [Orb]
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { proxy in
             let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)
-            ZStack {
-                ForEach(Array(orbs.enumerated()), id: \.element.id) { i, orb in
-                    let angle = Double(i) * 2.1 + 0.4
-                    let distance = (1 - orb.volume) * 70
-                    // Slightly smaller and softer than the CSS values: SwiftUI's blur
-                    // spreads less, so the same numbers render bigger and harsher.
-                    let size = (90 + orb.volume * 200) * 0.85
-                    Breathing(period: 7 + Double(i) * 1.7) {
-                        Circle()
-                            .fill(orb.kind.halo.opacity(0.85))
-                            .frame(width: size, height: size)
-                            .blur(radius: 22)
+            TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { timeline in
+                let t = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 10_000)
+                // Whole-halo drift: a slow figure-eight a few points across.
+                let drift = CGPoint(x: sin(t * 0.07) * 12, y: sin(t * 0.11) * 8)
+                ZStack {
+                    ForEach(Array(orbs.enumerated()), id: \.element.id) { i, orb in
+                        let angle = Double(i) * 2.1 + 0.4
+                        let distance = (1 - orb.volume) * 70
+                        // Slightly smaller and softer than the CSS values: SwiftUI's blur
+                        // spreads less, so the same numbers render bigger and harsher.
+                        let size = (90 + orb.volume * 200) * 0.85
+                        let phase = Double(i) * 1.9
+                        let wander = CGPoint(x: sin(t * 0.13 + phase) * 16, y: cos(t * 0.1 + phase * 1.3) * 14)
+                        Breathing(period: 7 + Double(i) * 1.7) {
+                            Circle()
+                                .fill(orb.kind.halo.opacity(0.85))
+                                .frame(width: size, height: size)
+                                .blur(radius: 22)
+                        }
+                        .blendMode(.screen)
+                        .position(x: center.x + cos(angle) * distance + wander.x + drift.x,
+                                  y: center.y + sin(angle) * distance + wander.y + drift.y)
+                        .animation(.smooth(duration: 0.6), value: orb.volume)
                     }
-                    .blendMode(.screen)
-                    .position(x: center.x + cos(angle) * distance, y: center.y + sin(angle) * distance)
-                    .animation(.smooth(duration: 0.6), value: orb.volume)
                 }
-                Circle()
-                    .fill(.white)
-                    .frame(width: 6, height: 6)
-                    .position(center)
+                .compositingGroup()
             }
-            .compositingGroup()
         }
         .accessibilityHidden(true)
     }
@@ -154,6 +161,7 @@ struct ModeToggle: View {
         }
         .padding(4)
         .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+        .sensoryFeedback(.selection, trigger: mixer.mode)
     }
 
     private func segment(_ label: String, _ mode: Mode) -> some View {
@@ -196,6 +204,7 @@ private struct PlayButton: View {
             .frame(width: 68, height: 68)
         }
         .buttonStyle(.plain)
+        .sensoryFeedback(.impact(weight: .medium), trigger: mixer.isPlaying)
         .accessibilityLabel(mixer.isPlaying ? "Pause" : "Play")
     }
 }
