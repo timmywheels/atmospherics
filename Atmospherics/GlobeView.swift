@@ -29,7 +29,7 @@ struct GlobeView: View {
                 pill("Globe", selected: !showList) { showList = false }
                 pill("List", selected: showList) { showList = true }
                 Spacer()
-                pill(mixer.pinnedPlace == nil ? "Opposite of home ✓" : "Opposite of home", selected: false) {
+                pill(mixer.pinnedPlace == nil ? "Most different ✓" : "Most different", selected: false) {
                     mixer.unpinPlace()
                     dismiss()
                 }

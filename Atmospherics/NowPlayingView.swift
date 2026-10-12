@@ -32,8 +32,7 @@ struct NowPlayingView: View {
             .foregroundStyle(Theme.mono)
 
             Halo(orbs: mixer.byVolume)
-                .frame(height: 380)
-                .padding(.top, 20)
+                .frame(minHeight: 300, maxHeight: .infinity)
                 .offset(x: swipe)
                 .opacity(1 - Double(min(abs(swipe), 160) / 320))
                 .contentShape(Rectangle())
@@ -66,18 +65,42 @@ struct NowPlayingView: View {
             Text(mixer.weather.line)
                 .font(Theme.body(15))
                 .foregroundStyle(Theme.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
                 .padding(.top, 10)
 
+            // Always two lines tall, so places with more or fewer sounds don't shift the layout.
             Text(mixer.layersLine)
                 .font(Theme.mono(11))
                 .lineSpacing(4)
                 .foregroundStyle(Theme.mono)
+                .lineLimit(2, reservesSpace: true)
                 .padding(.top, 14)
 
-            ModeToggle()
-                .padding(.top, 28)
+            // Away: a quiet way home. At home but edited: a way back to following the weather.
+            // A fixed-height slot: the line fades in and out without moving anything.
+            ZStack(alignment: .leading) {
+                Text(" ").hidden()
+                if mixer.mode == .escape {
+                    Button { withAnimation(.smooth(duration: 0.35)) { mixer.goHome() } } label: {
+                        Text("← Back to \(mixer.homeName)")
+                    }
+                } else if mixer.following[.match] != true {
+                    Button { mixer.followWeatherAgain() } label: {
+                        Text("↺ Follow the weather")
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .font(Theme.mono(12))
+            .foregroundStyle(Theme.text.opacity(0.8))
+            .buttonStyle(.plain)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+            .padding(.top, 14)
+            .sensoryFeedback(.selection, trigger: mixer.mode)
 
-            Spacer(minLength: 16)
+            Spacer().frame(height: 28)
 
             VStack(spacing: 14) {
                 HStack {
@@ -208,38 +231,6 @@ private struct Breathing<Content: View>: View {
                     expanded = true
                 }
             }
-    }
-}
-
-/// "Match outside / Escape outside" segmented pill.
-struct ModeToggle: View {
-    @Environment(Mixer.self) private var mixer
-
-    var body: some View {
-        HStack(spacing: 0) {
-            segment("Match outside", .match)
-            segment("Escape outside", .escape)
-        }
-        .padding(4)
-        .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
-        .sensoryFeedback(.selection, trigger: mixer.mode)
-    }
-
-    private func segment(_ label: String, _ mode: Mode) -> some View {
-        let selected = mixer.mode == mode
-        return Button {
-            withAnimation(.smooth(duration: 0.35)) { mixer.setMode(mode) }
-        } label: {
-            Text(label)
-                .font(Theme.body(14, .medium))
-                .foregroundStyle(selected ? Theme.background : Theme.text)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Capsule().fill(selected ? Theme.text : .clear))
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 

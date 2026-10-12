@@ -1,3 +1,4 @@
+import CoreLocation
 import AVFoundation
 import MediaPlayer
 import SwiftUI
@@ -169,17 +170,21 @@ final class Mixer {
                 guard let home else { return WeatherSummary(place: "", temp: "", line: "", head: head) }
                 let line = following[.match] == true
                     ? "Following \(home.subject) outside"
-                    : "Tap Match outside to follow the weather"
+                    : "Your own mix, made here"
                 return WeatherSummary(place: home.place, temp: home.temperature, line: line, head: head)
             }
         case .escape:
             guard let escape else {
+                if let pinned = pinnedPlace {
+                    return WeatherSummary(place: pinned.title, temp: "", line: "Checking the weather in \(pinned.name)…",
+                                          head: "Escaping to \(pinned.name)")
+                }
                 return WeatherSummary(place: "", temp: "", line: "Finding somewhere else…", head: "Escaping outside")
             }
             let c = escape.conditions
             let line: String
             if following[.escape] != true {
-                line = "Tap Escape outside to follow \(escape.place.name)"
+                line = "Your own mix, made in \(escape.place.name)"
             } else if pinnedPlace != nil {
                 line = "\(c.mixName) in \(escape.place.name) right now"
             } else {
@@ -204,7 +209,7 @@ final class Mixer {
 
     /// "Brown 70  ·  Rain 45  ·  Wind 25"
     var layersLine: String {
-        byVolume.map { "\($0.kind.short) \(Int(($0.volume * 100).rounded()))" }.joined(separator: "  ·  ")
+        byVolume.filter { $0.volume >= 0.05 }.map { "\($0.kind.short) \(Int(($0.volume * 100).rounded()))" }.joined(separator: "  ·  ")
     }
 
     var unusedSounds: [SoundKind] {
@@ -309,6 +314,7 @@ final class Mixer {
 
         do {
             let (coordinate, place) = try await location.current()
+            homeCoordinate = coordinate
             home = try await weatherService.conditions(at: coordinate, place: place)
             weatherState = .ready
         } catch {
@@ -318,6 +324,13 @@ final class Mixer {
         if let options = try? await weatherService.places() {
             placeConditions = Dictionary(uniqueKeysWithValues: zip(Place.all.map(\.name), options))
             chooseEscape()
+        } else {
+            // Don't wait 20 minutes for the next try if places didn't load.
+            lastWeatherFetch = nil
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(15))
+                await self?.refreshWeather()
+            }
         }
 
         applyWeather(to: .match, animated: true)
@@ -338,6 +351,14 @@ final class Mixer {
 
     /// Goes to a place: pins it, switches to Escape, and glides the field to its sound.
     func select(_ place: Place) {
+        // Choosing the place you're already in is just going home.
+        if isNearHome(place) {
+            pinnedPlace = nil
+            defaults.removeObject(forKey: "pinnedPlace")
+            goHome()
+            if !isPlaying { play() }
+            return
+        }
         pinnedPlace = place
         defaults.set(place.name, forKey: "pinnedPlace")
         chooseEscape()
@@ -352,9 +373,40 @@ final class Mixer {
         if !isPlaying { play() }
     }
 
+    /// Comes back from a place to the local weather.
+    func goHome() {
+        if mode != .match {
+            transition?.cancel()
+            mode = .match
+            defaults.set(Mode.match.rawValue, forKey: "mode")
+            apply()
+        }
+        setFollowing(true, for: .match)
+        applyWeather(to: .match, animated: true)
+        updateNowPlaying()
+    }
+
+    /// Hands an edited field back to the weather, without leaving the place.
+    func followWeatherAgain() {
+        setFollowing(true, for: mode)
+        applyWeather(to: mode, animated: true)
+    }
+
+    /// Where home is on the map, to tell when a chosen place is really just home.
+    @ObservationIgnored private var homeCoordinate: CLLocationCoordinate2D?
+
+    private func isNearHome(_ place: Place) -> Bool {
+        guard let h = homeCoordinate else { return false }
+        let here = CLLocation(latitude: h.latitude, longitude: h.longitude)
+        return here.distance(from: CLLocation(latitude: place.latitude, longitude: place.longitude)) < 40_000
+    }
+
+    /// Where "home" is, for the "Back to …" line.
+    var homeName: String { home?.place ?? "home" }
+
     /// Jumps to a random place other than the current one.
     func shuffle() {
-        let others = Place.all.filter { $0 != escape?.place && placeConditions[$0.name] != nil }
+        let others = Place.all.filter { $0 != escape?.place && placeConditions[$0.name] != nil && !isNearHome($0) }
         guard let place = others.randomElement() ?? Place.all.randomElement() else { return }
         shuffleCount += 1
         select(place)
