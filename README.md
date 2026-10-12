@@ -10,7 +10,7 @@ Sounds are lights on a field. Drag one toward the center to hear more of it, pus
 - **Escape outside** plays somewhere else, picking the place whose weather is most unlike yours.
 - **Library** has hand-made mixes for sleep, focus and relaxing.
 
-44 sounds: 23 synthesized live (seven noise colors, rain, ocean, wind, thunder, lightning, fire, birds, crickets, cicadas, frogs, stream, city hum, train, fan, chimes, drone) and 21 public-domain field recordings (howler monkeys, owls, loons, whales, a café, church bells and more; see `design/sounds/SOURCES.md`). 42 places around the world, each with live weather.
+44 sounds: 23 synthesized live (seven noise colors, rain, ocean, wind, thunder, lightning, fire, birds, crickets, cicadas, frogs, stream, city hum, train, fan, chimes, drone) and 21 public-domain field recordings (howler monkeys, owls, loons, whales, a café, church bells and more; see `design/sounds/SOURCES.md`). 43 places around the world, each with live weather.
 
 ## Build
 

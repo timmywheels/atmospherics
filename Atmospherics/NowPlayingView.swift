@@ -64,33 +64,29 @@ struct NowPlayingView: View {
 
             Spacer().frame(height: 18)
 
-            VStack(spacing: 14) {
-                HStack {
-                    Button { showLibrary = true } label: {
-                        Text("Library ↑")   // opens as a sheet, so it points up
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                            .contentShape(Rectangle())
-                    }
+            VStack(spacing: 18) {
+                PlayButton()
 
-                    PlayButton()
+                // Three evenly spaced tools under the play button.
+                HStack(spacing: 0) {
+                    Button { showLibrary = true } label: {
+                        ToolIcon(symbol: "books.vertical", label: "Library")
+                    }
+                    .accessibilityLabel("Library")
+
+                    Button { mixer.cycleTimer() } label: {
+                        ToolIcon(symbol: mixer.timer == .off ? "timer" : "moon.zzz",
+                                 label: mixer.timer == .off ? "Timer" : mixer.timer.label)
+                    }
+                    .accessibilityLabel("Sleep timer, \(mixer.timer.label). Tap to change.")
+                    .sensoryFeedback(.selection, trigger: mixer.timer)
 
                     NavigationLink(value: Route.mixer) {
-                        Text("Mixer →")
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
-                            .contentShape(Rectangle())
+                        ToolIcon(symbol: "slider.horizontal.3", label: "Mixer")
                     }
+                    .accessibilityLabel("Mixer")
                 }
-
-                Button { mixer.cycleTimer() } label: {
-                    Text(mixer.timer == .off ? "Timer off" : "Timer · \(mixer.timer.label)")
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 12)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel("Sleep timer, \(mixer.timer.label). Tap to change.")
-                .sensoryFeedback(.selection, trigger: mixer.timer)
             }
-            .font(Theme.mono(12))
             .foregroundStyle(Theme.mono)
             .buttonStyle(.plain)
         }
@@ -109,6 +105,25 @@ struct NowPlayingView: View {
 }
 
 enum Route: Hashable { case mixer }
+
+/// An icon with a small label, taking an equal share of the row.
+private struct ToolIcon: View {
+    let symbol: String
+    let label: String
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: symbol)
+                .font(.system(size: 19, weight: .regular))
+                .frame(height: 22)
+                .contentTransition(.symbolEffect(.replace))
+            Text(label)
+                .font(Theme.mono(10))
+        }
+        .frame(maxWidth: .infinity, minHeight: 48)
+        .contentShape(Rectangle())
+    }
+}
 
 /// The halo, title, weather and layers as a page, with the previous and next places beside it.
 /// Drag follows the finger 1:1; let go past a quarter of the width (or flick) to land on the neighbour.
