@@ -17,7 +17,11 @@ struct SculptureCamera {
     /// How far either side of the middle the view reaches, in world units.
     var extent = 1.12
 
-    var focal: Double { max(1, (Double(size.width) / 2 - 18) * distance / extent) }
+    /// How much of the view the form is fitted to: its width, but no more than its height allows (a
+    /// wide, short window would otherwise cut it off), and never more than a phone's width, so a
+    /// big window shows the same form rather than a bigger one.
+    var fit: Double { min(Double(size.width), Double(size.height) * 1.15, 440) }
+    var focal: Double { max(1, (fit / 2 - 18) * distance / extent) }
     var center: CGPoint { CGPoint(x: size.width / 2, y: size.height * 0.5) }
 
     func project(_ x: Double, _ y: Double, _ z: Double) -> (point: CGPoint, depth: Double) {
