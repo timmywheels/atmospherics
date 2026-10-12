@@ -59,6 +59,12 @@ final class NoiseEngine {
         engine.attach(source)
         engine.connect(source, to: engine.mainMixerNode, format: format)
 
+        // Watch what's actually playing, off the audio thread, for the waveform.
+        let scope = scope
+        engine.mainMixerNode.installTap(onBus: 0, bufferSize: 2048, format: nil) { buffer, _ in
+            scope.ingest(buffer)
+        }
+
         // The engine stops itself when the output device changes (e.g. AirPods connect).
         // Restart it if we were meant to be playing.
         NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine,
@@ -77,6 +83,9 @@ final class NoiseEngine {
         let index = SoundKind.allCases.firstIndex(of: kind)!
         targets[index] = max(0, min(1, level))
     }
+
+    /// The most recent slice of output, as peak levels, for the waveform.
+    let scope = Scope()
 
     func play() throws {
         stopGeneration += 1
@@ -350,5 +359,32 @@ final class Voice {
         notePosition = 0
         freqStart = 2200 + 1400 * random01()
         freqSweep = (random01() - 0.4) * 1600
+    }
+}
+
+/// Holds a short, downsampled picture of the output for drawing.
+final class Scope: @unchecked Sendable {
+    static let bins = 64
+    private let lock = NSLock()
+    private var levels = [Float](repeating: 0, count: Scope.bins)
+
+    /// Signed peaks per bin (largest-magnitude sample keeps its sign), so the line has real shape.
+    func ingest(_ buffer: AVAudioPCMBuffer) {
+        guard let data = buffer.floatChannelData?[0] else { return }
+        let n = Int(buffer.frameLength)
+        guard n >= Scope.bins else { return }
+        let step = n / Scope.bins
+        var next = [Float](repeating: 0, count: Scope.bins)
+        for b in 0..<Scope.bins {
+            var peak: Float = 0
+            for i in stride(from: b * step, to: (b + 1) * step, by: 4) where abs(data[i]) > abs(peak) { peak = data[i] }
+            next[b] = peak
+        }
+        lock.lock(); levels = next; lock.unlock()
+    }
+
+    func snapshot() -> [Float] {
+        lock.lock(); defer { lock.unlock() }
+        return levels
     }
 }

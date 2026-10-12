@@ -100,7 +100,11 @@ struct NowPlayingView: View {
             .padding(.top, 14)
             .sensoryFeedback(.selection, trigger: mixer.mode)
 
-            Spacer().frame(height: 28)
+            Waveform()
+                .frame(height: 40)
+                .padding(.top, 6)
+
+            Spacer().frame(height: 18)
 
             VStack(spacing: 14) {
                 HStack {
@@ -258,5 +262,49 @@ private struct PlayButton: View {
         .buttonStyle(.plain)
         .sensoryFeedback(.impact(weight: .medium), trigger: mixer.isPlaying)
         .accessibilityLabel(mixer.isPlaying ? "Pause" : "Play")
+    }
+}
+
+/// A slim live waveform of what's playing, tinted with the halo's colors. Flat and dim when paused.
+private struct Waveform: View {
+    @Environment(Mixer.self) private var mixer
+    @State private var smoothed = [Float](repeating: 0, count: Scope.bins)
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: !mixer.isPlaying)) { timeline in
+            Canvas { ctx, size in
+                let levels = smoothed
+                let mid = size.height / 2
+                let step = size.width / CGFloat(levels.count - 1)
+                // Taper toward the ends so the line fades in and out of the edges.
+                let points = levels.enumerated().map { i, v in
+                    let edge = sin(Double(i) / Double(levels.count - 1) * .pi)
+                    return CGPoint(x: CGFloat(i) * step, y: mid - CGFloat(v) * mid * 2.2 * CGFloat(edge))
+                }
+                // Curves through the midpoints, so it reads as a wave rather than a jagged graph.
+                var path = Path()
+                path.move(to: points[0])
+                for i in 1..<points.count {
+                    let m = CGPoint(x: (points[i - 1].x + points[i].x) / 2, y: (points[i - 1].y + points[i].y) / 2)
+                    path.addQuadCurve(to: m, control: points[i - 1])
+                }
+                path.addLine(to: points[points.count - 1])
+                let colors = mixer.byVolume.prefix(3).map(\.kind.orb)
+                let shading = GraphicsContext.Shading.linearGradient(
+                    Gradient(colors: colors.isEmpty ? [Theme.mono] : colors + [colors[0]]),
+                    startPoint: .zero, endPoint: CGPoint(x: size.width, y: 0))
+                ctx.opacity = mixer.isPlaying ? 0.9 : 0.25
+                ctx.drawLayer { glow in
+                    glow.addFilter(.blur(radius: 4))
+                    glow.stroke(path, with: shading, lineWidth: 3)
+                }
+                ctx.stroke(path, with: shading, style: StrokeStyle(lineWidth: 1.2, lineCap: .round, lineJoin: .round))
+            }
+            .onChange(of: timeline.date) { _, _ in
+                let fresh = mixer.isPlaying ? mixer.scope.snapshot() : [Float](repeating: 0, count: Scope.bins)
+                for i in smoothed.indices { smoothed[i] += (fresh[i] - smoothed[i]) * 0.35 }
+            }
+        }
+        .accessibilityHidden(true)
     }
 }

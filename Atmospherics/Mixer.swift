@@ -65,6 +65,7 @@ final class Mixer {
     private(set) var following: [Mode: Bool]
 
     @ObservationIgnored private let engine = NoiseEngine()
+    var scope: Scope { engine.scope }
     @ObservationIgnored private let defaults = UserDefaults.standard
     @ObservationIgnored private var timerWork: DispatchWorkItem?
     @ObservationIgnored private let weatherService = WeatherService()
