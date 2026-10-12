@@ -83,7 +83,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .cityHum: "City"
         case .howlers: "Howlers"
-        case .jungleBirds: "Jungle"
+        case .jungleBirds: "Jungle birds"
         case .treeFrogs: "Tree frogs"
         case .caveDrips: "Cave"
         case .tentRain: "Tent"
