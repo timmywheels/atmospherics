@@ -1,5 +1,7 @@
 import CoreLocation
+import ActivityKit
 import AVFoundation
+import WidgetKit
 import MediaPlayer
 import SwiftUI
 import Observation
@@ -103,6 +105,7 @@ final class Mixer {
         pinnedPlace = defaults.string(forKey: "pinnedPlace").flatMap { name in allPlaces.first { $0.name == name } }
         apply()
         setUpSystemAudio()
+        PlayPauseIntent.handler = { [weak self] in self?.togglePlayback() }
     }
 
     // MARK: Lock screen, interruptions, route changes
@@ -142,7 +145,54 @@ final class Mixer {
         }
     }
 
+    // MARK: Widget and Live Activity
+
+    @ObservationIgnored private var activity: Activity<SoundscapeActivity>?
+    @ObservationIgnored private var lastSnapshot: NowPlayingSnapshot?
+    @ObservationIgnored private var lastSnapshotSave = Date.distantPast
+
+    /// Shares what's playing with the widget, and keeps the Live Activity in step.
+    private func publishToWidgets() {
+        // Away, the title is the place's name, so show its weather as the title instead.
+        let conditions = mode == .escape ? escape?.conditions : home
+        let displayTitle = (title == weather.place || title == escape?.place.name) ? (conditions?.mixName ?? title) : title
+        let snapshot = NowPlayingSnapshot(
+            title: displayTitle, place: weather.place, temperature: weather.temp, isPlaying: isPlaying,
+            lights: byVolume.prefix(4).map { .init(hue: $0.kind.hue, chroma: $0.kind == .grey ? 0.1 : 1, volume: $0.volume) })
+        guard snapshot != lastSnapshot else { return }
+        let changedForWidget = snapshot.title != lastSnapshot?.title || snapshot.isPlaying != lastSnapshot?.isPlaying
+            || snapshot.place != lastSnapshot?.place
+        // Volume-only changes (a glide, a drag) are saved at most once a second.
+        guard changedForWidget || Date().timeIntervalSince(lastSnapshotSave) > 1 else { return }
+        lastSnapshotSave = Date()
+        lastSnapshot = snapshot
+        snapshot.save()
+        if changedForWidget { WidgetCenter.shared.reloadAllTimelines() }
+
+        let placeLine = snapshot.temperature.isEmpty ? snapshot.place : "\(snapshot.place) \(snapshot.temperature)"
+        let state = SoundscapeActivity.ContentState(title: snapshot.title, place: placeLine,
+                                                    isPlaying: isPlaying, hues: snapshot.lights.map(\.hue))
+        if isPlaying, activity == nil, ActivityAuthorizationInfo().areActivitiesEnabled {
+            activity = try? Activity.request(attributes: SoundscapeActivity(),
+                                             content: .init(state: state, staleDate: nil))
+        } else if let activity, changedForWidget {
+            Task { await activity.update(.init(state: state, staleDate: nil)) }
+        }
+    }
+
+    /// Ends the Live Activity a little after pausing, so a quick pause/play doesn't flicker it.
+    private func endActivitySoon() {
+        let current = activity
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(30))
+            guard let self, !self.isPlaying, self.activity === current else { return }
+            await current?.end(nil, dismissalPolicy: .immediate)
+            self.activity = nil
+        }
+    }
+
     private func updateNowPlaying() {
+        publishToWidgets()
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: title,
             MPMediaItemPropertyArtist: "Atmospherics",
@@ -519,6 +569,7 @@ final class Mixer {
 
         let encodable = Dictionary(uniqueKeysWithValues: fields.map { ($0.key.rawValue, $0.value) })
         if let data = try? JSONEncoder().encode(encodable) { defaults.set(data, forKey: "fields") }
+        publishToWidgets()
     }
 
     // MARK: Playback
@@ -543,6 +594,7 @@ final class Mixer {
         isPlaying = false
         timerWork?.cancel()
         updateNowPlaying()
+        endActivitySoon()
     }
 
     func cycleTimer() {

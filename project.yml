@@ -7,7 +7,13 @@ targets:
   Atmospherics:
     type: application
     platform: iOS
-    sources: [Atmospherics]
+    sources: [Atmospherics, Shared]
+    dependencies:
+      - target: AtmosphericsWidget
+    entitlements:
+      path: Atmospherics/Atmospherics.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.timwheeler.atmospherics]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.timwheeler.atmospherics
@@ -16,7 +22,7 @@ targets:
         MARKETING_VERSION: "1.0"
         DEVELOPMENT_TEAM: S3RY6Q3EW2
         CODE_SIGN_STYLE: Automatic
-        CURRENT_PROJECT_VERSION: "6"
+        CURRENT_PROJECT_VERSION: "7"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     info:
       path: Atmospherics/Info.plist
@@ -31,3 +37,29 @@ targets:
         UIUserInterfaceStyle: Dark
         NSLocationWhenInUseUsageDescription: Atmospherics uses your approximate location to match its sounds to the weather outside.
         ITSAppUsesNonExemptEncryption: false
+        NSSupportsLiveActivities: true
+  AtmosphericsWidget:
+    type: app-extension
+    platform: iOS
+    sources: [Widget, Shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.timwheeler.atmospherics.widget
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "7"
+        DEVELOPMENT_TEAM: S3RY6Q3EW2
+        CODE_SIGN_STYLE: Automatic
+    entitlements:
+      path: Widget/Widget.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.timwheeler.atmospherics]
+    info:
+      path: Widget/Info.plist
+      properties:
+        CFBundleDisplayName: Atmospherics
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
