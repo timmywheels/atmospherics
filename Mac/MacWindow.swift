@@ -16,9 +16,10 @@ struct MacWindow: View {
             Group {
                 switch navigation.tab {
                 case .listen: MacListen()
+                case .teleport:
+                    TeleportView(start: mixer.mode == .atmosphere ? mixer.atmosphere : nil) { navigation.tab = .listen }
                 case .layers: MacLayers()
                 case .library: LibraryView(current: mixer.activePreset) { navigation.tab = .listen }
-                case .world: GlobeView { navigation.tab = .listen }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -26,7 +27,7 @@ struct MacWindow: View {
         }
         .ignoresSafeArea(edges: .top)
         .background {
-            // Listening and Layers sit in the scene's colors; the Library and World have their own.
+            // Listening and Layers sit in the scene's colors; Teleport and the Library have their own.
             SceneWash(orbs: mixer.byVolume)
                 .opacity(navigation.tab == .listen || navigation.tab == .layers ? 1 : 0)
                 .background(Theme.background)
@@ -59,13 +60,25 @@ private struct TabBar: View {
     @State private var hovered: MacNavigation.Tab?
 
     var body: some View {
-        HStack(spacing: 22) {
+        // Centered when there's room; in a narrow window, pushed right to clear the window buttons.
+        HStack(spacing: 0) {
+            Spacer(minLength: 84)
+            tabs
+            Spacer(minLength: 12)
+        }
+        // The title bar is 32 points tall, with the window buttons centered in it.
+        .frame(height: 32)
+        .padding(.bottom, 14)
+    }
+
+    private var tabs: some View {
+        HStack(spacing: 20) {
             ForEach(MacNavigation.Tab.allCases) { tab in
                 Button { selection = tab } label: {
                     Text(tab.rawValue.uppercased())
-                        .font(Theme.mono(11, .medium))
+                        .font(Theme.caps(11))
                         .tracking(1.3)
-                        .foregroundStyle(selection == tab ? Theme.text : hovered == tab ? Theme.secondary : Theme.mono)
+                        .foregroundStyle(selection == tab ? Theme.text : hovered == tab ? Theme.secondary : Theme.muted)
                         .padding(.vertical, 8)
                         .contentShape(Rectangle())
                 }
@@ -75,9 +88,6 @@ private struct TabBar: View {
                 .accessibilityAddTraits(selection == tab ? .isSelected : [])
             }
         }
-        .frame(maxWidth: .infinity)
-        // The title bar is 32 points tall, with the window buttons centered in it.
-        .frame(height: 32)
-        .padding(.bottom, 14)
+        .fixedSize()
     }
 }

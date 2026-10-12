@@ -18,7 +18,7 @@ struct MacLayers: View {
                     .disabled(mixer.orbs.isEmpty)
                     .help("Save this mix to your Library  ⌘S")
             }
-            .font(Theme.mono(12, .medium))
+            .font(Theme.label(12, .medium))
             .buttonStyle(.plain)
             .padding(.horizontal, 28)
             .frame(height: 20)
@@ -28,8 +28,8 @@ struct MacLayers: View {
             Text(mixer.currentPlaceIsTweaked
                  ? "Your changes to \(mixer.currentPlaceName) are kept"
                  : "Closer is louder · drag the ground to turn it")
-                .font(Theme.mono(10.5))
-                .foregroundStyle(Theme.mono)
+                .font(Theme.label(10.5))
+                .foregroundStyle(Theme.muted)
                 .padding(.bottom, 14)
 
             SoundSections()

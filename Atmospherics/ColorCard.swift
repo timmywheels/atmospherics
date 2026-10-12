@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A card in the colors of a set of sounds, for the Library's mixes and the World's places: a
+/// A card in the colors of a set of sounds, for the Library's mixes and Teleport's ideas: a
 /// small line at the top, the name at the bottom, and under it either a line of text or the
 /// sounds themselves on one line. Outlined when it's what's playing.
 struct ColorCard: View {
@@ -19,13 +19,13 @@ struct ColorCard: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(top)
-                    .font(Theme.mono(11, .medium))
+                    .font(Theme.label(11, .medium))
                     .foregroundStyle(.white.opacity(0.75))
                     .lineLimit(1)
                 Spacer()
                 if let badge {
                     Text(badge)
-                        .font(Theme.mono(10, .medium))
+                        .font(Theme.label(10, .medium))
                         .padding(.vertical, 4)
                         .padding(.horizontal, 9)
                         .background(Capsule().fill(.black.opacity(0.3)))
@@ -40,7 +40,7 @@ struct ColorCard: View {
                     .padding(.top, 6)
             } else if let subtitle {
                 Text(subtitle)
-                    .font(Theme.mono(10.5))
+                    .font(Theme.label(10.5))
                     .foregroundStyle(.white.opacity(0.62))
                     .lineLimit(1)
                     .padding(.top, 4)

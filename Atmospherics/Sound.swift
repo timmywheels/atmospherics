@@ -220,7 +220,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
 
     /// How saturated the color is, relative to the design's default. Grey and the
     /// mechanical sounds stay muted; blue leans vivid so it isn't mistaken for white.
-    private var chroma: Double {
+    var chroma: Double {
         switch self {
         case .grey: 0.1
         case .fan, .train: 0.4
@@ -242,15 +242,19 @@ enum Theme {
     static let background = Color(hex: 0x0c0e13)
     static let text = Color(hex: 0xeceef2)
     static let secondary = Color(hex: 0xb9bec8)
-    static let mono = Color(hex: 0x9aa0ab)
+    static let muted = Color(hex: 0x9aa0ab)
     static let orbLabel = Color(hex: 0xc9ced8)
     static let hairline = Color.white.opacity(0.14)
 
     /// Stands in for Geist Light.
     static func display(_ size: CGFloat) -> Font { .system(size: size, weight: .light) }
     static func body(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font { .system(size: size, weight: weight) }
-    /// Stands in for Geist Mono.
-    static func mono(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight, design: .monospaced)
+    /// Small labels and captions, in the same clean sans as everything else (a point larger than
+    /// the monospace they replaced, which ran wider). Tracked out when in capitals.
+    static func label(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
+        .system(size: size + 1, weight: weight)
     }
+    /// Words in capitals (the wordmark, tabs, section names) keep the monospace: the brand's
+    /// voice, here and there. Sentences and names are in the sans.
+    static func caps(_ size: CGFloat) -> Font { .system(size: size, weight: .medium, design: .monospaced) }
 }

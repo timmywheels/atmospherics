@@ -105,9 +105,10 @@ struct Preset: Identifiable {
     }
 }
 
-/// Match outside follows the local weather; Escape plays somewhere else's.
+/// Match outside follows the local weather; Escape plays a real place's; Atmosphere plays a
+/// scene by name ("a log cabin in a snowstorm").
 enum Mode: String, Codable, CaseIterable {
-    case match, escape
+    case match, escape, atmosphere
 }
 
 /// What the header and subtitles say about the weather.

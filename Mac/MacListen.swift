@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Listening: the halo and the mix's name, with the places before and after beside it. Swipe
-/// with two fingers or press ← → to travel, click the light for its layers, click the name for
-/// the Library. Along the bottom, what's playing, the sleep timer and play.
+/// Listening: the halo and the scene's name, with the ones before and after beside it. Swipe
+/// with two fingers or press ← → to travel, click the light for its layers or drag it to turn it,
+/// click the name to teleport. Along the bottom, what's playing, the sleep timer and play.
 struct MacListen: View {
     @Environment(Mixer.self) private var mixer
     @Environment(MacNavigation.self) private var navigation
@@ -15,31 +15,33 @@ struct MacListen: View {
     private static let hints = [
         "Swipe with two fingers, or press → to travel",
         "Click the light to see its layers",
+        "Click the name to teleport",
+        "Drag the light to turn it",
     ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Where you are and how warm, as on the phone; click for the World.
+            // Your own weather, as on the phone; click to go back to it.
             HStack {
                 Spacer()
-                Button { navigation.tab = .world } label: {
+                Button { withAnimation(.smooth(duration: 0.35)) { mixer.goHome() } } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "globe")
-                        Text(mixer.headerPlace)
+                        Image(systemName: mixer.outsideSymbol)
+                        Text(mixer.outsideLabel)
                     }
-                    .font(Theme.mono(11, .medium))
+                    .font(Theme.caps(11))
                     .tracking(1.3)
-                    .foregroundStyle(Theme.mono)
+                    .foregroundStyle(Theme.muted)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("World  ⌘4")
-                .accessibilityLabel("World. \(mixer.headerPlace)")
+                .help("The weather outside your window  ⇧⌘H")
+                .accessibilityLabel("Outside. \(mixer.outsideLabel)")
             }
             .frame(height: 18)
 
-            Carousel(showLibrary: Binding(get: { false }, set: { if $0 { navigation.tab = .library } }),
-                     dragX: $dragX, openMixer: { navigation.tab = .layers })
+            Carousel(dragX: $dragX, openMixer: { navigation.tab = .layers }, teleport: { navigation.tab = .teleport },
+                     openLibrary: { navigation.tab = .library })
                 .frame(minHeight: 340, maxHeight: .infinity)
                 .overlay { TravelArrows() }
 
@@ -65,7 +67,7 @@ struct MacListen: View {
         .overlay(alignment: .bottom) {
             if let hint {
                 Text(hint)
-                    .font(Theme.mono(11))
+                    .font(Theme.label(11))
                     .padding(.vertical, 10)
                     .padding(.horizontal, 16)
                     .background(Capsule().fill(.ultraThinMaterial))
@@ -148,10 +150,10 @@ private struct TimerMenu: View {
                 if mixer.timer == .off {
                     Image(systemName: "moon").font(.system(size: 12))
                 } else {
-                    Text(mixer.timer.label).font(Theme.mono(11))
+                    Text(mixer.timer.label).font(Theme.label(11))
                 }
             }
-            .foregroundStyle(Theme.mono)
+            .foregroundStyle(Theme.muted)
             .padding(6)
             .contentShape(Rectangle())
         }

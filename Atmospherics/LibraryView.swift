@@ -54,7 +54,7 @@ struct LibraryView: View {
                                 Text("How we chose these")
                                 Image(systemName: "arrow.up.right").font(.system(size: 10, weight: .semibold))
                             }
-                            .font(Theme.mono(11, .medium))
+                            .font(Theme.label(11, .medium))
                             .foregroundStyle(Theme.secondary)
                             .padding(.vertical, 6)
                             .padding(.horizontal, 4)

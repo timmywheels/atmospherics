@@ -33,12 +33,13 @@ enum Season: String { case spring, summer, autumn, winter }
 enum DayPhase: String { case dawn, day, dusk, night }
 
 extension Conditions {
-    /// The local calendar at the place, from its UTC offset.
+    /// The local calendar at the place, from its UTC offset. An imagined scene can fix its hour
+    /// and month (the minutes still tick, for the sounds that keep time).
     func localTime(at date: Date = Date()) -> (month: Int, weekday: Int, hour: Int, minute: Int) {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: utcOffset) ?? .gmt
         let c = calendar.dateComponents([.month, .weekday, .hour, .minute], from: date)
-        return (c.month ?? 1, c.weekday ?? 1, c.hour ?? 12, c.minute ?? 0)
+        return (forcedMonth ?? c.month ?? 1, c.weekday ?? 1, forcedHour ?? c.hour ?? 12, c.minute ?? 0)
     }
 
     /// The month as the northern hemisphere would feel it, so seasonal rules are written once:
@@ -347,11 +348,15 @@ enum Ecology {
     /// hour in one place keeps changing. The air of a place (surf, rain, the city's hum, a stream)
     /// only breathes a little; events and sounds on a clock keep their own time. The path is
     /// seeded by the place and the sound, so it's the same on every device at the same moment.
-    static func drift(of kind: SoundKind, at place: Place?, now: Date) -> Double {
+    /// `steady` treats any sound as part of the air (an atmosphere's own sounds, like the fire in
+    /// a cabin, shouldn't go quiet for a stretch).
+    static func drift(of kind: SoundKind, at place: Place?, now: Date, steady: Bool = false) -> Double {
         let depth: Double, rests: Bool
         switch kind {
         case .planes, .geese, .tram, .templeBell, .bells, .foghorn, .thunder, .lightning, .whales:
             return 1
+        case _ where steady:
+            (depth, rests) = (0.15, false)
         case .ocean, .rain, .lightRain, .heavyRain, .tinRoof, .tentRain, .rainyStreet, .cityHum, .stream, .waterfall,
              .lake, .lapping, .rocks, .fountain, .wind, .highway, .cabin, .fan, .caveDrips, .drone, .brown, .pink, .white, .green, .grey, .blue, .violet:
             (depth, rests) = (0.15, false)
@@ -462,8 +467,12 @@ enum Ecology {
 enum Soundscape {
     /// What you'd hear at a place right now: its weather, then its own sounds in season.
     /// `playableOnly` swaps any recording the app doesn't have for its nearest stand-in.
-    static func compose(_ c: Conditions, place: Place?, now: Date = Date(),
-                        playableOnly: Bool = true) -> [(SoundKind, Double)] {
+    /// For an atmosphere, `core` sounds are always there whatever the hour or weather (a café's
+    /// room is open at midnight), rain can land on a surface of its own (a tent), and indoors the
+    /// weather is `muffle`d by the walls.
+    static func compose(_ c: Conditions, place: Place?, now: Date = Date(), playableOnly: Bool = true,
+                        core: Set<SoundKind> = [], rainOn surface: SoundKind? = nil,
+                        muffle: Double = 1) -> [(SoundKind, Double)] {
         var levels: [SoundKind: Double] = [:]
         func add(_ kind: SoundKind, _ level: Double) {
             guard level >= 0.05 else { return }
@@ -493,7 +502,8 @@ enum Soundscape {
         let cast = place?.signature ?? []
         let seasonal = (place?.climate ?? Climate.of(latitude: c.latitude)).hasSeasons
         func level(_ kind: SoundKind, _ base: Double) -> Double {
-            base * 1.5 * Ecology.activity(of: kind, at: place, in: c, now: now) * Ecology.weatherFactor(for: kind, in: c)
+            if core.contains(kind) { return base * 1.5 * Ecology.drift(of: kind, at: place, now: now, steady: true) }
+            return base * 1.5 * Ecology.activity(of: kind, at: place, in: c, now: now) * Ecology.weatherFactor(for: kind, in: c)
                 * Ecology.drift(of: kind, at: place, now: now)
         }
         for (kind, base) in cast {
@@ -511,9 +521,22 @@ enum Soundscape {
             if let cars = levels.removeValue(forKey: .traffic) { add(.rainyStreet, cars) }
             let isCity = cast.contains { $0.0 == .cityHum && $0.1 >= 0.3 }
             let isForest = cast.contains { $0.0 == .canopy }
-            if let place, abs(place.latitude) < 23.5, !isCity, !isForest {
+            if let surface {
+                let rain = [SoundKind.rain, .lightRain, .heavyRain].compactMap { levels.removeValue(forKey: $0) }.max() ?? 0.5
+                add(surface, rain)
+            } else if let place, abs(place.latitude) < 23.5, !isCity, !isForest {
                 let rain = [SoundKind.rain, .lightRain].compactMap { levels.removeValue(forKey: $0) }.max() ?? 0.5
                 add(.tinRoof, c.rainIntensity == .light ? 0.5 : rain)
+            }
+        }
+
+        if muffle < 1 {
+            // Walls stop the hiss of rain more than the low roar of wind and thunder.
+            for kind in [SoundKind.rain, .lightRain, .heavyRain] {
+                if let level = levels[kind] { levels[kind] = level * muffle }
+            }
+            for kind in [SoundKind.wind, .thunder, .lightning] {
+                if let level = levels[kind] { levels[kind] = level * muffle.squareRoot() }
             }
         }
 

@@ -56,27 +56,42 @@ private struct PlaybackCommands: View {
         }
         .keyboardShortcut("h", modifiers: [.command, .shift])
         .disabled(mixer.activePreset == nil && mixer.mode == .match)
+        Button("Teleport…") {
+            navigation.tab = .teleport
+            openWindow(id: MacNavigation.mainWindow)
+        }
+        .keyboardShortcut("k")
         Divider()
         Picker("Sleep Timer", selection: Binding(get: { mixer.timer }, set: { mixer.setTimer($0) })) {
             ForEach(Mixer.Timer.allCases, id: \.self) { t in
                 Text(t == .off ? "No Timer" : "Stop After \(t.label)").tag(t)
             }
         }
-        Picker("Weather", selection: Binding(get: { mixer.skyOverride }, set: { mixer.setSky($0) })) {
-            ForEach(Mixer.SkyOverride.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+        if mixer.mode == .atmosphere, mixer.activePreset == nil, let a = mixer.atmosphere {
+            // An atmosphere's own weather and time, from those that suit it.
+            Picker("Weather", selection: Binding(get: { a.sky }, set: { mixer.setAtmosphereSky($0) })) {
+                ForEach(a.setting.info.skies, id: \.self) { Text($0.name).tag($0) }
+            }
+            Picker("Time of Day", selection: Binding(get: { a.time }, set: { mixer.setAtmosphereTime($0) })) {
+                ForEach(a.setting.info.times, id: \.self) { Text($0.name).tag($0) }
+            }
+        } else {
+            Picker("Weather", selection: Binding(get: { mixer.skyOverride }, set: { mixer.setSky($0) })) {
+                ForEach(Mixer.SkyOverride.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+            Picker("Time of Day", selection: Binding(get: { mixer.timeOverride }, set: { mixer.setTime($0) })) {
+                ForEach(Mixer.TimeOverride.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+            Button("Back to Live Weather") { withAnimation(.smooth) { mixer.clearOverrides() } }
+                .disabled(!mixer.isImagining)
         }
-        Picker("Time of Day", selection: Binding(get: { mixer.timeOverride }, set: { mixer.setTime($0) })) {
-            ForEach(Mixer.TimeOverride.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-        }
-        Button("Back to Live Weather") { withAnimation(.smooth) { mixer.clearOverrides() } }
-            .disabled(!mixer.isImagining)
         Divider()
         Button("Save This Mix…") {
             openWindow(id: MacNavigation.mainWindow)
             navigation.saving = true
         }
         .keyboardShortcut("s")
-        Button("Reset \(mixer.currentPlaceName.capitalizedFirst) to Default") {
+        Button(mixer.mode == .atmosphere ? "Reset Scene to Default" : "Reset \(mixer.currentPlaceName.capitalizedFirst) to Default") {
             withAnimation(.smooth) { mixer.resetCurrentPlace() }
         }
         .disabled(!mixer.currentPlaceIsTweaked)

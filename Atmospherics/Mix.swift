@@ -48,7 +48,7 @@ extension SoundKind {
         case .heavyRain, .brown: 0
         case .rain, .thunder, .waterfall, .cabin, .fan, .pink, .green, .betaPulse: -1
         case .ocean, .rocks, .rainyStreet, .cityHum, .grey: -2
-        case .tentRain, .tinRoof, .wind, .stream: -3
+        case .tentRain, .tinRoof, .wind: -3
         case .cafe, .train, .fire, .white, .blue, .lapping: -4
         case .violet, .traffic, .bazaar: -5
         case .highway: -6
@@ -63,6 +63,8 @@ extension SoundKind {
         case .halyards, .templeBell: -7
         case .owls: -7
         case .wolves, .foghorn, .library, .planes: -8
+        // A stream babbles on without pause and carries in the quiet, so it sits well back.
+        case .stream: -8
         // Binaural beats sit under the noise they ride on, but clear enough to hear the beat.
         case .leaves, .buoy, .betaBeats, .gammaBeats: -9
         case .typing, .chimes: -10

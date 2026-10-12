@@ -26,9 +26,6 @@ struct Place: Identifiable, Hashable {
     /// The name as a title: "The Highlands" rather than "the Highlands".
     var title: String { name.prefix(1).uppercased() + name.dropFirst() }
 
-    /// The loudest signature sound, used to color the place on the globe.
-    var accent: SoundKind { signature.max { $0.1 < $1.1 }?.0 ?? .ocean }
-
     static func == (a: Place, b: Place) -> Bool { a.name == b.name }
     func hash(into hasher: inout Hasher) { hasher.combine(name) }
 
