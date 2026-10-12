@@ -7,7 +7,7 @@ Atmospheres for focus and sleep: the scenes you'd ask for by name, alive with re
 - **Atmospheres** are scenes by name: "a log cabin in a snowstorm", "a rainy night in the city". Swipe through them, or **Teleport**: build one as a sentence ("Take me to a tent in a thunderstorm at night") or say it in your own words. When it's really like that somewhere right now, the scene follows that place's live weather ("Snowing in Lofoten right now"). (`Atmospherics/Atmospheres.swift`)
 - **Outside** builds a mix from your own weather: rain follows precipitation, wind follows gusts, and what's around you (a coast, a lake, a city) is heard in season and at its hour.
 - **Library** has mixes for sleep, relaxing and focus, the focus ones built on what research supports (`design/focus/RESEARCH.md`).
-- **Layers** shows what's playing as a landscape: drag a sound closer to hear more of it, past the rim to let it go.
+- **The sculpture**: what's playing is a soft 3D form of light, one body per sound, bigger and higher the louder it is. On the home screen it turns and drifts; in **Layers** the same sounds stand on the field, where you drag one closer to hear more of it or past the rim to let it go. It's drawn by a Metal shader compiled at run time (`Atmospherics/Sculpture.swift`, `SculptureShader.swift`).
 
 Noise colors, focus tones, drone, chimes, fan and lightning are synthesized live; everything that should sound real (rain, surf, wind, thunder, fire, birds, insects, frogs, streams, trains, city streets, cafés, howler monkeys, loons, whales and more) is a public-domain or CC0 field recording, credited in `design/sounds/SOURCES.md`. Live weather comes from 44 real places and your own location.
 

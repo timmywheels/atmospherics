@@ -220,7 +220,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
 
     /// How saturated the color is, relative to the design's default. Grey and the
     /// mechanical sounds stay muted; blue leans vivid so it isn't mistaken for white.
-    private var chroma: Double {
+    var chroma: Double {
         switch self {
         case .grey: 0.1
         case .fan, .train: 0.4

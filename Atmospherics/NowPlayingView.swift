@@ -257,6 +257,8 @@ struct Carousel: View {
     @State private var frozen: (outgoing: Mixer.Page, incoming: Mixer.Page, forward: Bool)?
 
     private let gap: CGFloat = 56
+    /// Neighbouring pages only draw their sculptures while they're sliding into view.
+    private var sliding: Bool { dragX != 0 || settling }
 
     var body: some View {
         GeometryReader { proxy in
@@ -264,15 +266,15 @@ struct Carousel: View {
             let step = w + gap
             ZStack(alignment: .topLeading) {
                 if let f = frozen {
-                    PageView(page: f.outgoing).frame(width: w).offset(x: dragX)
-                    PageView(page: f.incoming).frame(width: w).offset(x: (f.forward ? step : -step) + dragX)
+                    PageView(page: f.outgoing, live: true).frame(width: w).offset(x: dragX)
+                    PageView(page: f.incoming, live: true).frame(width: w).offset(x: (f.forward ? step : -step) + dragX)
                 } else {
                     if let prev = mixer.previous {
-                        PageView(page: mixer.page(for: prev)).frame(width: w).offset(x: -step + dragX)
+                        PageView(page: mixer.page(for: prev), live: sliding).frame(width: w).offset(x: -step + dragX)
                     }
                     currentPage.frame(width: w).offset(x: dragX)
                     if let next = mixer.next {
-                        PageView(page: mixer.page(for: next)).frame(width: w).offset(x: step + dragX)
+                        PageView(page: mixer.page(for: next), live: sliding).frame(width: w).offset(x: step + dragX)
                     }
                 }
             }
@@ -298,7 +300,7 @@ struct Carousel: View {
     /// The live page: the real mix, with the name opening Teleport.
     private var currentPage: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Halo(orbs: mixer.byVolume)
+            SoundForm(orbs: mixer.byVolume)
                 .frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
                 .onTapGesture { openMixer() }
@@ -382,10 +384,11 @@ struct Carousel: View {
 /// A neighbouring place, previewed with its live weather and sounds.
 private struct PageView: View {
     let page: Mixer.Page
+    var live = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Halo(orbs: page.orbs.sorted { $0.volume > $1.volume })
+            SoundForm(orbs: page.orbs.sorted { $0.volume > $1.volume }, live: live)
                 .frame(maxHeight: .infinity)
             PageTitle(lines: page.lines ?? [page.title], chevron: false)
             PageLines(line: page.line)
@@ -475,6 +478,21 @@ struct LayerStrip: View {
             if more > 0 { Text("+\(more)") }
         }
         .fixedSize()
+    }
+}
+
+/// What's playing, as a form: the sculpture of its sounds, turning slowly in a soft bloom of their
+/// colors (the halo behind it).
+struct SoundForm: View {
+    let orbs: [Orb]
+    var live = true
+
+    var body: some View {
+        ZStack {
+            Halo(orbs: orbs)
+                .opacity(0.4)
+            SculptureView(orbs: orbs, style: .home, pitch: 0.5, extent: 0.8, animated: live)
+        }
     }
 }
 
