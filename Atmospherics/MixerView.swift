@@ -8,7 +8,7 @@ struct MixerView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Mixer")
+                Text("Layers")
                     .font(Theme.display(30))
                     .tracking(-0.6)
                 Spacer()

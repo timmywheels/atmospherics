@@ -1,7 +1,7 @@
 # Recorded sound sources
 
 Every recording is public domain or CC0 (no attribution required). Credited here anyway.
-Loops are made with `prepare.py` (60 s from the given start, seam crossfaded, loudness normalised).
+Loops are made with `prepare.py` (60 s from the given start unless noted): each is mastered to -20 LUFS with its natural dynamics (a gentle compressor only tames events well above the recording's norm), then seam crossfaded.
 
 | Sound | Source | Author | License | Start |
 |---|---|---|---|---|

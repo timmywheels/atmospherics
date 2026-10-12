@@ -400,11 +400,6 @@ enum Soundscape {
             }
         }
 
-        // Never quite silent: a soft hush under a very sparse scene.
-        if levels.values.reduce(0, +) < 0.45 {
-            add(.brown, 0.12)
-        }
-
         var result: [(SoundKind, Double)] = []
         for (kind, level) in levels {
             let k = playableOnly ? kind.playable : kind
@@ -414,6 +409,16 @@ enum Soundscape {
             } else {
                 result.append((k, level))
             }
+        }
+
+        // Settle near a calm listening level, partway, so places still differ.
+        result = Mix.balance(result)
+        // Never quite silent: a soft hush beneath a very sparse scene, under it where it can be,
+        // and only ever faint (-46 to -38 LUFS).
+        let loudness = Mix.loudness(result)
+        if loudness < Mix.target - 8 {
+            let hush = max(Mix.target - 22, min(Mix.target - 14, loudness - 6))
+            result.append((.brown, pow(10, (hush - Mix.reference - SoundKind.brown.presenceDB) / 20)))
         }
         return result.sorted { $0.1 > $1.1 }
     }

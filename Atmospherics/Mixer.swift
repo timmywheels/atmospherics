@@ -211,7 +211,8 @@ final class Mixer {
         timeOverride = defaults.string(forKey: "timeOverride").flatMap(TimeOverride.init(rawValue:)) ?? .live
         tweaks = defaults.dictionary(forKey: "placeTweaks") as? [String: [String: Double]] ?? [:]
         if let data = defaults.data(forKey: "savedMixes"), let saved = try? JSONDecoder().decode([SavedMix].self, from: data) {
-            savedMixes = saved
+            // Layers used to be called the mixer.
+            savedMixes = saved.map { var mix = $0; mix.origin = mix.origin.replacingOccurrences(of: "Made in the mixer", with: "Made in Layers"); return mix }
         }
         activePreset = defaults.string(forKey: "activePreset").flatMap { id in
             Preset.all.first { $0.id == id } ?? savedMixes.first { $0.id.uuidString == id }?.preset
@@ -378,11 +379,6 @@ final class Mixer {
     /// even though the sound is still crossfading.
     var byVolume: [Orb] { (visualTarget ?? orbs).sorted { $0.volume > $1.volume } }
 
-    /// "Brown 70  ·  Rain 45  ·  Wind 25"
-    var layersLine: String {
-        byVolume.filter { $0.volume >= 0.05 }.map { "\($0.kind.short) \(Int(($0.volume * 100).rounded()))" }.joined(separator: "  ·  ")
-    }
-
     var unusedSounds: [SoundKind] {
         let used = Set(orbs.map(\.kind))
         return SoundKind.available.filter { !used.contains($0) }
@@ -460,7 +456,7 @@ final class Mixer {
     private var saveOrigin: String {
         let date = Date().formatted(.dateTime.month(.abbreviated).day())
         if let p = activePreset { return title == p.name ? "Copy of \(p.name), \(date)" : "Started from \(p.name), \(date)" }
-        if title == "Your mix" { return "Made in the mixer, \(date)" }
+        if title == "Your mix" { return "Made in Layers, \(date)" }
         if mode == .escape, let e = escape { return "Saved from \(e.place.name)'s \(e.conditions.mixName.lowercased()), \(date)" }
         if let h = home { return "Saved from \(h.mixName.lowercased()) in \(h.place), \(date)" }
         return "Saved \(date)"
@@ -492,6 +488,11 @@ final class Mixer {
         savedMixes.removeAll { $0.id == mix.id }
         persistSaved()
         if activePreset?.savedID == mix.id { setActivePreset(nil) }
+    }
+
+    func moveSavedMixes(from source: IndexSet, to destination: Int) {
+        savedMixes.move(fromOffsets: source, toOffset: destination)
+        persistSaved()
     }
 
     private func persistSaved() {
@@ -871,21 +872,16 @@ final class Mixer {
     struct Page {
         var title: String
         var line: String
-        var layers: String
         var orbs: [Orb]
     }
 
     func page(for dest: Destination) -> Page {
-        func layers(_ o: [Orb]) -> String {
-            o.sorted { $0.volume > $1.volume }.filter { $0.volume >= 0.05 }
-                .map { "\($0.kind.short) \(Int(($0.volume * 100).rounded()))" }.joined(separator: "  ·  ")
-        }
         switch dest {
         case .home:
-            guard let h = home else { return Page(title: "Home", line: "", layers: "", orbs: []) }
+            guard let h = home else { return Page(title: "Home", line: "", orbs: []) }
             let o = Preset.layout(Self.applying(tweaks["home"], to: WeatherMix.orbs(for: h, place: homePlace)))
             return Page(title: h.mixName, line: isImagining ? imaginingLine(at: h.place) : "\(h.sceneDescription.capitalizedFirst) outside",
-                        layers: layers(o), orbs: o)
+                        orbs: o)
         case .place(let p):
             let o: [Orb]
             let line: String
@@ -896,7 +892,7 @@ final class Mixer {
                 o = Preset.layout(p.signature.compactMap { k, v in k.playable.map { ($0, v) } })
                 line = p.country
             }
-            return Page(title: p.title, line: line, layers: layers(o), orbs: o)
+            return Page(title: p.title, line: line, orbs: o)
         }
     }
 
@@ -994,10 +990,8 @@ final class Mixer {
     private func apply() {
         var levels = Dictionary(uniqueKeysWithValues: SoundKind.allCases.map { ($0, 0.0) })
         for orb in orbs { levels[orb.kind] = max(levels[orb.kind]!, orb.volume) }
-        // Many layers at once add up; keep the total under a ceiling so nothing clips.
-        let total = sqrt(levels.values.map { $0 * $0 }.reduce(0, +))
-        let headroom = total > 1.2 ? 1.2 / total : 1
-        for (kind, level) in levels { engine.setLevel(Float(level * headroom), for: kind) }
+        // Each sound at its natural presence, and many layers at once kept under a ceiling.
+        for (kind, gain) in Mix.gains(levels) { engine.setLevel(Float(gain), for: kind) }
 
         let encodable = Dictionary(uniqueKeysWithValues: fields.map { ($0.key.rawValue, $0.value) })
         if let data = try? JSONEncoder().encode(encodable) { defaults.set(data, forKey: "fields") }

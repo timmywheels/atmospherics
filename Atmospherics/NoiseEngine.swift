@@ -80,11 +80,12 @@ final class NoiseEngine {
         masterTarget.deallocate()
     }
 
-    func setLevel(_ level: Float, for kind: SoundKind) {
-        let level = max(0, min(1, level))
-        if kind.isRecorded { samples.setLevel(level, for: kind); return }
+    /// `gain` comes from `Mix.gains`; synthesized sounds are calibrated to the recordings here.
+    func setLevel(_ gain: Float, for kind: SoundKind) {
+        let gain = max(0, min(1, gain))
+        if kind.isRecorded { samples.setLevel(gain, for: kind); return }
         let index = SoundKind.allCases.firstIndex(of: kind)!
-        targets[index] = level
+        targets[index] = gain * Float(kind.calibration)
     }
 
     private lazy var samples = SampleBank(engine: engine)
@@ -94,9 +95,11 @@ final class NoiseEngine {
 
     func play() throws {
         stopGeneration += 1
+        #if os(iOS)   // (the design tools build this file for macOS)
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playback, mode: .default)
         try session.setActive(true)
+        #endif
         if !engine.isRunning { try engine.start() }
         masterTarget.pointee = 1
         samples.setMaster(true)

@@ -16,7 +16,7 @@ struct NowPlayingView: View {
 
     private static let hints = [
         "Swipe left or right to travel",
-        "Tap the light to open the mixer",
+        "Tap the light to see its layers",
         "Swipe up for your library",
         "Swipe down to change the weather",
         "Hold play for a sleep timer",
@@ -68,7 +68,7 @@ struct NowPlayingView: View {
                         }
                         Divider()
                     }
-                    Button("Mixer", systemImage: "circle.dotted") { showMixer = true }
+                    Button("Layers", systemImage: "square.3.layers.3d") { showMixer = true }
                     Button("Library", systemImage: "books.vertical") { showLibrary = true }
                     Button("World", systemImage: "globe") { showGlobe = true }
                     Menu("Sleep timer · \(mixer.timer == .off ? "off" : mixer.timer.label)", systemImage: "moon") {
@@ -178,7 +178,7 @@ struct NowPlayingView: View {
         )
         .accessibilityAction(named: "Library") { showLibrary = true }
         .accessibilityAction(named: "Change the weather") { mixer.cycleSky() }
-        .accessibilityAction(named: "Mixer") { showMixer = true }
+        .accessibilityAction(named: "Layers") { showMixer = true }
         .navigationDestination(isPresented: $showMixer) { MixerView() }
         .overlay(alignment: .bottom) {
             if let hint {
@@ -197,7 +197,7 @@ struct NowPlayingView: View {
         .saveMixPrompt(isPresented: $saving)
         .task { await runHints() }
         .sheet(isPresented: $showLibrary) {
-            LibraryView()
+            LibraryView(current: mixer.activePreset)
         }
         .fullScreenCover(isPresented: $showGlobe) {
             GlobeView()
@@ -261,7 +261,7 @@ private struct Carousel: View {
                 .contentShape(Rectangle())
                 .onTapGesture { openMixer() }
                 .accessibilityAddTraits(.isButton)
-                .accessibilityLabel("Open the mixer")
+                .accessibilityLabel("Open layers")
             Button { showLibrary = true } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     PageTitle(text: mixer.title)
@@ -277,7 +277,7 @@ private struct Carousel: View {
                 Button("Library", systemImage: "books.vertical") { showLibrary = true }
             }
             .saveMixPrompt(isPresented: $saving)
-            PageLines(line: mixer.weather.line, layers: mixer.layersLine)
+            PageLines(line: mixer.weather.line, orbs: mixer.byVolume)
         }
     }
 
@@ -307,8 +307,7 @@ private struct Carousel: View {
                 }
                 settling = true
                 // Snapshot both pages, then switch the sound right away.
-                let outgoing = Mixer.Page(title: mixer.title, line: mixer.weather.line,
-                                          layers: mixer.layersLine, orbs: mixer.byVolume)
+                let outgoing = Mixer.Page(title: mixer.title, line: mixer.weather.line, orbs: mixer.byVolume)
                 if let dest = forward ? mixer.next : mixer.previous {
                     frozen = (outgoing, mixer.page(for: dest), forward)
                 }
@@ -344,7 +343,7 @@ private struct PageView: View {
                     .foregroundStyle(Theme.mono)
                     .hidden()
             }
-            PageLines(line: page.line, layers: page.layers)
+            PageLines(line: page.line, orbs: page.orbs)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
@@ -364,7 +363,7 @@ private struct PageTitle: View {
 
 private struct PageLines: View {
     let line: String
-    let layers: String
+    let orbs: [Orb]
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(line)
@@ -373,14 +372,49 @@ private struct PageLines: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .padding(.top, 10)
-            // Always two lines tall, so pages line up whatever their sounds.
-            Text(layers)
-                .font(Theme.mono(11))
-                .lineSpacing(4)
-                .foregroundStyle(Theme.mono)
-                .lineLimit(2, reservesSpace: true)
+            LayerStrip(orbs: orbs)
                 .padding(.top, 14)
         }
+    }
+}
+
+/// The sounds playing, loudest first, each with a dot in its light's color. Always one line:
+/// as many as fit, then "+2" for the rest, so it never wraps and pages line up.
+private struct LayerStrip: View {
+    let orbs: [Orb]
+
+    private var kinds: [SoundKind] {
+        var seen = Set<SoundKind>()
+        return orbs.sorted { $0.volume > $1.volume }
+            .filter { $0.volume >= 0.05 && seen.insert($0.kind).inserted }
+            .map(\.kind)
+    }
+
+    var body: some View {
+        let kinds = kinds
+        ViewThatFits(in: .horizontal) {
+            ForEach(Array((1...max(1, kinds.count)).reversed()), id: \.self) { n in
+                row(Array(kinds.prefix(n)), more: kinds.count - n)
+            }
+        }
+        .font(Theme.mono(11))
+        .foregroundStyle(Theme.mono)
+        .frame(maxWidth: .infinity, minHeight: 16, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(kinds.map(\.name).joined(separator: ", "))
+    }
+
+    private func row(_ shown: [SoundKind], more: Int) -> some View {
+        HStack(spacing: 14) {
+            ForEach(shown, id: \.self) { kind in
+                HStack(spacing: 6) {
+                    Circle().fill(kind.orb).frame(width: 5, height: 5)
+                    Text(kind.short)
+                }
+            }
+            if more > 0 { Text("+\(more)") }
+        }
+        .fixedSize()
     }
 }
 
@@ -525,7 +559,7 @@ private struct Waveform: View {
             let t = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 10_000)
             Canvas { ctx, size in
                 let mid = size.height / 2
-                let amplitude = mid * 0.45 * min(1, level * 4)
+                let amplitude = mid * 0.45 * min(1, level * 7)
                 var path = Path()
                 let samples = 90
                 for i in 0...samples {

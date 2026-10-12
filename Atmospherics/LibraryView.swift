@@ -1,19 +1,26 @@
 import SwiftUI
 
 /// Saved mixes, filterable by Sleep / Focus / Relax. Tapping one loads it onto the field.
+/// Your own mixes come first: swipe left to delete, right to rename, hold and drag to reorder.
+/// It opens on the mix that's playing, under its own filter.
 struct LibraryView: View {
     @Environment(Mixer.self) private var mixer
     @Environment(\.dismiss) private var dismiss
     @State private var filter: Preset.Tag?
-    @State private var showingYours = false
+    @State private var showingYours: Bool
     @State private var renaming: SavedMix?
     @State private var newName = ""
+    @State private var deletes = 0
+    private let current: Preset?
 
-    private var presets: [Preset] {
-        let yours = mixer.savedMixes.map(\.preset)
-        if showingYours { return yours }
-        return (filter == nil ? yours : []) + Preset.all.filter { filter == nil || $0.tag == filter }
+    init(current: Preset? = nil) {
+        self.current = current
+        _filter = State(initialValue: current?.tag)
+        _showingYours = State(initialValue: current?.isSaved == true)
     }
+
+    private var yours: [SavedMix] { filter == nil ? mixer.savedMixes : [] }
+    private var builtIn: [Preset] { showingYours ? [] : Preset.all.filter { filter == nil || $0.tag == filter } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -34,30 +41,29 @@ struct LibraryView: View {
             .padding(.top, 18)
             .padding(.bottom, 12)
 
-            ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(presets) { preset in
-                        Button {
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                            mixer.load(preset)
-                            dismiss()
-                        } label: {
-                            row(preset)
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            if let saved = mixer.savedMixes.first(where: { $0.id == preset.savedID }) {
-                                Button("Rename", systemImage: "pencil") { newName = saved.name; renaming = saved }
-                                Button("Delete", systemImage: "trash", role: .destructive) {
-                                    withAnimation { mixer.delete(saved) }
-                                    if mixer.savedMixes.isEmpty { showingYours = false }
-                                }
+            ScrollViewReader { proxy in
+                List {
+                    ForEach(yours) { mix in
+                        item(mix.preset)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button("Delete", systemImage: "trash", role: .destructive) { delete(mix) }
+                                    .tint(.red)
                             }
-                        }
+                            .swipeActions(edge: .leading) {
+                                Button("Rename", systemImage: "pencil") { newName = mix.name; renaming = mix }
+                                    .tint(Color(white: 0.35))
+                            }
                     }
+                    .onMove { mixer.moveSavedMixes(from: $0, to: $1) }
+                    ForEach(builtIn) { item($0) }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .scrollIndicators(.hidden)
+                .onAppear {
+                    if let id = current?.id { proxy.scrollTo(id, anchor: .center) }
                 }
             }
-            .scrollIndicators(.hidden)
         }
         .padding(.horizontal, 24)
         .padding(.top, 28)
@@ -72,6 +78,30 @@ struct LibraryView: View {
             Button("Save") { if let r = renaming { mixer.rename(r, to: newName) } }
         }
         .sensoryFeedback(.selection, trigger: filter)
+        .sensoryFeedback(.impact(weight: .medium), trigger: deletes)
+        .sensoryFeedback(.selection, trigger: mixer.savedMixes.map(\.id))
+    }
+
+    /// One row of the list: tap to play it.
+    private func item(_ preset: Preset) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            mixer.load(preset)
+            dismiss()
+        } label: {
+            row(preset)
+        }
+        .buttonStyle(.plain)
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .id(preset.id)
+    }
+
+    private func delete(_ mix: SavedMix) {
+        deletes += 1
+        withAnimation { mixer.delete(mix) }
+        if mixer.savedMixes.isEmpty { showingYours = false }
     }
 
     private func chip(_ label: String, selected: Bool, action: @escaping () -> Void) -> some View {
@@ -99,9 +129,15 @@ struct LibraryView: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
-            Text(preset.length)
-                .font(Theme.mono(11))
-                .foregroundStyle(Theme.mono)
+            if preset.id == mixer.activePreset?.id {
+                Text(mixer.isPlaying ? "Playing" : "Current")
+                    .font(Theme.mono(11, .medium))
+                    .foregroundStyle(Theme.text)
+            } else {
+                Text(preset.length)
+                    .font(Theme.mono(11))
+                    .foregroundStyle(Theme.mono)
+            }
         }
         .padding(.vertical, 14)
         .padding(.horizontal, 4)

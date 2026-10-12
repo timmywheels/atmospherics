@@ -1,17 +1,18 @@
 // Prints what each place sounds like: right now (live weather), and across seasons and hours.
 // Build and run from the repo root:
-//   swiftc -parse-as-library -o /tmp/inspect Atmospherics/Sound.swift Atmospherics/Places.swift \
+//   swiftc -parse-as-library -o /tmp/inspect Atmospherics/Sound.swift Atmospherics/Mix.swift Atmospherics/Places.swift \
 //     Atmospherics/Weather.swift Atmospherics/Ecology.swift Shared/Color+OKLCH.swift design/soundscapes/inspect.swift
+// Each sound shows its estimated loudness in LUFS; the scene's total is in brackets.
 //   /tmp/inspect [live|seasons]
 import Foundation
 
 @main
 struct Inspect {
     static func line(_ name: String, _ c: Conditions, _ place: Place?, _ now: Date) -> String {
-        let mix = Soundscape.compose(c, place: place, now: now, playableOnly: false)
-            .map { "\($0.0.short) \(Int(($0.1 * 100).rounded()))" }.joined(separator: " · ")
+        let scene = Soundscape.compose(c, place: place, now: now, playableOnly: false)
+        let mix = scene.map { "\($0.0.short) \(Int(Mix.loudness($0.0, $0.1).rounded()))" }.joined(separator: " · ")
         let pad = name.padding(toLength: 14, withPad: " ", startingAt: 0)
-        return "\(pad) \(c.mixName(at: now).padding(toLength: 18, withPad: " ", startingAt: 0)) \(mix)"
+        return "\(pad) \(c.mixName(at: now).padding(toLength: 18, withPad: " ", startingAt: 0)) [\(Int(Mix.loudness(scene).rounded()))] \(mix)"
     }
 
     static func main() async {
