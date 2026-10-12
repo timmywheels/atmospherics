@@ -20,6 +20,24 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// This sound if the app has it, otherwise the closest synthesized one (or nothing).
+    var playable: SoundKind? {
+        if !isRecorded || SoundKind.available.contains(self) { return self }
+        switch self {
+        case .jungleBirds, .parrots: return .birds
+        case .treeFrogs: return .frogs
+        case .canopy: return .cicadas
+        case .tentRain, .tinRoof: return .rain
+        case .waterfall, .caveDrips: return .stream
+        case .lake, .whales: return .ocean
+        case .leaves: return .wind
+        case .cafe: return .cityHum
+        case .bells: return .chimes
+        case .cabin: return .fan
+        default: return nil   // howlers, owls, loons, wolves, library, typing, clock
+        }
+    }
+
     /// Recorded sounds whose file is actually in the app. Ones without a file are hidden.
     static let available: [SoundKind] = allCases.filter {
         !$0.isRecorded || Bundle.main.url(forResource: $0.rawValue, withExtension: "m4a") != nil

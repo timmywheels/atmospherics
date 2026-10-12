@@ -143,17 +143,68 @@ enum WeatherMix {
         if c.isDay && !c.isRaining && c.temperatureC >= 25 {
             mix.append((.cicadas, 0.25))
         }
-        for (kind, level) in place?.signature ?? [] {
+        for (kind, signatureLevel) in place?.signature ?? [] {
             if kind == .fire && c.temperatureC >= 12 { continue }
+            let level = signatureLevel * weatherFactor(for: kind, in: c)
+            if level < 0.06 { continue }
             if let i = mix.firstIndex(where: { $0.0 == kind }) {
                 mix[i].1 = max(mix[i].1, level)
             } else {
                 mix.append((kind, level))
             }
         }
-        // Creatures keep their hours: birds and cicadas by day, crickets and frogs by night.
-        let offHours: Set<SoundKind> = c.isDay ? [.crickets, .frogs] : [.birds, .cicadas]
-        return mix.filter { !offHours.contains($0.0) }
+        // In the tropics, rain lands on tin roofs.
+        if let place, abs(place.latitude) < 23.5, let i = mix.firstIndex(where: { $0.0 == .rain }) {
+            mix[i].0 = .tinRoof
+        }
+
+        // Creatures keep their hours.
+        let offHours: Set<SoundKind> = c.isDay
+            ? [.crickets, .frogs, .treeFrogs, .owls, .wolves]
+            : [.birds, .cicadas, .jungleBirds, .parrots, .howlers, .cafe, .bells]
+        mix = mix.filter { !offHours.contains($0.0) }
+
+        // A recording that isn't in the app falls back to the nearest synthesized sound.
+        var result: [(SoundKind, Double)] = []
+        for (kind, level) in mix {
+            guard let k = kind.playable else { continue }
+            if let i = result.firstIndex(where: { $0.0 == k }) {
+                result[i].1 = max(result[i].1, level)
+            } else {
+                result.append((k, level))
+            }
+        }
+        return result
+    }
+
+    /// How the weather right now changes a place's own sounds.
+    static func weatherFactor(for kind: SoundKind, in c: Conditions) -> Double {
+        let heavy = c.isThunder || c.precipitationMM > 2.5
+        let freezing = c.isSnow || c.temperatureC < 3
+        switch kind {
+        // Birds and insects shelter from rain, and stop altogether in a downpour or the cold.
+        case .birds, .jungleBirds, .parrots, .cicadas, .crickets, .howlers:
+            if freezing || heavy { return 0 }
+            return c.isRaining ? 0.3 : 1
+        // Frogs love rain; cold silences them.
+        case .frogs, .treeFrogs:
+            if freezing { return 0 }
+            return c.isRaining ? 1.4 : 1
+        // Wind roughens the sea and stirs the trees.
+        case .ocean, .lake:
+            return c.windKMH > 30 ? 1.3 : 1
+        case .leaves:
+            return c.windKMH > 30 ? 1.5 : c.windKMH < 8 ? 0.6 : 1
+        // Snow muffles a city; rain empties café terraces.
+        case .cityHum, .train:
+            return c.isSnow ? 0.6 : 1
+        case .cafe:
+            return heavy ? 0.5 : 1
+        case .whales:
+            return heavy ? 0.6 : 1
+        default:
+            return 1
+        }
     }
 
     /// The place whose weather is most unlike home's.
