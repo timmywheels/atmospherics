@@ -254,4 +254,6 @@ enum Theme {
     static func label(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
         .system(size: size + 1, weight: weight)
     }
+    /// The wordmark alone keeps the monospace: it's the brand, not a label.
+    static func brand(_ size: CGFloat) -> Font { .system(size: size, weight: .medium, design: .monospaced) }
 }

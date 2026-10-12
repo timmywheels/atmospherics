@@ -60,7 +60,19 @@ private struct TabBar: View {
     @State private var hovered: MacNavigation.Tab?
 
     var body: some View {
-        HStack(spacing: 22) {
+        // Centered when there's room; in a narrow window, pushed right to clear the window buttons.
+        HStack(spacing: 0) {
+            Spacer(minLength: 84)
+            tabs
+            Spacer(minLength: 12)
+        }
+        // The title bar is 32 points tall, with the window buttons centered in it.
+        .frame(height: 32)
+        .padding(.bottom, 14)
+    }
+
+    private var tabs: some View {
+        HStack(spacing: 20) {
             ForEach(MacNavigation.Tab.allCases) { tab in
                 Button { selection = tab } label: {
                     Text(tab.rawValue.uppercased())
@@ -76,9 +88,6 @@ private struct TabBar: View {
                 .accessibilityAddTraits(selection == tab ? .isSelected : [])
             }
         }
-        .frame(maxWidth: .infinity)
-        // The title bar is 32 points tall, with the window buttons centered in it.
-        .frame(height: 32)
-        .padding(.bottom, 14)
+        .fixedSize()
     }
 }
