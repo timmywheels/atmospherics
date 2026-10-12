@@ -23,6 +23,18 @@ open Atmospherics.xcodeproj
 
 Weather comes from [Open-Meteo](https://open-meteo.com) (free, no API key).
 
+## Releasing
+
+Bump `CURRENT_PROJECT_VERSION` in `project.yml` for every upload (App Store Connect rejects a repeated build number), then:
+
+```bash
+xcodegen generate
+xcodebuild -project Atmospherics.xcodeproj -scheme Atmospherics -configuration Release -destination 'generic/platform=iOS' -archivePath build/Atmospherics.xcarchive -allowProvisioningUpdates archive
+xcodebuild -exportArchive -archivePath build/Atmospherics.xcarchive -exportOptionsPlist ExportOptions.plist -exportPath build/export -allowProvisioningUpdates
+```
+
+App Store screenshots: `design/screenshots/make-upload.sh`.
+
 ## Layout
 
 - `Atmospherics/` app source
