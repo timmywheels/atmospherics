@@ -45,7 +45,7 @@ struct Preset: Identifiable {
             let (kind, volume) = entry
             let r = (1 - volume) * 0.5
             let angle = Double(j) * 2.4 + 0.6
-            return Orb(kind: kind, x: 0.5 + cos(angle) * r, y: 0.5 + sin(angle) * r)
+            return Orb(id: kind.stableID, kind: kind, x: 0.5 + cos(angle) * r, y: 0.5 + sin(angle) * r)
         }
     }
 }
@@ -61,4 +61,13 @@ struct WeatherSummary {
     let temp: String
     let line: String
     let head: String
+}
+
+extension SoundKind {
+    /// The same ID for a sound everywhere it's laid out, so its light keeps its animation
+    /// when it moves between the carousel's pages and the live field.
+    var stableID: UUID {
+        let i = SoundKind.allCases.firstIndex(of: self) ?? 0
+        return UUID(uuidString: String(format: "A7505000-0000-0000-0000-%012d", i))!
+    }
 }

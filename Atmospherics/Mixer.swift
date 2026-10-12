@@ -67,6 +67,7 @@ final class Mixer {
 
     /// Set while moving between places, for a quicker crossfade than weather drift.
     @ObservationIgnored private var traveling = false
+    private(set) var visualTarget: [Orb]?
 
     /// Bumps on every random jump, so views can animate and play a haptic.
     private(set) var shuffleCount = 0
@@ -264,7 +265,9 @@ final class Mixer {
     }
 
     /// Orbs loudest first.
-    var byVolume: [Orb] { orbs.sorted { $0.volume > $1.volume } }
+    /// What the halo shows. While traveling it shows the destination right away (it's what slid in),
+    /// even though the sound is still crossfading.
+    var byVolume: [Orb] { (visualTarget ?? orbs).sorted { $0.volume > $1.volume } }
 
     /// "Brown 70  ·  Rain 45  ·  Wind 25"
     var layersLine: String {
@@ -295,6 +298,7 @@ final class Mixer {
     /// Moves an orb, keeping it inside the circle.
     func move(_ id: Orb.ID, toX x: Double, y: Double) {
         transition?.cancel()
+        visualTarget = nil
         var x = x, y = y
         let d = hypot(x - 0.5, y - 0.5)
         if d > 0.5 {
@@ -384,6 +388,7 @@ final class Mixer {
         if let options = try? await weatherService.conditions(for: places) {
             placeConditions = Dictionary(zip(places.map(\.name), options), uniquingKeysWith: { a, _ in a })
             chooseEscape()
+            if upcoming == nil { refreshUpcoming() }
         } else {
             // Don't wait 20 minutes for the next try if places didn't load.
             lastWeatherFetch = nil
@@ -484,6 +489,87 @@ final class Mixer {
     /// Where "home" is, for the "Back to …" line.
     var homeName: String { home?.place ?? "home" }
 
+    // MARK: Carousel
+
+    enum Destination: Equatable {
+        case home
+        case place(Place)
+    }
+
+    /// Where the field is now.
+    var here: Destination {
+        if mode == .escape, let p = escape?.place { return .place(p) }
+        return .home
+    }
+
+    /// Picked ahead of time so the carousel can show it peeking in before you arrive.
+    private(set) var upcoming: Place?
+    private(set) var upcomingBack: Place?
+    private(set) var backStack: [Destination] = []
+
+    var next: Destination? { (upcoming ?? pickRandom()).map { .place($0) } }
+    var previous: Destination? { backStack.last ?? upcomingBack.map { .place($0) } }
+
+    private func pickRandom(excluding: [Place] = []) -> Place? {
+        let current: Place? = { if case .place(let p) = here { return p }; return nil }()
+        return allPlaces.filter { p in
+            p != current && !excluding.contains(p) && placeConditions[p.name] != nil && !isNearHome(p)
+        }.randomElement()
+    }
+
+    private func refreshUpcoming() {
+        upcoming = pickRandom()
+        upcomingBack = pickRandom(excluding: upcoming.map { [$0] } ?? [])
+    }
+
+    /// Swipe left (forward) to a new place, or right (back) through where you've been.
+    func travel(forward: Bool) {
+        guard let dest = forward ? next : previous else { return }
+        if forward {
+            backStack.append(here)
+        } else if !backStack.isEmpty {
+            backStack.removeLast()
+        }
+        shuffleCount += 1
+        switch dest {
+        case .home: goHome()
+        case .place(let p): select(p)
+        }
+        refreshUpcoming()
+    }
+
+    /// How a destination would look, for the carousel's neighbouring pages.
+    struct Page {
+        var title: String
+        var line: String
+        var layers: String
+        var orbs: [Orb]
+    }
+
+    func page(for dest: Destination) -> Page {
+        func layers(_ o: [Orb]) -> String {
+            o.sorted { $0.volume > $1.volume }.filter { $0.volume >= 0.05 }
+                .map { "\($0.kind.short) \(Int(($0.volume * 100).rounded()))" }.joined(separator: "  ·  ")
+        }
+        switch dest {
+        case .home:
+            guard let h = home else { return Page(title: "Home", line: "", layers: "", orbs: []) }
+            let o = Preset.layout(WeatherMix.orbs(for: h))
+            return Page(title: h.mixName, line: "Following \(h.subject) outside", layers: layers(o), orbs: o)
+        case .place(let p):
+            let o: [Orb]
+            let line: String
+            if let c = placeConditions[p.name] {
+                o = Preset.layout(WeatherMix.orbs(for: c, place: p))
+                line = "\(c.mixName) in \(p.name) right now"
+            } else {
+                o = Preset.layout(p.signature.compactMap { k, v in k.playable.map { ($0, v) } })
+                line = p.country
+            }
+            return Page(title: p.title, line: line, layers: layers(o), orbs: o)
+        }
+    }
+
     /// Jumps to a random place other than the current one.
     func shuffle() {
         let others = allPlaces.filter { $0 != escape?.place && placeConditions[$0.name] != nil && !isNearHome($0) }
@@ -547,7 +633,9 @@ final class Mixer {
         }
 
         let steps = max(1, Int(duration * 30))
+        visualTarget = duration < 6 ? target : nil
         transition = Task { @MainActor [weak self] in
+            defer { if !Task.isCancelled { self?.visualTarget = nil } }
             for step in 1...steps {
                 guard let self, !Task.isCancelled else { return }
                 let t = Double(step) / Double(steps)

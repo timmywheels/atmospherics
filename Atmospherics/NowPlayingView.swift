@@ -5,11 +5,8 @@ struct NowPlayingView: View {
     @Environment(Mixer.self) private var mixer
     @State private var showLibrary = false
     @State private var showGlobe = false
-    @State private var swipe: CGFloat = 0
-    @State private var pastThreshold = false
+    @State private var dragX: CGFloat = 0
     @AppStorage("hasSwiped") private var hasSwiped = false
-
-    private let swipeThreshold: CGFloat = 70
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -31,53 +28,8 @@ struct NowPlayingView: View {
             .tracking(1.3)
             .foregroundStyle(Theme.mono)
 
-            Halo(orbs: mixer.byVolume)
-                .frame(minHeight: 300, maxHeight: .infinity)
-                // Leans with the finger (with resistance) and softens, rather than flying away.
-                .offset(x: swipe)
-                .scaleEffect(1 - min(abs(swipe), 60) / 600)
-                .blur(radius: min(abs(swipe), 60) / 12)
-                .contentShape(Rectangle())
-                .gesture(travelSwipe)
-                .overlay(alignment: .bottom) {
-                    if !hasSwiped {
-                        Text("← swipe to travel →")
-                            .font(Theme.mono(10))
-                            .foregroundStyle(Theme.mono.opacity(0.7))
-                            .transition(.opacity)
-                    }
-                }
-                .accessibilityAction(named: "Travel somewhere random") { mixer.shuffle() }
-
-            Button { showLibrary = true } label: {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(mixer.title)
-                        .font(Theme.display(44))
-                        .tracking(-1.3)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Theme.mono)
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint("Opens the library")
-
-            Text(mixer.weather.line)
-                .font(Theme.body(15))
-                .foregroundStyle(Theme.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .padding(.top, 10)
-
-            // Always two lines tall, so places with more or fewer sounds don't shift the layout.
-            Text(mixer.layersLine)
-                .font(Theme.mono(11))
-                .lineSpacing(4)
-                .foregroundStyle(Theme.mono)
-                .lineLimit(2, reservesSpace: true)
-                .padding(.top, 14)
+            Carousel(showLibrary: $showLibrary, dragX: $dragX, hasSwiped: $hasSwiped)
+                .frame(minHeight: 420, maxHeight: .infinity)
 
             // Away: a quiet way home. At home but edited: a way back to following the weather.
             // A fixed-height slot: the line fades in and out without moving anything.
@@ -147,35 +99,171 @@ struct NowPlayingView: View {
         .fullScreenCover(isPresented: $showGlobe) {
             GlobeView()
         }
-        // A soft tick when the swipe is far enough to count, a firmer one when it lands.
-        .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.6), trigger: pastThreshold) { _, now in now }
         .sensoryFeedback(.impact(weight: .medium), trigger: mixer.shuffleCount)
     }
 
-    /// Swipe the halo sideways to jump to a random place.
-    private var travelSwipe: some Gesture {
-        DragGesture(minimumDistance: 12)
+}
+
+enum Route: Hashable { case mixer }
+
+/// The halo, title, weather and layers as a page, with the previous and next places beside it.
+/// Drag follows the finger 1:1; let go past a quarter of the width (or flick) to land on the neighbour.
+private struct Carousel: View {
+    @Environment(Mixer.self) private var mixer
+    @Binding var showLibrary: Bool
+    @Binding var dragX: CGFloat
+    @Binding var hasSwiped: Bool
+    @State private var pastThreshold = false
+    @State private var settling = false
+
+    private let gap: CGFloat = 56
+
+    var body: some View {
+        GeometryReader { proxy in
+            let w = proxy.size.width
+            let step = w + gap
+            ZStack(alignment: .topLeading) {
+                if let prev = mixer.previous {
+                    PageView(page: mixer.page(for: prev)).frame(width: w).offset(x: -step + dragX)
+                }
+                currentPage.frame(width: w).offset(x: dragX)
+                if let next = mixer.next {
+                    PageView(page: mixer.page(for: next)).frame(width: w).offset(x: step + dragX)
+                }
+            }
+            .frame(width: w, height: proxy.size.height, alignment: .topLeading)
+            .contentShape(Rectangle())
+            .gesture(drag(width: w, step: step))
+            .overlay(alignment: .center) {
+                if !hasSwiped {
+                    Text("← swipe to travel →")
+                        .font(Theme.mono(10))
+                        .foregroundStyle(Theme.mono.opacity(0.7))
+                        .offset(y: proxy.size.height * 0.18)
+                        .allowsHitTesting(false)
+                }
+            }
+        }
+        .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.6), trigger: pastThreshold) { _, now in now }
+        .accessibilityAction(named: "Travel somewhere new") { mixer.travel(forward: true) }
+        .accessibilityAction(named: "Go back") { mixer.travel(forward: false) }
+    }
+
+    /// The live page: the real mix, with the title opening the Library.
+    private var currentPage: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Halo(orbs: mixer.byVolume)
+                .frame(maxHeight: .infinity)
+            Button { showLibrary = true } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    PageTitle(text: mixer.title)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Theme.mono)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens the library")
+            PageLines(line: mixer.weather.line, layers: mixer.layersLine)
+        }
+    }
+
+    private func drag(width: CGFloat, step: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 10)
             .onChanged { g in
-                guard abs(g.translation.width) > abs(g.translation.height) else { return }
-                // Rubber-band: follows the finger at first, then resists.
-                let x = g.translation.width
-                swipe = 60 * tanh(x / 160)
-                pastThreshold = abs(x) > swipeThreshold
+                guard !settling, abs(g.translation.width) > abs(g.translation.height) else { return }
+                var x = g.translation.width
+                // Resist past an edge with nothing beyond it.
+                if (x < 0 && mixer.next == nil) || (x > 0 && mixer.previous == nil) { x = 40 * tanh(x / 120) }
+                dragX = x
+                pastThreshold = abs(x) > width * 0.25
             }
             .onEnded { g in
-                let travel = abs(g.translation.width) > swipeThreshold && abs(g.translation.width) > abs(g.translation.height)
-                if travel {
-                    mixer.shuffle()
+                guard !settling else { return }
+                let projected = g.predictedEndTranslation.width
+                let forward = dragX < 0
+                // Travel only if the finger ends up past a quarter of the way, or flicks onward;
+                // pulling back toward the start cancels, it never sends you the other way.
+                let sameWay = dragX != 0 && (projected < 0) == forward
+                let commit = sameWay && (abs(dragX) > width * 0.25 || abs(projected) > width * 0.6)
+                    && (forward ? mixer.next != nil : mixer.previous != nil)
+                pastThreshold = false
+                guard commit else {
+                    withAnimation(.spring(duration: 0.4, bounce: 0.2)) { dragX = 0 }
+                    return
+                }
+                settling = true
+                withAnimation(.spring(duration: 0.38, bounce: 0.05)) {
+                    dragX = forward ? -step : step
+                } completion: {
+                    // The neighbour is now centred: make it the live page without any visible jump.
+                    var t = Transaction()
+                    t.disablesAnimations = true
+                    withTransaction(t) {
+                        mixer.travel(forward: forward)
+                        dragX = 0
+                    }
+                    settling = false
                     withAnimation { hasSwiped = true }
                 }
-                // Settle back gently; the colors melt into the new place as the sound crossfades.
-                withAnimation(.smooth(duration: 0.9)) { swipe = 0 }
-                pastThreshold = false
             }
     }
 }
 
-enum Route: Hashable { case mixer }
+/// A neighbouring place, previewed with its live weather and sounds.
+private struct PageView: View {
+    let page: Mixer.Page
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Halo(orbs: page.orbs.sorted { $0.volume > $1.volume })
+                .frame(maxHeight: .infinity)
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                PageTitle(text: page.title)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Theme.mono)
+                    .hidden()
+            }
+            PageLines(line: page.line, layers: page.layers)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct PageTitle: View {
+    let text: String
+    var body: some View {
+        Text(text)
+            .font(Theme.display(44))
+            .tracking(-1.3)
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+    }
+}
+
+private struct PageLines: View {
+    let line: String
+    let layers: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(line)
+                .font(Theme.body(15))
+                .foregroundStyle(Theme.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .padding(.top, 10)
+            // Always two lines tall, so pages line up whatever their sounds.
+            Text(layers)
+                .font(Theme.mono(11))
+                .lineSpacing(4)
+                .foregroundStyle(Theme.mono)
+                .lineLimit(2, reservesSpace: true)
+                .padding(.top, 14)
+        }
+    }
+}
 
 /// Soft blurred lights, one per sound. Louder sounds are bigger and sit nearer the center.
 /// Each light wanders slowly on its own path, and the whole halo drifts, so it feels alive.
