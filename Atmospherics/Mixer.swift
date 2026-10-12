@@ -226,10 +226,9 @@ final class Mixer {
     @ObservationIgnored private var resumeAfterInterruption = false
 
     private func setUpSystemAudio() {
-        let commands = MPRemoteCommandCenter.shared()
-        commands.playCommand.addTarget { [weak self] _ in self?.play(); return .success }
-        commands.pauseCommand.addTarget { [weak self] _ in self?.stop(); return .success }
-        commands.togglePlayPauseCommand.addTarget { [weak self] _ in self?.togglePlayback(); return .success }
+        // No system Now Playing panel: the Live Activity is the lock-screen control.
+        // (Registering remote commands or Now Playing info makes iOS show its own panel too.)
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
 
         let center = NotificationCenter.default
         center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
@@ -293,6 +292,12 @@ final class Mixer {
         }
     }
 
+    /// Ends any Live Activity left from an earlier version.
+    private func endAllActivities() {
+        guard !Activity<SoundscapeActivity>.activities.isEmpty else { return }
+        Task { for a in Activity<SoundscapeActivity>.activities { await a.end(nil, dismissalPolicy: .immediate) } }
+    }
+
     /// Ends the Live Activity a little after pausing, so a quick pause/play doesn't flicker it.
     private func endActivitySoon() {
         let current = activity
@@ -306,17 +311,6 @@ final class Mixer {
 
     private func updateNowPlaying() {
         publishToWidgets()
-        var info: [String: Any] = [
-            MPMediaItemPropertyTitle: title,
-            MPMediaItemPropertyArtist: "Atmospherics",
-            MPNowPlayingInfoPropertyIsLiveStream: true,
-            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0,
-        ]
-        if let image = UIImage(named: "Artwork") {
-            info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-        }
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-        MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
     }
 
     // MARK: Reading
