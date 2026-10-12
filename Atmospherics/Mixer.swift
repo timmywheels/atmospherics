@@ -107,6 +107,7 @@ final class Mixer {
         if let raw = defaults.string(forKey: "mode"), let saved = Mode(rawValue: raw) { mode = saved }
         customPlaces = (defaults.array(forKey: "customPlaces") as? [[String: Any]] ?? []).compactMap(Place.init(dictionary:))
         pinnedPlace = defaults.string(forKey: "pinnedPlace").flatMap { name in allPlaces.first { $0.name == name } }
+        tweaks = defaults.dictionary(forKey: "placeTweaks") as? [String: [String: Double]] ?? [:]
         if let data = defaults.data(forKey: "savedMixes"), let saved = try? JSONDecoder().decode([SavedMix].self, from: data) {
             savedMixes = saved
         }
@@ -239,7 +240,7 @@ final class Mixer {
             default:
                 guard let home else { return WeatherSummary(place: "", temp: "", line: "", head: head) }
                 let line = following[.match] == true
-                    ? "Following \(home.subject) outside"
+                    ? "Following \(home.subject) outside" + (tweaks["home"] != nil ? " · tuned by you" : "")
                     : "Your own mix, made here"
                 return WeatherSummary(place: home.place, temp: home.temperature, line: line, head: head)
             }
@@ -256,7 +257,7 @@ final class Mixer {
             if following[.escape] != true {
                 line = "Your own mix, made in \(escape.place.name)"
             } else if pinnedPlace != nil {
-                line = "\(c.mixName) in \(escape.place.name) right now"
+                line = "\(c.mixName) in \(escape.place.name) right now" + (tweaks[escape.place.name] != nil ? " · tuned by you" : "")
             } else {
                 line = Self.escapeLine(c)
             }
@@ -436,10 +437,77 @@ final class Mixer {
     }
 
     private func markCustom() {
+        // At a place (or home) that's following the weather, an edit becomes a lasting tweak to
+        // that place instead of breaking away from it.
+        if activePreset == nil, following[mode] == true, let key = tweakKey {
+            recordTweaks(for: key)
+            return
+        }
         setFollowing(false, for: mode)
         guard titles[mode] != "Your mix" else { return }
         setTitle("Your mix", for: mode)
     }
+
+    // MARK: Per-place tweaks
+
+    /// Volume changes you've made to a place, by sound: added on top of what the weather gives.
+    private(set) var tweaks: [String: [String: Double]] = [:]
+
+    /// The place the field belongs to right now ("home" for home), if it's following the weather.
+    private var tweakKey: String? {
+        guard activePreset == nil else { return nil }
+        if mode == .escape { return escape?.place.name }
+        return "home"
+    }
+
+    var currentPlaceIsTweaked: Bool { tweakKey.map { !(tweaks[$0] ?? [:]).isEmpty } ?? false }
+    var currentPlaceName: String { mode == .escape ? (escape?.place.name ?? "this place") : "home" }
+
+    /// What the weather alone gives this mode, before tweaks.
+    private func baseMix(for mode: Mode) -> [(SoundKind, Double)]? {
+        switch mode {
+        case .match: return home.map { WeatherMix.orbs(for: $0) }
+        case .escape: return escape.map { WeatherMix.orbs(for: $0.conditions, place: $0.place) }
+        }
+    }
+
+    /// Stores the difference between the field and the weather mix as this place's tweaks.
+    private func recordTweaks(for key: String) {
+        guard let base = baseMix(for: mode) else { return }
+        var baseLevels: [SoundKind: Double] = [:]
+        for (k, v) in base { baseLevels[k] = v }
+        var delta: [String: Double] = [:]
+        var fieldLevels: [SoundKind: Double] = [:]
+        for o in orbs { fieldLevels[o.kind] = max(fieldLevels[o.kind] ?? 0, o.volume) }
+        for k in Set(baseLevels.keys).union(fieldLevels.keys) {
+            let d = (fieldLevels[k] ?? 0) - (baseLevels[k] ?? 0)
+            if abs(d) > 0.02 { delta[k.rawValue] = d }
+        }
+        tweaks[key] = delta.isEmpty ? nil : delta
+        persistTweaks()
+    }
+
+    static func applying(_ delta: [String: Double]?, to base: [(SoundKind, Double)]) -> [(SoundKind, Double)] {
+        guard let delta, !delta.isEmpty else { return base }
+        var out: [(SoundKind, Double)] = base.map { k, v in (k, min(1, max(0, v + (delta[k.rawValue] ?? 0)))) }
+        for (raw, d) in delta {
+            guard let k = SoundKind(rawValue: raw), !base.contains(where: { $0.0 == k }), d > 0 else { continue }
+            out.append((k, min(1, d)))
+        }
+        return out.filter { $0.1 >= 0.03 }
+    }
+
+    /// Puts the current place back to how it sounds by default, following the weather.
+    func resetCurrentPlace() {
+        if let key = tweakKey {
+            tweaks[key] = nil
+            persistTweaks()
+        }
+        traveling = true
+        applyWeather(to: mode, animated: true)
+    }
+
+    private func persistTweaks() { defaults.set(tweaks, forKey: "placeTweaks") }
 
     private func setTitle(_ title: String, for mode: Mode) {
         titles[mode] = title
@@ -643,13 +711,13 @@ final class Mixer {
         switch dest {
         case .home:
             guard let h = home else { return Page(title: "Home", line: "", layers: "", orbs: []) }
-            let o = Preset.layout(WeatherMix.orbs(for: h))
+            let o = Preset.layout(Self.applying(tweaks["home"], to: WeatherMix.orbs(for: h)))
             return Page(title: h.mixName, line: "Following \(h.subject) outside", layers: layers(o), orbs: o)
         case .place(let p):
             let o: [Orb]
             let line: String
             if let c = placeConditions[p.name] {
-                o = Preset.layout(WeatherMix.orbs(for: c, place: p))
+                o = Preset.layout(Self.applying(tweaks[p.name], to: WeatherMix.orbs(for: c, place: p)))
                 line = "\(c.mixName) in \(p.name) right now"
             } else {
                 o = Preset.layout(p.signature.compactMap { k, v in k.playable.map { ($0, v) } })
@@ -682,11 +750,11 @@ final class Mixer {
         switch mode {
         case .match:
             guard let home else { return }
-            target = WeatherMix.orbs(for: home)
+            target = Self.applying(tweaks["home"], to: WeatherMix.orbs(for: home))
             name = home.mixName
         case .escape:
             guard let escape else { return }
-            target = WeatherMix.orbs(for: escape.conditions, place: escape.place)
+            target = Self.applying(tweaks[escape.place.name], to: WeatherMix.orbs(for: escape.conditions, place: escape.place))
             name = escape.place.title
         }
         setTitle(name, for: mode)

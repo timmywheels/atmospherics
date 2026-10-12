@@ -12,6 +12,19 @@ struct MixerView: View {
                     .font(Theme.display(30))
                     .tracking(-0.6)
                 Spacer()
+                if mixer.currentPlaceIsTweaked {
+                    Button { withAnimation(.smooth) { mixer.resetCurrentPlace() } } label: {
+                        Text("Reset")
+                            .font(Theme.mono(12, .medium))
+                            .foregroundStyle(Theme.mono)
+                            .padding(.vertical, 7)
+                            .padding(.horizontal, 10)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Reset \(mixer.currentPlaceName) to default")
+                    .transition(.opacity)
+                }
                 Button { saving = true } label: {
                     Text("Save")
                         .font(Theme.mono(12, .medium))
@@ -25,7 +38,9 @@ struct MixerView: View {
             }
             .padding(.horizontal, 8)
 
-            Text("Drag closer to hear more. Drag off the edge to remove.")
+            Text(mixer.currentPlaceIsTweaked
+                 ? "Your changes to \(mixer.currentPlaceName) are kept, and still follow the weather."
+                 : "Drag closer to hear more. Drag off the edge to remove.")
                 .font(Theme.body(14))
                 .foregroundStyle(Theme.secondary)
                 .padding(.horizontal, 8)

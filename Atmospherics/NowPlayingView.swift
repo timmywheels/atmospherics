@@ -44,6 +44,11 @@ struct NowPlayingView: View {
                         }
                     }
                     Button("Save this mix", systemImage: "bookmark") { saving = true }
+                    if mixer.currentPlaceIsTweaked {
+                        Button("Reset \(mixer.currentPlaceName) to default", systemImage: "arrow.counterclockwise") {
+                            withAnimation(.smooth) { mixer.resetCurrentPlace() }
+                        }
+                    }
                     Divider()
                     Button("Show gesture hints again", systemImage: "hand.tap") {
                         hintStep = 0
