@@ -15,8 +15,8 @@ struct NowPlayingView: View {
                 Spacer()
                 Button { showGlobe = true } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "globe")
-                        Text("\(mixer.weather.place) \(mixer.weather.temp)")
+                        Image(systemName: mixer.activePreset == nil ? "globe" : "books.vertical")
+                        Text(mixer.weather.temp.isEmpty ? mixer.weather.place : "\(mixer.weather.place) \(mixer.weather.temp)")
                     }
                     .padding(.vertical, 6)
                     .contentShape(Rectangle())
@@ -35,7 +35,11 @@ struct NowPlayingView: View {
             // A fixed-height slot: the line fades in and out without moving anything.
             ZStack(alignment: .leading) {
                 Text(" ").hidden()
-                if mixer.mode == .escape {
+                if mixer.activePreset != nil {
+                    Button { withAnimation(.smooth(duration: 0.35)) { mixer.leavePreset() } } label: {
+                        Text("← Back to \(mixer.presetReturnName)")
+                    }
+                } else if mixer.mode == .escape {
                     Button { withAnimation(.smooth(duration: 0.35)) { mixer.goHome() } } label: {
                         Text("← Back to \(mixer.homeName)")
                     }

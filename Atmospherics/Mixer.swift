@@ -107,6 +107,7 @@ final class Mixer {
         if let raw = defaults.string(forKey: "mode"), let saved = Mode(rawValue: raw) { mode = saved }
         customPlaces = (defaults.array(forKey: "customPlaces") as? [[String: Any]] ?? []).compactMap(Place.init(dictionary:))
         pinnedPlace = defaults.string(forKey: "pinnedPlace").flatMap { name in allPlaces.first { $0.name == name } }
+        activePreset = defaults.string(forKey: "activePreset").flatMap { name in Preset.all.first { $0.name == name } }
         apply()
         setUpSystemAudio()
         PlayPauseIntent.handler = { [weak self] in self?.togglePlayback() }
@@ -215,6 +216,10 @@ final class Mixer {
     var orbs: [Orb] { fields[mode] ?? [] }
     var title: String { titles[mode] ?? "" }
     var weather: WeatherSummary {
+        if let preset = activePreset {
+            let line = title == preset.name ? preset.description : "Started from \(preset.name)"
+            return WeatherSummary(place: "Library", temp: "", line: line, head: "Library mix")
+        }
         switch mode {
         case .match:
             let head = following[.match] == true ? "Matching outside" : "Your mix"
@@ -332,8 +337,30 @@ final class Mixer {
         apply()
     }
 
+    /// A Library mix that's playing. It stands on its own, apart from any place's weather.
+    private(set) var activePreset: Preset?
+
+    private func setActivePreset(_ preset: Preset?) {
+        activePreset = preset
+        defaults.set(preset?.name, forKey: "activePreset")
+    }
+
+    /// Where "Back to …" returns from a Library mix: the place you were in, or home.
+    var presetReturnName: String {
+        if mode == .escape, let p = escape?.place { return p.name }
+        return homeName
+    }
+
+    /// Leaves a Library mix and follows the weather where you were.
+    func leavePreset() {
+        setActivePreset(nil)
+        traveling = true
+        followWeatherAgain()
+    }
+
     func load(_ preset: Preset) {
         transition?.cancel()
+        setActivePreset(preset)
         setFollowing(false, for: mode)
         fields[mode] = preset.orbs
         titles[mode] = preset.name
@@ -416,6 +443,7 @@ final class Mixer {
 
     /// Goes to a place: pins it, switches to Escape, and glides the field to its sound.
     func select(_ place: Place) {
+        setActivePreset(nil)
         // Choosing the place you're already in is just going home.
         if isNearHome(place) {
             pinnedPlace = nil
@@ -459,6 +487,7 @@ final class Mixer {
 
     /// Comes back from a place to the local weather.
     func goHome() {
+        setActivePreset(nil)
         traveling = true
         if mode != .match {
             transition?.cancel()
@@ -473,6 +502,7 @@ final class Mixer {
 
     /// Hands an edited field back to the weather, without leaving the place.
     func followWeatherAgain() {
+        setActivePreset(nil)
         setFollowing(true, for: mode)
         applyWeather(to: mode, animated: true)
     }
