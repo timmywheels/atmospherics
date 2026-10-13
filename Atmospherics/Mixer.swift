@@ -227,8 +227,14 @@ final class Mixer {
         timeOverride = defaults.string(forKey: "timeOverride").flatMap(TimeOverride.init(rawValue:)) ?? .live
         tweaks = defaults.dictionary(forKey: "placeTweaks") as? [String: [String: Double]] ?? [:]
         if let data = defaults.data(forKey: "savedMixes"), let saved = try? JSONDecoder().decode([SavedMix].self, from: data) {
-            // Layers used to be called the mixer.
-            savedMixes = saved.map { var mix = $0; mix.origin = mix.origin.replacingOccurrences(of: "Made in the mixer", with: "Made in Layers"); return mix }
+            // Topology used to be called Layers, and before that the mixer.
+            savedMixes = saved.map { saved in
+                var mix = saved
+                for old in ["Made in the mixer", "Made in Layers"] {
+                    mix.origin = mix.origin.replacingOccurrences(of: old, with: "Made in Topology")
+                }
+                return mix
+            }
         }
         activePreset = defaults.string(forKey: "activePreset").flatMap { id in
             Preset.all.first { $0.id == id } ?? savedMixes.first { $0.id.uuidString == id }?.preset
@@ -611,7 +617,7 @@ final class Mixer {
     private var saveOrigin: String {
         let date = Date().formatted(.dateTime.month(.abbreviated).day())
         if let p = activePreset { return title == p.name ? "Copy of \(p.name), \(date)" : "Started from \(p.name), \(date)" }
-        if title == "Your mix" { return "Made in Layers, \(date)" }
+        if title == "Your mix" { return "Made in Topology, \(date)" }
         if mode == .escape, let e = escape { return "Saved from \(e.place.name)'s \(e.conditions.mixName.lowercased()), \(date)" }
         if mode == .atmosphere, atmosphere != nil { return "Saved from \(title.prefix(1).lowercased() + title.dropFirst()), \(date)" }
         if let h = home { return "Saved from \(h.mixName.lowercased()) in \(h.place), \(date)" }
@@ -776,7 +782,7 @@ final class Mixer {
 
     var currentPlaceIsTweaked: Bool { tweakKey.map { !(tweaks[$0] ?? [:]).isEmpty } ?? false }
 
-    /// The sounds that belong to where you are, to suggest first in Layers.
+    /// The sounds that belong to where you are, to suggest first in Topology.
     var currentCast: [SoundKind] {
         guard activePreset == nil else { return [] }
         let place = mode == .escape ? escape?.place : mode == .atmosphere ? atmosphere?.setting.place : homePlace

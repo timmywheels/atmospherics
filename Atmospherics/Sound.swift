@@ -174,6 +174,24 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// How high up the sound comes from, 0 (the ground, the water) to 1 (the sky): owls up in the
+    /// trees, frogs in the grass, thunder overhead. The home screen's form leans each sound's
+    /// swell up or down by it.
+    var height: Double {
+        switch self {
+        case .planes, .lightning: 1
+        case .thunder, .geese: 0.9
+        case .owls, .jungleBirds, .parrots, .canopy, .howlers: 0.75
+        case .birds, .winterBirds, .gulls, .treeWind, .leaves, .gusts: 0.6
+        case .rain, .lightRain, .heavyRain, .wind, .breeze, .palms, .bells, .templeBell: 0.5
+        case .chimes, .halyards, .buoy, .howl, .tentRain, .tinRoof, .cicadas: 0.4
+        case .clock, .library, .cafe, .typing, .fan, .cabin, .train, .tram, .bazaar, .foghorn, .whales: 0.25
+        case .fire, .crickets, .cityHum, .cityNight, .traffic, .highway, .motorbikes, .rainyStreet, .waterfall, .fountain: 0.15
+        case .frogs, .treeFrogs, .peepers, .loons, .stream, .lake, .ocean, .lapping, .rocks, .caveDrips: 0.05
+        default: 0.3
+        }
+    }
+
     /// OKLCH hue from the design.
     var hue: Double {
         switch self {

@@ -1,10 +1,12 @@
 import SwiftUI
 
-/// Layers: the shape of what's playing, from the iPhone app. Pull a sound out to hear more of it or
-/// in to let it go, drag around it to turn it, and add or take away sounds below.
-struct MacLayers: View {
+/// Topology: the landscape of what's playing, from the iPhone app. Drag a sound closer to hear
+/// more of it or off the edge to let it go, click one to pick it out, drag the ground to turn it,
+/// and add or take away sounds below.
+struct MacTopology: View {
     @Environment(Mixer.self) private var mixer
     @Environment(MacNavigation.self) private var navigation
+    @State private var selected: Orb.ID?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,14 +25,13 @@ struct MacLayers: View {
             .padding(.horizontal, 28)
             .frame(height: 20)
 
-            ShapeField()
+            SoundField(selected: $selected)
 
-            Text(mixer.currentPlaceIsTweaked
-                 ? "Your changes to \(mixer.currentPlaceName) are kept"
-                 : "Pull a sound out to hear more · drag to turn")
-                .font(Theme.label(10.5))
-                .foregroundStyle(Theme.muted)
-                .padding(.bottom, 14)
+            SoundDetail(selected: $selected,
+                        hint: mixer.currentPlaceIsTweaked ? "Your changes to \(mixer.currentPlaceName) are kept"
+                            : "Closer is louder · drag the ground to turn it")
+                .frame(maxWidth: 560)
+                .padding(.bottom, 8)
 
             SoundSections()
                 .padding(.bottom, 8)
