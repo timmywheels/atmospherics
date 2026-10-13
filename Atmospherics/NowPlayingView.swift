@@ -316,7 +316,7 @@ struct Carousel: View {
                 #endif
             }
             .contextMenu {
-                Button("Teleport…", systemImage: "sparkles") { teleport() }
+                Button("Teleport…", systemImage: "arrow.triangle.2.circlepath") { teleport() }
                 Button("Save this mix", systemImage: "bookmark") { saving = true }
                 Button("Library", systemImage: "books.vertical") { openLibrary() }
             }
@@ -705,7 +705,7 @@ private struct TakeMeBar: View {
         HStack(spacing: 0) {
             Button(action: action) {
                 HStack(spacing: 10) {
-                    Image(systemName: "sparkles")
+                    Image(systemName: "arrow.triangle.2.circlepath")
                         .font(.system(size: 15))
                     Text("Take me to…")
                         .font(Theme.label(15))
