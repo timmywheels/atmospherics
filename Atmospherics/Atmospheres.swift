@@ -354,6 +354,14 @@ struct Atmosphere: Hashable, Codable, Identifiable {
 
     var id: String { "\(setting.rawValue).\(sky.rawValue).\(time.rawValue)" }
 
+    /// Back from an `id` ("cabin.snowstorm.night"), or nil if it names nothing.
+    init?(id: String) {
+        let parts = id.split(separator: ".").map(String.init)
+        guard parts.count == 3, let setting = Setting(rawValue: parts[0]), let sky = Sky(rawValue: parts[1]),
+              let time = TimeOfDay(rawValue: parts[2]) else { return nil }
+        self.init(setting, sky, time)
+    }
+
     /// Where changes you make to it in Layers are kept.
     var tweakKey: String { "atmosphere:\(id)" }
 

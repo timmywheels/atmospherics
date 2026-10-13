@@ -15,7 +15,7 @@ None of this is medical advice, and the app makes no medical claims.
   performance; a long-term open-plan office trial (Hongisto et al., 2017, *Frontiers in
   Psychology*, https://pmc.ncbi.nlm.nih.gov/articles/PMC5515102/) did not confirm water's edge
   over standard masking noise.
-- **In the app:** Speech Shield (pink noise + stream), Steady Rain, Reading Room (the ticking
+- **In the app:** Quiet Car (pink noise + stream), Steady Rain, Reading Room (the ticking
   clock was taken out). Late Draft (typing, clock) and Temple Garden (chimes, birdsong) moved to
   Relax, since their sounds keep changing.
 

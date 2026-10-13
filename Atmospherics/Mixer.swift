@@ -635,7 +635,51 @@ final class Mixer {
     func delete(_ mix: SavedMix) {
         savedMixes.removeAll { $0.id == mix.id }
         persistSaved()
+        if isFavorite(Self.favoriteKey(mix.preset)) { toggleFavorite(Self.favoriteKey(mix.preset)) }
         if activePreset?.savedID == mix.id { setActivePreset(nil) }
+    }
+
+    // MARK: Favorites
+
+    /// What you've marked as a favorite, newest first: Library mixes (`mix:` and the mix's ID) and
+    /// scenes (`scene:` and the atmosphere's ID). Kept on this device.
+    private(set) var favorites: [String] = UserDefaults.standard.stringArray(forKey: "favorites") ?? []
+
+    func isFavorite(_ key: String) -> Bool { favorites.contains(key) }
+
+    func toggleFavorite(_ key: String) {
+        if let i = favorites.firstIndex(of: key) { favorites.remove(at: i) } else { favorites.insert(key, at: 0) }
+        defaults.set(favorites, forKey: "favorites")
+    }
+
+    nonisolated static func favoriteKey(_ preset: Preset) -> String { "mix:\(preset.id)" }
+    nonisolated static func favoriteKey(_ atmosphere: Atmosphere) -> String { "scene:\(atmosphere.id)" }
+
+    /// What's playing, as something to favorite: a Library mix or a scene (not your own weather).
+    var favoriteKey: String? {
+        if let p = activePreset { return Self.favoriteKey(p) }
+        if mode == .atmosphere, let a = atmosphere { return Self.favoriteKey(a) }
+        return nil
+    }
+
+    enum Favorite: Identifiable {
+        case scene(Atmosphere), mix(Preset)
+        var id: String {
+            switch self {
+            case .scene(let a): Mixer.favoriteKey(a)
+            case .mix(let p): Mixer.favoriteKey(p)
+            }
+        }
+    }
+
+    /// Your favorites, newest first, as things to play.
+    var favoriteItems: [Favorite] {
+        let mixes = savedMixes.map(\.preset) + Preset.all
+        return favorites.compactMap { key in
+            if key.hasPrefix("scene:"), let a = Atmosphere(id: String(key.dropFirst(6))) { return .scene(a) }
+            if key.hasPrefix("mix:"), let p = mixes.first(where: { Self.favoriteKey($0) == key }) { return .mix(p) }
+            return nil
+        }
     }
 
     func moveSavedMixes(from source: IndexSet, to destination: Int) {

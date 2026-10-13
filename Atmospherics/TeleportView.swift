@@ -254,9 +254,13 @@ struct TeleportView: View {
                         ColorCard(hues: page.orbs.sorted { $0.volume > $1.volume }.prefix(3).map(\.kind.hue),
                                   top: source.map { "Live from \($0.place.title) · \($0.conditions.temperature)" } ?? a.setting.info.name,
                                   title: page.title, sounds: page.orbs,
-                                  badge: current ? (mixer.isPlaying ? "Playing" : "Here") : nil, outlined: current, minHeight: 112)
+                                  badge: current ? (mixer.isPlaying ? "Playing" : "Here") : nil, outlined: current, minHeight: 112,
+                                  trailingRoom: 30)
                     }
                     .buttonStyle(.plain)
+                    .overlay(alignment: .bottomTrailing) {
+                        FavoriteToggle(key: Mixer.favoriteKey(a)).padding(6)
+                    }
                 }
             }
         }

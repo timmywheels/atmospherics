@@ -23,7 +23,7 @@ struct Preset: Identifiable {
 
     static let all: [Preset] = [
         // Focus mixes built on what research supports (design/focus/RESEARCH.md).
-        Preset(name: "Speech Shield", tag: .focus, length: "2 h", description: "Pink noise and a steady stream cover nearby voices",
+        Preset(name: "Quiet Car", tag: .focus, length: "2 h", description: "Pink noise and a steady stream cover nearby voices",
                mix: [(.pink, 0.55), (.stream, 0.55)], evidence: .strong),
         Preset(name: "Steady Rain", tag: .focus, length: "2 h", description: "Rain that doesn't change, over a low hush",
                mix: [(.rain, 0.7), (.brown, 0.25)], evidence: .strong),

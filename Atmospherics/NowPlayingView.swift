@@ -294,11 +294,19 @@ struct Carousel: View {
                 .onTapGesture { openMixer() }
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel("Open layers")
-            Button { teleport() } label: {
-                PageTitle(lines: mixer.titleLines)
+            HStack(alignment: .lastTextBaseline, spacing: 8) {
+                Button { teleport() } label: {
+                    PageTitle(lines: mixer.titleLines)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Teleport somewhere")
+                Spacer(minLength: 0)
+                if let key = mixer.favoriteKey {
+                    FavoriteToggle(key: key, size: 19)
+                        .alignmentGuide(.lastTextBaseline) { $0[VerticalAlignment.center] + 7 }
+                        .offset(x: 10)
+                }
             }
-            .buttonStyle(.plain)
-            .accessibilityHint("Teleport somewhere")
             .contextMenu {
                 Button("Teleport…", systemImage: "sparkles") { teleport() }
                 Button("Save this mix", systemImage: "bookmark") { saving = true }
