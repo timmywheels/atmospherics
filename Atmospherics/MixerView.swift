@@ -46,8 +46,9 @@ struct MixerView: View {
 #endif
 
 /// Every sound that's playing, a layer each in the order they came in, filled in its color as far
-/// across as it's loud: tap or drag across one to set its level. (Hold one to take it away; the
-/// sounds to add are below, in `SoundSections`.) All in the monospace.
+/// across as it's loud: tap or drag across one to set its level, or hold it to take it away. Last,
+/// an empty layer brings in a sound at random. (The sounds to pick from are below, in
+/// `SoundSections`.) All in the monospace.
 struct SoundList: View {
     @Environment(Mixer.self) private var mixer
 
@@ -62,21 +63,15 @@ struct SoundList: View {
                 .padding(.bottom, 16)
             GeometryReader { proxy in
                 // As tall as there's room for, down to a fingertip's height with a lot playing.
-                let height = min(84, max(44, proxy.size.height / CGFloat(max(1, mixer.orbs.count))))
+                let height = min(84, max(44, proxy.size.height / CGFloat(mixer.orbs.count + 1)))
                 VStack(spacing: 0) {
-                    if mixer.orbs.isEmpty {
-                        Text("Nothing playing. Add a layer below.")
-                            .font(Theme.mono(11))
-                            .foregroundStyle(Theme.muted)
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 40)
-                    } else {
-                        Rectangle().fill(Theme.hairline).frame(height: 1)
-                    }
+                    Rectangle().fill(Theme.hairline).frame(height: 1)
                     ForEach(mixer.orbs) { orb in
                         LevelRow(orb: orb, height: height)
                         Rectangle().fill(Theme.hairline).frame(height: 1)
                     }
+                    RandomLayer(height: height)
+                    Rectangle().fill(Theme.hairline).frame(height: 1)
                 }
             }
             .clipped()
@@ -85,8 +80,8 @@ struct SoundList: View {
     }
 }
 
-/// One sound as a layer: filled in its color from the left as far as it's loud, with a bright edge
-/// where it ends, its name large and its level small. Tap anywhere across it to set the level
+/// One sound as a layer: filled in its color from the left as far as it's loud, its name large and
+/// its level small. Tap anywhere across it to set the level
 /// there (it glides over), or drag across to slide it.
 private struct LevelRow: View {
     @Environment(Mixer.self) private var mixer
@@ -148,10 +143,6 @@ private struct LevelRow: View {
                                      startPoint: .leading, endPoint: .trailing))
                 .background(Theme.background.opacity(0.3))
                 .frame(width: filled)
-            Rectangle()
-                .fill(Theme.text.opacity(0.9))
-                .frame(width: 1.5)
-                .offset(x: max(0, filled - 1.5))
             HStack(alignment: .firstTextBaseline) {
                 Text(orb.kind.short)
                     .font(Theme.mono(height > 64 ? 25 : 18, .light))
@@ -161,13 +152,37 @@ private struct LevelRow: View {
                 Text("\(percent)%")
                     .font(Theme.caps(11))
                     .foregroundStyle(Theme.text.opacity(0.85))
-                    // Just inside the edge, when the edge would run through it.
-                    .padding(.trailing, filled > width - 70 && filled < width - 6 ? width - filled - 12 : 0)
             }
             .padding(.horizontal, 24)
             .shadow(color: .black.opacity(0.25), radius: 6)
         }
         .frame(width: width, alignment: .leading)
+    }
+}
+
+/// The last layer, empty: tap it to bring in a sound that isn't playing yet, picked at random.
+private struct RandomLayer: View {
+    @Environment(Mixer.self) private var mixer
+    let height: CGFloat
+
+    var body: some View {
+        let waiting = SoundKind.available.filter { kind in !mixer.orbs.contains { $0.kind == kind } }
+        Button {
+            guard let kind = waiting.randomElement() else { return }
+            Haptics.tap(.light)
+            withAnimation(.snappy) { mixer.add(kind) }
+        } label: {
+            Text("+ Random")
+                .font(Theme.mono(height > 64 ? 25 : 18, .light))
+                .foregroundStyle(Theme.muted)
+                .padding(.horizontal, 24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(height: height)
+        .disabled(waiting.isEmpty)
+        .accessibilityLabel("Add a random sound")
     }
 }
 
