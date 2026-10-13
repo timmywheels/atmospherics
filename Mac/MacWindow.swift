@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The window: the scene's colors filling it, the four parts named along the top beside the
-/// window buttons, and the part you're in below.
+/// The window: the scene's colors filling it, the four parts as pills in the toolbar with a way
+/// back beside the window buttons, and the part you're in below.
 struct MacWindow: View {
     @Environment(Mixer.self) private var mixer
     @Environment(MacNavigation.self) private var navigation
@@ -11,21 +11,18 @@ struct MacWindow: View {
 
     var body: some View {
         @Bindable var navigation = navigation
-        VStack(spacing: 0) {
-            TabBar(selection: $navigation.tab)
-            Group {
-                switch navigation.tab {
-                case .listen: MacListen()
-                case .teleport:
-                    TeleportView(start: mixer.mode == .atmosphere ? mixer.atmosphere : nil) { navigation.tab = .listen }
-                case .layers: MacLayers()
-                case .library: LibraryView(current: mixer.activePreset) { navigation.tab = .listen }
-                }
+        Group {
+            switch navigation.tab {
+            case .listen: MacListen()
+            case .teleport:
+                TeleportView(start: mixer.mode == .atmosphere ? mixer.atmosphere : nil) { navigation.tab = .listen }
+            case .layers: MacLayers()
+            case .library: LibraryView(current: mixer.activePreset) { navigation.tab = .listen }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .transition(.opacity)
         }
-        .ignoresSafeArea(edges: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .transition(.opacity)
+        .modifier(WindowBar(selection: $navigation.tab))
         .background {
             // Listening and Layers sit in the scene's colors; Teleport and the Library have their own.
             SceneWash(orbs: mixer.byVolume)
@@ -54,31 +51,36 @@ struct MacWindow: View {
     }
 }
 
-/// The four parts as pills in the title bar, level with the window buttons, the one you're in
-/// lit; and beside the window buttons, a way back.
-private struct TabBar: View {
-    @Environment(Mixer.self) private var mixer
+/// The toolbar, as tall as a Mac's (the window buttons centered in it): a way back beside the
+/// window buttons, and the four parts as pills in the middle. Plain, without the glass a
+/// toolbar item gets by default.
+private struct WindowBar: ViewModifier {
+    @Binding var selection: MacNavigation.Tab
+
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content.toolbar {
+                ToolbarItem(placement: .navigation) { BackButton(selection: $selection) }
+                    .sharedBackgroundVisibility(.hidden)
+                ToolbarItem(placement: .principal) { TabPills(selection: $selection) }
+                    .sharedBackgroundVisibility(.hidden)
+            }
+        } else {
+            content.toolbar {
+                ToolbarItem(placement: .navigation) { BackButton(selection: $selection) }
+                ToolbarItem(placement: .principal) { TabPills(selection: $selection) }
+            }
+        }
+    }
+}
+
+/// The four parts in one capsule, the one you're in lit by a pill that slides between them.
+private struct TabPills: View {
     @Binding var selection: MacNavigation.Tab
     @State private var hovered: MacNavigation.Tab?
-    @State private var hoveringBack = false
     @Namespace private var pill
 
     var body: some View {
-        // Centered when there's room; in a narrow window, pushed right to clear the window
-        // buttons and the way back.
-        HStack(spacing: 0) {
-            Spacer(minLength: 120)
-            tabs
-            Spacer(minLength: 12)
-        }
-        .overlay(alignment: .leading) { back.padding(.leading, 78) }
-        // The title bar is 32 points tall, with the window buttons centered in it.
-        .frame(height: 32)
-        .padding(.bottom, 14)
-        .animation(.smooth(duration: 0.25), value: mixer.backStack.isEmpty)
-    }
-
-    private var tabs: some View {
         HStack(spacing: 2) {
             ForEach(MacNavigation.Tab.allCases) { tab in
                 Button { selection = tab } label: {
@@ -107,30 +109,40 @@ private struct TabBar: View {
         .background(Capsule().fill(.white.opacity(0.05)))
         .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
         .fixedSize()
+        .animation(.smooth(duration: 0.3), value: selection)
     }
+}
 
-    /// From Teleport, Layers or the Library, back to listening; while listening, back to the
-    /// place before this one (as swiping right does), once there's been one.
-    @ViewBuilder private var back: some View {
-        if selection != .listen {
-            backButton("Back to Listen") { selection = .listen }
-        } else if let last = mixer.backStack.last {
-            backButton("Back to \(mixer.page(for: last).title)  ←") { mixer.requestTravel(forward: false) }
+/// From Teleport, Layers or the Library, back to listening; while listening, back to the place
+/// before this one (as swiping right does), once there's been one.
+private struct BackButton: View {
+    @Environment(Mixer.self) private var mixer
+    @Binding var selection: MacNavigation.Tab
+    @State private var hovering = false
+
+    var body: some View {
+        Group {
+            if selection != .listen {
+                button("Back to Listen") { selection = .listen }
+            } else if let last = mixer.backStack.last {
+                button("Back to \(mixer.page(for: last).title)  ←") { mixer.requestTravel(forward: false) }
+            }
         }
+        .animation(.smooth(duration: 0.25), value: selection == .listen && mixer.backStack.isEmpty)
     }
 
-    private func backButton(_ label: String, action: @escaping () -> Void) -> some View {
+    private func button(_ label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: "chevron.left")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(hoveringBack ? Theme.text : Theme.secondary)
+                .foregroundStyle(hovering ? Theme.text : Theme.secondary)
                 .frame(width: 28, height: 28)
-                .background(Circle().fill(.white.opacity(hoveringBack ? 0.12 : 0.05)))
+                .background(Circle().fill(.white.opacity(hovering ? 0.12 : 0.05)))
                 .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .onHover { hoveringBack = $0 }
+        .onHover { hovering = $0 }
         .help(label)
         .accessibilityLabel(label)
         .transition(.opacity)
