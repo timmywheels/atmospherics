@@ -165,19 +165,15 @@ private struct MenuRowStyle: ButtonStyle {
 
 /// The menu bar icon: the halo as a small soft orb with faded edges, like the app icon. While
 /// playing it takes the colors of what's playing and breathes, slowly: a breath every six seconds,
-/// its lights turning once a minute. Paused, it's grey and still. A faint dark disc under it keeps
-/// it legible on a light menu bar.
+/// its lights swaying a little with it. Paused, it's grey and still. A faint dark disc under it
+/// keeps it legible on a light menu bar.
 struct MenuBarIcon: View {
     @Environment(Mixer.self) private var mixer
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Group {
             if mixer.isPlaying {
-                let tints = Self.tints(mixer.byVolume)
-                TimelineView(.periodic(from: .now, by: reduceMotion ? 3600 : 1.0 / 12)) { context in
-                    Image(nsImage: Self.image(tints: tints, time: reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate))
-                }
+                Image(nsImage: Self.breath(mixer.byVolume)[IconBreath.shared.frame % Self.frames])
             } else {
                 Image(nsImage: Self.paused)
             }
@@ -185,34 +181,45 @@ struct MenuBarIcon: View {
         .accessibilityLabel(mixer.isPlaying ? "Atmospherics, playing" : "Atmospherics")
     }
 
-    /// The loudest three sounds' colors, a little softened toward grey so the menu bar stays calm.
-    private static func tints(_ orbs: [Orb]) -> [NSColor] {
+    /// One breath: six seconds at five frames a second (`IconBreath`). Each breath is drawn once and
+    /// kept for its colors, so the icon never makes the same picture twice.
+    static let frames = 30
+    private static var breaths: [[Double]: [NSImage]] = [:]
+
+    /// One breath's frames in the loudest three sounds' colors, a little softened toward grey so
+    /// the menu bar stays calm.
+    private static func breath(_ orbs: [Orb]) -> [NSImage] {
         let hues = orbs.prefix(3).map(\.kind.hue)
-        let picked = hues.isEmpty ? [55.0, 235, 330] : (0..<3).map { hues[$0 % hues.count] }
-        return picked.map { NSColor(Color.oklch(0.74, 0.15, $0)).blended(withFraction: 0.2, of: .gray) ?? .gray }
+        let key = hues.isEmpty ? [55.0, 235, 330] : (0..<3).map { hues[$0 % hues.count] }
+        if let kept = breaths[key] { return kept }
+        if breaths.count > 24 { breaths.removeAll() }
+        let tints = key.map { NSColor(Color.oklch(0.74, 0.15, $0)).blended(withFraction: 0.2, of: .gray) ?? .gray }
+        let made = (0..<frames).map { image(tints: tints, phase: Double($0) / Double(frames)) }
+        breaths[key] = made
+        return made
     }
 
     /// The app icon's warm, blue and pink lights, mostly grey and dim.
     private static let paused = image(
         tints: [55.0, 235, 330].map { NSColor(Color.oklch(0.7, 0.16, $0)).blended(withFraction: 0.7, of: .gray) ?? .gray },
-        time: nil)
+        phase: nil)
 
-    /// Still and dim with no `time` (paused); otherwise the breath and the turn at that moment.
-    private static func image(tints: [NSColor], time: TimeInterval?) -> NSImage {
-        let breath = CGFloat(time.map { 0.5 + 0.5 * sin($0 * 2 * .pi / 6) } ?? 0)
-        let turn = CGFloat(time.map { $0 * 2 * .pi / 60 } ?? 0)
-        let alpha: CGFloat = time == nil ? 0.5 : 0.82 + 0.18 * breath
-        let swell: CGFloat = time == nil ? 1 : 0.95 + 0.05 * breath
-        let middle: CGFloat = time == nil ? 0.6 : 0.42
+    /// Still and dim with no `phase` (paused); otherwise that moment of a breath, from 0 to 1.
+    private static func image(tints: [NSColor], phase: Double?) -> NSImage {
+        let breath = CGFloat(phase.map { 0.5 - 0.5 * cos($0 * 2 * .pi) } ?? 0)
+        let sway = CGFloat(phase.map { 0.35 * sin($0 * 2 * .pi) } ?? 0)
+        let alpha: CGFloat = phase == nil ? 0.5 : 0.82 + 0.18 * breath
+        let swell: CGFloat = phase == nil ? 1 : 0.95 + 0.05 * breath
+        let middle: CGFloat = phase == nil ? 0.6 : 0.42
         return NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
             let center = CGPoint(x: 9, y: 9)
             disc(ctx, center, 8.8, NSColor(srgbRed: 0.05, green: 0.055, blue: 0.075, alpha: 0.7 * alpha), hold: 0.55)
-            // Three lights, each a little off center, turning slowly around the middle.
+            // Three lights, each a little off center, swaying around the middle as it breathes.
             let offsets = [CGPoint(x: 1.5, y: 1.3), CGPoint(x: -1.7, y: 0.4), CGPoint(x: 0.5, y: -1.7)]
             ctx.setBlendMode(.screen)
             for (tint, o) in zip(tints, offsets) {
-                let at = CGPoint(x: center.x + o.x * cos(turn) - o.y * sin(turn), y: center.y + o.x * sin(turn) + o.y * cos(turn))
+                let at = CGPoint(x: center.x + o.x * cos(sway) - o.y * sin(sway), y: center.y + o.x * sin(sway) + o.y * cos(sway))
                 disc(ctx, at, 7.6 * swell, tint.withAlphaComponent(0.9 * alpha), hold: 0.15)
             }
             // The bright middle where they meet.
@@ -232,5 +239,57 @@ struct MenuBarIcon: View {
         guard let gradient = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB),
                                         colors: colors as CFArray, locations: stops) else { return }
         ctx.drawRadialGradient(gradient, startCenter: c, startRadius: 0, endCenter: c, endRadius: r, options: [])
+    }
+}
+
+/// The menu bar icon's breath: a frame that steps five times a second while something plays, the
+/// displays are awake and motion isn't reduced. Each step is a plain change that redraws the icon
+/// once. (A TimelineView in a menu bar icon makes SwiftUI redraw it nonstop and holds up the app.)
+@MainActor
+@Observable
+final class IconBreath {
+    static let shared = IconBreath()
+    private(set) var frame = 0
+    @ObservationIgnored private var timer: Timer?
+
+    /// Breathes while the mixer plays, from now on.
+    func follow(_ mixer: Mixer) {
+        withObservationTracking {
+            run(mixer.isPlaying && !Displays.shared.asleep && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+        } onChange: {
+            Task { @MainActor in self.follow(mixer) }
+        }
+    }
+
+    private func run(_ on: Bool) {
+        guard on != (timer != nil) else { return }
+        timer?.invalidate()
+        timer = nil
+        guard on else { return }
+        let step = Timer(timeInterval: 0.2, repeats: true) { _ in
+            MainActor.assumeIsolated { IconBreath.shared.frame &+= 1 }
+        }
+        step.tolerance = 0.05
+        RunLoop.main.add(step, forMode: .common)
+        timer = step
+    }
+}
+
+/// Whether the displays are asleep, so the menu bar icon can rest through a night of sleep sounds
+/// instead of redrawing for no one.
+@MainActor
+@Observable
+final class Displays {
+    static let shared = Displays()
+    private(set) var asleep = false
+
+    private init() {
+        let center = NSWorkspace.shared.notificationCenter
+        center.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.asleep = true }
+        }
+        center.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.asleep = false }
+        }
     }
 }

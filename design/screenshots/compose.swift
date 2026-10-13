@@ -7,6 +7,10 @@ import Foundation
 // Usage: swift compose.swift  (reads raw/, writes framed/)
 
 let W: CGFloat = 1320, H: CGFloat = 2868
+
+// Headlines in the app's serif, from its own font file.
+CTFontManagerRegisterFontsForURL(URL(fileURLWithPath: "../../Atmospherics/Fonts/InstrumentSerif-Regular.ttf") as CFURL, .process, nil)
+let headline = NSFont(name: "InstrumentSerif-Regular", size: 116)!
 let shots: [(file: String, title: String, sub: String, glow: NSColor)] = [
     ("1-cabin", "Teleport\nby sound", "A log cabin in a snowstorm, the fire going.", NSColor(srgbRed: 0.85, green: 0.45, blue: 0.3, alpha: 1)),
     ("2-teleport", "Take me\nanywhere", "Build a scene in a sentence, or say it.", NSColor(srgbRed: 0.75, green: 0.38, blue: 0.3, alpha: 1)),
@@ -63,9 +67,9 @@ for shot in shots {
     let para = NSMutableParagraphStyle()
     para.lineSpacing = 4
     let title = NSAttributedString(string: shot.title, attributes: [
-        .font: NSFont.systemFont(ofSize: 104, weight: .light),
+        .font: headline,
         .foregroundColor: NSColor(srgbRed: 0.925, green: 0.933, blue: 0.95, alpha: 1),
-        .kern: -2.5, .paragraphStyle: para,
+        .kern: -0.6, .paragraphStyle: para,
     ])
     let left = screen.minX
     // The subline at 44 pt, smaller if it would run past the screen's width.
@@ -77,9 +81,9 @@ for shot in shots {
     }
     var sub = subline(44)
     if sub.size().width > W - left * 2 { sub = subline(44 * (W - left * 2) / sub.size().width) }
-    let titleRect = CGRect(x: left, y: H - 160 - 260, width: W - left * 2, height: 260)
+    let titleRect = CGRect(x: left, y: H - 160 - 280, width: W - left * 2, height: 280)
     title.draw(with: titleRect, options: [.usesLineFragmentOrigin])
-    sub.draw(at: CGPoint(x: left, y: titleRect.minY - 110))
+    sub.draw(at: CGPoint(x: left, y: titleRect.minY - 96))
 
     NSGraphicsContext.restoreGraphicsState()
     let png = rep.representation(using: .png, properties: [:])!
