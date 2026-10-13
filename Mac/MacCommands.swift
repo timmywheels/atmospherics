@@ -5,8 +5,13 @@ import SwiftUI
 struct MacCommands: Commands {
     let mixer: Mixer
     let navigation: MacNavigation
+    let updates: Updates
 
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            CheckForUpdatesButton(updates: updates)
+        }
+
         // One window, so no New Window.
         CommandGroup(replacing: .newItem) {}
 
@@ -108,6 +113,7 @@ private struct PlaybackCommands: View {
 
 /// Settings: the temperature unit, and whether to keep a control in the menu bar.
 struct MacSettings: View {
+    @EnvironmentObject private var updates: Updates
     @AppStorage("tempUnit") private var tempUnit = "auto"
     @AppStorage("showInMenuBar") private var showInMenuBar = true
 
@@ -119,6 +125,8 @@ struct MacSettings: View {
                 Text("Celsius (°C)").tag("c")
             }
             Toggle("Show in the menu bar", isOn: $showInMenuBar)
+            Toggle("Check for updates automatically", isOn: Binding(
+                get: { updates.checksAutomatically }, set: { updates.checksAutomatically = $0 }))
         }
         .formStyle(.grouped)
         .frame(width: 400)

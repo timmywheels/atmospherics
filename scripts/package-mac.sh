@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 # Builds dist/Atmospherics-<version>.dmg, for downloading from GitHub: the Mac app archived for
-# Apple Silicon and Intel, signed with your Developer ID, notarized by Apple and stapled.
-#   ./scripts/package-mac.sh                 # full release
+# Apple Silicon and Intel, signed with your Developer ID, notarized by Apple and stapled. Then signs
+# it for Sparkle and writes dist/appcast.xml, the update feed, to attach to the release with it:
+#   NOTES=notes.md ./scripts/package-mac.sh  # full release (NOTES: the release notes, optional)
 #   ./scripts/package-mac.sh --no-notarize   # signed, not notarized (quick local check)
+#   gh release create v<version> dist/Atmospherics-<version>.dmg dist/appcast.xml --notes-file notes.md
+# Every release needs its appcast.xml: the app reads the feed from the latest release.
+# The Sparkle key is in the login keychain as "atmospherics" (made with Sparkle's generate_keys
+# --account atmospherics; back it up with generate_keys --account atmospherics -x <file>).
 # Needs: the Developer ID certificate in your keychain, and a notarytool profile for the team
 # (xcrun notarytool store-credentials <name> --apple-id … --team-id S3RY6Q3EW2). NOTARY_PROFILE
 # picks it (default "onramp", the one Onramp's releases use); IDENTITY overrides the certificate.
@@ -13,12 +18,15 @@ PROFILE="${NOTARY_PROFILE:-onramp}"
 NOTARIZE=1; [ "${1:-}" = "--no-notarize" ] && NOTARIZE=0
 DIST="$ROOT/dist"
 ARCHIVE="$DIST/AtmosphericsMac.xcarchive"
+PACKAGES="$ROOT/build/SourcePackages"
+SPARKLE="$PACKAGES/artifacts/sparkle/Sparkle/bin"
 step() { printf '\n==> %s\n' "$1"; }
 
 step "Archive (Apple Silicon + Intel)"
 rm -rf "$DIST" && mkdir -p "$DIST"
 xcodebuild -project "$ROOT/Atmospherics.xcodeproj" -scheme AtmosphericsMac -configuration Release \
-  -destination 'generic/platform=macOS' -archivePath "$ARCHIVE" -allowProvisioningUpdates archive \
+  -destination 'generic/platform=macOS' -archivePath "$ARCHIVE" -clonedSourcePackagesDirPath "$PACKAGES" \
+  -allowProvisioningUpdates archive \
   > "$DIST/archive.log" 2>&1 || { tail -30 "$DIST/archive.log"; exit 1; }
 
 step "Export, signed with your Developer ID"
@@ -26,6 +34,7 @@ xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist "$ROOT/scr
   -exportPath "$DIST/export" -allowProvisioningUpdates > "$DIST/export.log" 2>&1 || { tail -30 "$DIST/export.log"; exit 1; }
 APP="$DIST/export/Atmospherics.app"
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
+BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Contents/Info.plist")"
 DMG="$DIST/Atmospherics-$VERSION.dmg"
 lipo -info "$APP/Contents/MacOS/Atmospherics"
 codesign --verify --strict --deep --verbose=2 "$APP"
@@ -56,4 +65,13 @@ if [ "$NOTARIZE" = 1 ]; then
   spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG"
   spctl --assess --type execute --verbose=2 "$APP"
 fi
-step "Done: $DMG ($(du -h "$DMG" | cut -f1))"
+
+# Signed last, once stapling has finished changing the DMG.
+step "Sign the update and write its feed"
+SIGNED="$("$SPARKLE/sign_update" --account atmospherics "$DMG")"
+SIGNATURE="$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' <<< "$SIGNED")"
+LENGTH="$(sed -n 's/.*length="\([0-9]*\)".*/\1/p' <<< "$SIGNED")"
+python3 -I "$ROOT/scripts/appcast.py" "$VERSION" "$BUILD" "$DMG" "$SIGNATURE" "$LENGTH" ${NOTES:+"$NOTES"} > "$DIST/appcast.xml"
+"$SPARKLE/sign_update" --account atmospherics --verify "$DMG" "$SIGNATURE"
+
+step "Done: $DMG ($(du -h "$DMG" | cut -f1)) and $DIST/appcast.xml"

@@ -4,6 +4,11 @@ options:
   deploymentTarget:
     iOS: "17.0"
     macOS: "14.0"
+packages:
+  # Updates for the Mac app downloaded from GitHub (not the App Store).
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.6.0
 targets:
   Atmospherics:
     type: application
@@ -85,19 +90,25 @@ targets:
         excludes:
           - Info.plist
           - Atmospherics.entitlements
+    dependencies:
+      - package: Sparkle
     entitlements:
       path: Mac/Atmospherics.entitlements
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
         com.apple.security.personal-information.location: true
+        # Sparkle's installer runs outside the sandbox and talks to the app over these.
+        com.apple.security.temporary-exception.mach-lookup.global-name:
+          - $(PRODUCT_BUNDLE_IDENTIFIER)-spks
+          - $(PRODUCT_BUNDLE_IDENTIFIER)-spki
     settings:
       base:
         PRODUCT_NAME: Atmospherics
         PRODUCT_BUNDLE_IDENTIFIER: com.timwheeler.atmospherics
         SWIFT_VERSION: "5.0"
-        MARKETING_VERSION: "1.1"
-        CURRENT_PROJECT_VERSION: "2"
+        MARKETING_VERSION: "1.1.1"
+        CURRENT_PROJECT_VERSION: "3"
         DEVELOPMENT_TEAM: S3RY6Q3EW2
         CODE_SIGN_STYLE: Automatic
         ENABLE_HARDENED_RUNTIME: YES
@@ -114,3 +125,9 @@ targets:
         NSLocationWhenInUseUsageDescription: Atmospherics uses your approximate location to match its sounds to the weather outside.
         ITSAppUsesNonExemptEncryption: false
         NSHumanReadableCopyright: © 2026 Timothy Wheeler
+        # Updates (Sparkle): the feed is attached to the latest GitHub release, and each update is
+        # signed with the key in the login keychain under "atmospherics" (scripts/package-mac.sh).
+        SUFeedURL: https://github.com/timmywheels/atmospherics/releases/latest/download/appcast.xml
+        SUPublicEDKey: iWHqyDVEyfgxdKxhKJQ6OmS+S7TlpIeNigVouyb81mM=
+        SUEnableAutomaticChecks: true
+        SUEnableInstallerLauncherService: true

@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The menu bar control, in the colors of what's playing: play, travel, a sleep timer, and every
-/// atmosphere a click away, without opening the window.
+/// The menu bar control, in the colors of what's playing: what it is, play and travel, the volume,
+/// and one quiet line for the sleep timer, Teleport, the window and Quit.
 struct MenuBarPanel: View {
     @Environment(Mixer.self) private var mixer
     @Environment(MacNavigation.self) private var navigation
@@ -23,21 +23,12 @@ struct MenuBarPanel: View {
                 .padding(.top, 10)
                 .padding(.horizontal, 18)
 
-            timer
-                .padding(.top, 16)
-                .padding(.horizontal, 18)
-
             Rectangle().fill(Theme.hairline).frame(height: 1)
-                .padding(.top, 16)
-
-            destinations
-                .frame(height: 248)
-
-            Rectangle().fill(Theme.hairline).frame(height: 1)
+                .padding(.top, 12)
 
             footer
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
         }
         .frame(width: 300)
         .foregroundStyle(Theme.text)
@@ -113,147 +104,34 @@ struct MenuBarPanel: View {
         .accessibilityLabel(label)
     }
 
-    private var timer: some View {
-        HStack(spacing: 6) {
-            Text("SLEEP")
-                .font(Theme.caps(10))
-                .tracking(1.2)
-                .foregroundStyle(Theme.muted)
-            Spacer()
-            ForEach(Mixer.Timer.allCases, id: \.self) { t in
-                let selected = mixer.timer == t
-                Button { mixer.setTimer(t) } label: {
-                    Text(t.label)
-                        .font(Theme.label(11, .medium))
-                        .foregroundStyle(selected ? Theme.background : Theme.text)
-                        .padding(.vertical, 5)
-                        .padding(.horizontal, 8)
-                        .background(Capsule().fill(selected ? Theme.text : .clear))
-                        .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(t == .off ? "No sleep timer" : "Stop after \(t.label)")
-                .accessibilityAddTraits(selected ? .isSelected : [])
-            }
-        }
-        .sensoryFeedback(.selection, trigger: mixer.timer)
-    }
-
-    // MARK: Where to go
-
-    private var destinations: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    placeRow(id: "home", name: "Home" + (mixer.home.map { " · \($0.place)" } ?? ""),
-                             temperature: mixer.home?.temperature, color: Theme.text,
-                             current: mixer.activePreset == nil && mixer.mode == .match) {
-                        mixer.goHome()
-                        if !mixer.isPlaying { mixer.play() }
-                    }
-                    .padding(.top, 6)
-                    header("Atmospheres")
-                    ForEach(Atmosphere.curated) { a in
-                        let page = mixer.page(for: .atmosphere(a))
-                        let top = page.orbs.max { $0.volume < $1.volume }?.kind
-                        placeRow(id: a.id, name: page.title, temperature: mixer.liveSource(for: a)?.conditions.temperature,
-                                 color: top?.orb ?? Theme.text, current: isCurrent(a)) {
-                            mixer.go(to: a)
-                        }
-                    }
-                }
-                .padding(.bottom, 8)
-            }
-            .scrollIndicators(.never)
-            .onAppear {
-                if let a = mixer.atmosphere, mixer.mode == .atmosphere { proxy.scrollTo(a.id, anchor: .center) }
-            }
-        }
-    }
-
-    private func header(_ title: String) -> some View {
-        Text(title.uppercased())
-            .font(Theme.caps(10))
-            .tracking(1.2)
-            .foregroundStyle(Theme.muted)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 18)
-            .padding(.top, 12)
-            .padding(.bottom, 4)
-    }
-
-    private func isCurrent(_ atmosphere: Atmosphere) -> Bool {
-        mixer.activePreset == nil && mixer.mode == .atmosphere && mixer.atmosphere == atmosphere
-    }
-
-    private func placeRow(id: String, name: String, temperature: String?, color: Color, current: Bool,
-                          action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Circle()
-                    .fill(color)
-                    .frame(width: 6, height: 6)
-                    .shadow(color: color.opacity(0.8), radius: current ? 4 : 0)
-                Text(name)
-                    .font(Theme.body(13, current ? .medium : .regular))
-                    .lineLimit(1)
-                Spacer()
-                if current {
-                    Text(mixer.isPlaying ? "Playing" : "Here")
-                        .font(Theme.label(10, .medium))
-                        .foregroundStyle(Theme.secondary)
-                }
-                if let temperature {
-                    Text(temperature)
-                        .font(Theme.label(11))
-                        .foregroundStyle(Theme.muted)
-                }
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 6)
-            .background(current ? Color.white.opacity(0.07) : .clear)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(MenuRowStyle())
-        .id(id)
-    }
-
     // MARK: Footer
 
+    /// The sleep timer, then Teleport, the window and Quit.
     private var footer: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button {
-                open(navigation.tab)
-            } label: {
-                footerRow("Open Atmospherics", shortcut: nil)
+        HStack(spacing: 0) {
+            TimerMenu()
+            Spacer()
+            footerButton(help: "Teleport somewhere  ⌘K") { open(.teleport) } label: { Text("Teleport…") }
+            footerButton(help: "Open the Atmospherics window") { open(navigation.tab) } label: { Text("Open") }
+            footerButton(help: "Quit Atmospherics  ⌘Q") { NSApp.terminate(nil) } label: {
+                Image(systemName: "power").font(.system(size: 11, weight: .medium))
             }
-            .buttonStyle(MenuRowStyle(corner: 6))
-            Button {
-                open(.teleport)
-            } label: {
-                footerRow("Teleport…", shortcut: "⌘K")
-            }
-            .buttonStyle(MenuRowStyle(corner: 6))
-            Button {
-                NSApp.terminate(nil)
-            } label: {
-                footerRow("Quit", shortcut: "⌘Q")
-            }
-            .buttonStyle(MenuRowStyle(corner: 6))
             .keyboardShortcut("q")
+            .accessibilityLabel("Quit")
         }
     }
 
-    private func footerRow(_ title: String, shortcut: String?) -> some View {
-        HStack {
-            Text(title).font(Theme.body(13))
-            Spacer()
-            if let shortcut { Text(shortcut).font(Theme.label(11)).foregroundStyle(Theme.muted) }
+    private func footerButton(help: String, action: @escaping () -> Void, @ViewBuilder label: () -> some View) -> some View {
+        Button(action: action) {
+            label()
+                .font(Theme.label(12))
+                .foregroundStyle(Theme.secondary)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .contentShape(Rectangle())
+        .buttonStyle(MenuRowStyle(corner: 6))
+        .help(help)
     }
 
     private func open(_ tab: MacNavigation.Tab) {
@@ -285,41 +163,63 @@ private struct MenuRowStyle: ButtonStyle {
     }
 }
 
-/// The menu bar icon: the halo as a small soft orb with faded edges, like the app icon, kept
-/// neutral (the halo's colors only as a faint tint). A little brighter while playing. A faint dark
-/// disc under it keeps it legible on a light menu bar.
+/// The menu bar icon: the halo as a small soft orb with faded edges, like the app icon. While
+/// playing it takes the colors of what's playing and breathes, slowly: a breath every six seconds,
+/// its lights turning once a minute. Paused, it's grey and still. A faint dark disc under it keeps
+/// it legible on a light menu bar.
 struct MenuBarIcon: View {
     @Environment(Mixer.self) private var mixer
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        Image(nsImage: mixer.isPlaying ? Self.playing : Self.paused)
-            .accessibilityLabel(mixer.isPlaying ? "Atmospherics, playing" : "Atmospherics")
+        Group {
+            if mixer.isPlaying {
+                let tints = Self.tints(mixer.byVolume)
+                TimelineView(.periodic(from: .now, by: reduceMotion ? 3600 : 1.0 / 12)) { context in
+                    Image(nsImage: Self.image(tints: tints, time: reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate))
+                }
+            } else {
+                Image(nsImage: Self.paused)
+            }
+        }
+        .accessibilityLabel(mixer.isPlaying ? "Atmospherics, playing" : "Atmospherics")
     }
 
-    private static let playing = image(brightness: 0.75)
-    private static let paused = image(brightness: 0.5)
+    /// The loudest three sounds' colors, a little softened toward grey so the menu bar stays calm.
+    private static func tints(_ orbs: [Orb]) -> [NSColor] {
+        let hues = orbs.prefix(3).map(\.kind.hue)
+        let picked = hues.isEmpty ? [55.0, 235, 330] : (0..<3).map { hues[$0 % hues.count] }
+        return picked.map { NSColor(Color.oklch(0.74, 0.15, $0)).blended(withFraction: 0.2, of: .gray) ?? .gray }
+    }
 
-    private static func image(brightness: CGFloat) -> NSImage {
-        NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
+    /// The app icon's warm, blue and pink lights, mostly grey and dim.
+    private static let paused = image(
+        tints: [55.0, 235, 330].map { NSColor(Color.oklch(0.7, 0.16, $0)).blended(withFraction: 0.7, of: .gray) ?? .gray },
+        time: nil)
+
+    /// Still and dim with no `time` (paused); otherwise the breath and the turn at that moment.
+    private static func image(tints: [NSColor], time: TimeInterval?) -> NSImage {
+        let breath = CGFloat(time.map { 0.5 + 0.5 * sin($0 * 2 * .pi / 6) } ?? 0)
+        let turn = CGFloat(time.map { $0 * 2 * .pi / 60 } ?? 0)
+        let alpha: CGFloat = time == nil ? 0.5 : 0.82 + 0.18 * breath
+        let swell: CGFloat = time == nil ? 1 : 0.95 + 0.05 * breath
+        let middle: CGFloat = time == nil ? 0.6 : 0.42
+        return NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
-            draw(in: ctx, alpha: brightness)
+            let center = CGPoint(x: 9, y: 9)
+            disc(ctx, center, 8.8, NSColor(srgbRed: 0.05, green: 0.055, blue: 0.075, alpha: 0.7 * alpha), hold: 0.55)
+            // Three lights, each a little off center, turning slowly around the middle.
+            let offsets = [CGPoint(x: 1.5, y: 1.3), CGPoint(x: -1.7, y: 0.4), CGPoint(x: 0.5, y: -1.7)]
+            ctx.setBlendMode(.screen)
+            for (tint, o) in zip(tints, offsets) {
+                let at = CGPoint(x: center.x + o.x * cos(turn) - o.y * sin(turn), y: center.y + o.x * sin(turn) + o.y * cos(turn))
+                disc(ctx, at, 7.6 * swell, tint.withAlphaComponent(0.9 * alpha), hold: 0.15)
+            }
+            // The bright middle where they meet.
+            disc(ctx, center, 5.2 * swell, NSColor(white: 1, alpha: middle * alpha), hold: 0.05)
+            ctx.setBlendMode(.normal)
             return true
         }
-    }
-
-    private static func draw(in ctx: CGContext, alpha: CGFloat) {
-        let center = CGPoint(x: 9, y: 9)
-        disc(ctx, center, 8.8, NSColor(srgbRed: 0.05, green: 0.055, blue: 0.075, alpha: 0.7 * alpha), hold: 0.55)
-        // The app icon's warm, blue and pink lights, mostly grey, each a little off center.
-        let tints = [55.0, 235, 330].map { NSColor(Color.oklch(0.7, 0.16, $0)).blended(withFraction: 0.7, of: .gray) ?? .gray }
-        let offsets = [CGPoint(x: 1.5, y: 1.3), CGPoint(x: -1.7, y: 0.4), CGPoint(x: 0.5, y: -1.7)]
-        ctx.setBlendMode(.screen)
-        for (tint, offset) in zip(tints, offsets) {
-            disc(ctx, CGPoint(x: center.x + offset.x, y: center.y + offset.y), 7.6, tint.withAlphaComponent(0.9 * alpha), hold: 0.15)
-        }
-        // The bright middle where they meet.
-        disc(ctx, center, 5.2, NSColor(white: 1, alpha: 0.6 * alpha), hold: 0.05)
-        ctx.setBlendMode(.normal)
     }
 
     /// A soft disc: solid out to `hold` of its radius, then fading smoothly to nothing at the edge.

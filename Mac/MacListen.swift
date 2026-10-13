@@ -129,7 +129,7 @@ private struct TravelArrows: View {
 }
 
 /// The sleep timer beside play: a moon when there's none, otherwise how long it's set for.
-private struct TimerMenu: View {
+struct TimerMenu: View {
     @Environment(Mixer.self) private var mixer
 
     var body: some View {
