@@ -91,8 +91,9 @@ private struct PlaybackCommands: View {
             navigation.saving = true
         }
         .keyboardShortcut("s")
-        Button(mixer.mode == .atmosphere ? "Reset Scene to Default" : "Reset \(mixer.currentPlaceName.capitalizedFirst) to Default") {
-            withAnimation(.smooth) { mixer.resetCurrentPlace() }
+        Button(mixer.mode == .atmosphere ? "Reset Scene to Default…" : "Reset \(mixer.currentPlaceName.capitalizedFirst) to Default…") {
+            openWindow(id: MacNavigation.mainWindow)
+            navigation.resetting = true
         }
         .disabled(!mixer.currentPlaceIsTweaked)
     }

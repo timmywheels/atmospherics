@@ -10,9 +10,8 @@ using namespace metal;
 // The soundscape as a glass ghost: one form made of a soft body for each sound (bigger and
 // higher the louder it is), merged where sounds are near, and seen through like colored glass:
 // a faint glow inside, thicker where there's more of it, and a glowing edge where you look along
-// its surface, smoothed over the last pixel. Seen through the same camera as Layers
-// (`SculptureCamera` in Sculpture.swift), so labels drawn over it line up. In Layers it stands
-// on a ground with the sounds' light pooled on it, contour footprints, the rim and you.
+// its surface, smoothed over the last pixel. Seen through `SculptureCamera` (Sculpture.swift),
+// so anything drawn over it lines up.
 
 struct Blob {
     float4 sphere;   // center xyz, radius
@@ -29,7 +28,6 @@ struct Uniforms {
     float pitch;
     float smoothness;    // how readily blobs merge
     float glow;          // halo strength around the form
-    float ground;        // 1 draws the ground
     float time;
     int count;
     float exposure;      // a lightning flash brightens everything
@@ -92,17 +90,6 @@ static float3 fieldNormal(float3 p, constant Blob *b, int n, float k, float wobb
                      + h.yxy * field(p + h.yxy * e, b, n, k, wobble, time, c) + h.xxx * field(p + h.xxx * e, b, n, k, wobble, time, c));
 }
 
-/// The ground's own relief under the sounds, for contour footprints: a rise under each, as
-/// high as the sound is loud.
-static float relief(float2 q, constant Blob *b, int n) {
-    float h = 0.0;
-    for (int i = 0; i < n; i++) {
-        float2 d = q - b[i].sphere.xz;
-        h += (b[i].sphere.y + b[i].sphere.w) * exp(-dot(d, d) / 0.09);
-    }
-    return h;
-}
-
 fragment float4 sculptureFragment(VertexOut in [[stage_in]],
                                   constant Uniforms &u [[buffer(0)]],
                                   constant Blob *blobs [[buffer(1)]]) {
@@ -113,15 +100,6 @@ fragment float4 sculptureFragment(VertexOut in [[stage_in]],
     float3 light = normalize(toWorld(float3(-0.5, 0.8, -0.45), u.yaw, u.pitch));
     int n = u.count;
     float k = u.smoothness, wob = u.wobble, time = u.time;
-
-    // The ground, if any: where the ray meets y = 0 inside the disc.
-    float tGround = 1e4;
-    float3 g = float3(0.0);
-    if (u.ground > 0.5 && rd.y < -1e-4) {
-        float t = -ro.y / rd.y;
-        float3 q = ro + rd * t;
-        if (length(q.xz) < 1.2) { tGround = t; g = q; }
-    }
 
     // Light from the form (premultiplied) and how much of what's behind still shows through.
     float3 lightOut = float3(0.0);
@@ -135,7 +113,7 @@ fragment float4 sculptureFragment(VertexOut in [[stage_in]],
     float disc = bq * bq - (dot(oc, oc) - u.bounds.w * u.bounds.w);
     if (n > 0 && disc > 0.0) {
         float s = sqrt(disc);
-        float t = max(0.0, -bq - s), tEnd = min(-bq + s, tGround);
+        float t = max(0.0, -bq - s), tEnd = -bq + s;
         // In: march to the surface. A ray that runs out of steps skimming it (along a thin neck
         // between two sounds) is on the glass, not a gap in it.
         bool hit = false;
@@ -193,32 +171,6 @@ fragment float4 sculptureFragment(VertexOut in [[stage_in]],
         }
     }
 
-    if (tGround < 1e4) {
-        // The ground under it: faint, lit by the sounds above, with their contour footprints.
-        float r = length(g.xz);
-        float fade = smoothstep(1.2, 0.9, r);
-        float3 spill = float3(0.0);
-        for (int i = 0; i < n; i++) {
-            float d = max(length(g - blobs[i].sphere.xyz) - blobs[i].sphere.w, 0.0);
-            spill += blobs[i].color.rgb * exp(-d * 3.2);
-        }
-        float cover = 0.5 * fade;
-        float3 groundLight = (float3(0.012, 0.016, 0.022) + spill * 0.22) * cover;
-        float h = relief(g.xz, blobs, n) * 9.0;
-        float fw = max(fwidth(h), 1e-4);
-        float line = (1.0 - smoothstep(0.0, fw * 1.4, abs(fract(h + 0.5) - 0.5))) * fade;
-        float strength = 0.08 + 0.45 * clamp(h / 9.0, 0.0, 1.0);
-        float3 lineColor = spill / max(max(spill.r, max(spill.g, spill.b)), 0.2);
-        groundLight += lineColor * line * strength * 0.5;
-        cover = max(cover, line * strength);
-        float rimLine = exp(-pow((r - 1.0) / 0.004, 2.0)) * step(0.55, fract(atan2(g.z, g.x) * 24.0 / M_PI_F)) * 0.3;
-        float you = min(1.0, exp(-pow((r - 0.075) / 0.005, 2.0)) + exp(-pow(r / 0.013, 2.0))) * 0.85;
-        groundLight += float3(0.55) * rimLine + float3(0.92) * you;
-        cover = max(cover, max(rimLine, you));
-        // Seen through the form.
-        lightOut += groundLight * through;
-        through *= 1.0 - cover;
-    }
     float alpha = 1.0 - through;
 
     // A soft halo of each sound's own light around it (each its own, so colors blend without a

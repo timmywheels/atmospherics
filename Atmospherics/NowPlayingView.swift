@@ -9,6 +9,8 @@ struct NowPlayingView: View {
     @State private var dragX: CGFloat = 0
     @State private var showMixer = false
     @State private var showTeleport = false
+    /// Teleport opened from the Take me to… bar starts with the keyboard up.
+    @State private var teleportTyping = false
     @State private var saving = false
     @State private var hint: String?
     /// How many of the one-time hints have been shown.
@@ -52,6 +54,12 @@ struct NowPlayingView: View {
         }
     }
 
+    /// Teleport as the sentence to change, or (from the Take me to… bar) ready to type.
+    private func openTeleport(typing: Bool) {
+        teleportTyping = typing
+        showTeleport = true
+    }
+
     /// Playing an atmosphere (not a Library mix started from one): its own weather and time apply.
     private var inAtmosphere: Bool { mixer.mode == .atmosphere && mixer.activePreset == nil }
 
@@ -59,72 +67,31 @@ struct NowPlayingView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Menu {
+                    // Ways back, only when there's something to go back from.
                     if mixer.activePreset != nil {
                         Button("Back to \(mixer.presetReturnName)", systemImage: "arrow.uturn.backward") {
                             withAnimation(.smooth(duration: 0.35)) { mixer.leavePreset() }
                         }
-                    } else if mixer.mode != .match {
-                        Button("Home · \(mixer.homeName)", systemImage: "house") {
-                            withAnimation(.smooth(duration: 0.35)) { mixer.goHome() }
-                        }
-                    } else if mixer.following[.match] != true {
-                        Button("Follow the weather", systemImage: "arrow.clockwise") { mixer.followWeatherAgain() }
                     }
                     if mixer.isImagining {
                         Button("Back to live weather", systemImage: "arrow.uturn.backward") {
                             withAnimation(.smooth) { mixer.clearOverrides() }
                         }
-                        Divider()
                     }
-                    Button("Teleport…", systemImage: "sparkles") { showTeleport = true }
-                    Button("Layers", systemImage: "square.3.layers.3d") { showMixer = true }
+                    if mixer.activePreset != nil || mixer.isImagining { Divider() }
                     Button("Library", systemImage: "books.vertical") { showLibrary = true }
                     Menu("Sleep timer · \(mixer.timer == .off ? "off" : mixer.timer.label)", systemImage: "moon") {
                         ForEach(Mixer.Timer.allCases, id: \.self) { t in
                             Button(t == .off ? "No timer" : "Stop after \(t.label)") { mixer.setTimer(t) }
                         }
                     }
-                    if inAtmosphere, let a = mixer.atmosphere {
-                        // An atmosphere's own weather and time, from those that suit it.
-                        Menu("Weather · \(a.sky.name)", systemImage: "cloud.sun") {
-                            Picker("Weather", selection: Binding(get: { a.sky }, set: { mixer.setAtmosphereSky($0) })) {
-                                ForEach(a.setting.info.skies, id: \.self) { Text($0.name).tag($0) }
-                            }
-                        }
-                        Menu("Time of day · \(a.time.name)", systemImage: "sun.and.horizon") {
-                            Picker("Time of day", selection: Binding(get: { a.time }, set: { mixer.setAtmosphereTime($0) })) {
-                                ForEach(a.setting.info.times, id: \.self) { Text($0.name).tag($0) }
-                            }
-                        }
-                    } else {
-                        Menu("Weather · \(mixer.skyOverride.rawValue)", systemImage: "cloud.sun") {
-                            Picker("Weather", selection: Binding(get: { mixer.skyOverride }, set: { mixer.setSky($0) })) {
-                                ForEach(Mixer.SkyOverride.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                            }
-                        }
-                        Menu("Time of day · \(mixer.timeOverride.rawValue)", systemImage: "sun.and.horizon") {
-                            Picker("Time of day", selection: Binding(get: { mixer.timeOverride }, set: { mixer.setTime($0) })) {
-                                ForEach(Mixer.TimeOverride.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                            }
-                        }
-                    }
+                    Button("Save this mix", systemImage: "bookmark") { saving = true }
                     Menu("Temperature · \(tempUnitLabel)", systemImage: "thermometer.medium") {
                         Picker("Temperature", selection: $tempUnit) {
                             Text("Auto").tag("auto")
                             Text("°F").tag("f")
                             Text("°C").tag("c")
                         }
-                    }
-                    Button("Save this mix", systemImage: "bookmark") { saving = true }
-                    if mixer.currentPlaceIsTweaked {
-                        Button("Reset \(mixer.currentPlaceName) to default", systemImage: "arrow.counterclockwise") {
-                            withAnimation(.smooth) { mixer.resetCurrentPlace() }
-                        }
-                    }
-                    Divider()
-                    Button("Show gesture hints again", systemImage: "hand.tap") {
-                        hintStep = 0
-                        Task { await runHints() }
                     }
                 } label: {
                     HStack(spacing: 10) {
@@ -161,17 +128,13 @@ struct NowPlayingView: View {
             .tracking(1.3)
             .foregroundStyle(Theme.muted)
 
-            Carousel(dragX: $dragX, openMixer: { showMixer = true }, teleport: { showTeleport = true },
+            Carousel(dragX: $dragX, openMixer: { showMixer = true }, teleport: { openTeleport(typing: false) },
                      openLibrary: { showLibrary = true })
-                .frame(minHeight: 420, maxHeight: .infinity)
+                .frame(minHeight: 400, maxHeight: .infinity)
 
             .sensoryFeedback(.selection, trigger: mixer.mode)
 
-            Waveform()
-                .frame(height: 40)
-                .padding(.top, 6)
-
-            // What's playing, and the control for it, side by side along the bottom.
+            // What's playing, a way back if you've tuned it, and the sleep timer if there is one.
             HStack(spacing: 14) {
                 LayerStrip(orbs: mixer.byVolume)
                 if mixer.timer != .off {
@@ -180,10 +143,25 @@ struct NowPlayingView: View {
                         .foregroundStyle(Theme.muted)
                         .transition(.opacity)
                 }
-                PlayButton()
+                HStack(spacing: 8) {
+                    ResetTuning()
+                    SoundsMenu(edit: { showMixer = true }, save: { saving = true })
+                }
             }
             .padding(.top, 14)
             .animation(.smooth, value: mixer.timer)
+            .animation(.smooth, value: mixer.currentPlaceIsTweaked)
+
+            Waveform()
+                .frame(height: 40)
+                .padding(.top, 2)
+
+            // Where to go next, and play, in reach of a thumb.
+            HStack(spacing: 12) {
+                TakeMeBar { openTeleport(typing: true) }
+                PlayButton()
+            }
+            .padding(.top, 10)
         }
         .padding(.horizontal, 28)
         .padding(.top, 18)
@@ -206,7 +184,7 @@ struct NowPlayingView: View {
             }
         )
         .accessibilityAction(named: "Library") { showLibrary = true }
-        .accessibilityAction(named: "Teleport") { showTeleport = true }
+        .accessibilityAction(named: "Teleport") { openTeleport(typing: false) }
         .accessibilityAction(named: "Change the weather") { inAtmosphere ? mixer.cycleAtmosphereSky() : mixer.cycleSky() }
         .accessibilityAction(named: "Layers") { showMixer = true }
         .navigationDestination(isPresented: $showMixer) { MixerView() }
@@ -230,7 +208,7 @@ struct NowPlayingView: View {
             LibraryView(current: mixer.activePreset)
         }
         .sheet(isPresented: $showTeleport) {
-            TeleportView(start: mixer.mode == .atmosphere ? mixer.atmosphere : nil)
+            TeleportView(start: mixer.mode == .atmosphere ? mixer.atmosphere : nil, typing: teleportTyping)
         }
         .sensoryFeedback(.impact(weight: .medium), trigger: mixer.shuffleCount)
         .sensoryFeedback(.impact(flexibility: .soft), trigger: mixer.skyOverride)
@@ -316,11 +294,27 @@ struct Carousel: View {
                 .onTapGesture { openMixer() }
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel("Open layers")
-            Button { teleport() } label: {
-                PageTitle(lines: mixer.titleLines)
+            HStack(alignment: .lastTextBaseline, spacing: 8) {
+                Button { teleport() } label: {
+                    PageTitle(lines: mixer.titleLines)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Teleport somewhere")
+                // At the edge on a phone; beside the name in a wide Mac window.
+                #if os(iOS)
+                Spacer(minLength: 0)
+                #endif
+                if let key = mixer.favoriteKey {
+                    FavoriteToggle(key: key, size: 19)
+                        .alignmentGuide(.lastTextBaseline) { $0[VerticalAlignment.center] + 7 }
+                        #if os(iOS)
+                        .offset(x: 10)
+                        #endif
+                }
+                #if os(macOS)
+                Spacer(minLength: 0)
+                #endif
             }
-            .buttonStyle(.plain)
-            .accessibilityHint("Teleport somewhere")
             .contextMenu {
                 Button("Teleport…", systemImage: "sparkles") { teleport() }
                 Button("Save this mix", systemImage: "bookmark") { saving = true }
@@ -608,6 +602,144 @@ private struct Breathing<Content: View>: View {
                     expanded = true
                 }
             }
+    }
+}
+
+/// A small outlined button beside what's playing.
+private struct SoundsPill: View {
+    let title: String
+    let symbol: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: symbol)
+                .font(Theme.label(12, .medium))
+                .foregroundStyle(Theme.text)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 12)
+                .background(Capsule().fill(Color.white.opacity(0.06)))
+                .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                .contentShape(Capsule())
+                .fixedSize()
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// What you can do with what's playing: change its sounds, or keep it in your library.
+private struct SoundsMenu: View {
+    let edit: () -> Void
+    let save: () -> Void
+
+    var body: some View {
+        Menu {
+            Button("Edit sounds", systemImage: "slider.horizontal.3", action: edit)
+            Button("Save this mix", systemImage: "bookmark", action: save)
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.text)
+                .frame(width: 34, height: 26)
+                .background(Capsule().fill(Color.white.opacity(0.06)))
+                .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Sound options")
+    }
+}
+
+/// When you've tuned the scene playing (in Layers): a plain way back to how it sounds by default,
+/// after asking.
+struct ResetTuning: View {
+    @Environment(Mixer.self) private var mixer
+    @State private var confirming = false
+
+    var body: some View {
+        if mixer.currentPlaceIsTweaked {
+            SoundsPill(title: "Reset", symbol: "arrow.counterclockwise") { confirming = true }
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                .accessibilityLabel("Reset this scene")
+                .accessibilityHint("Back to how it sounds by default")
+                #if os(macOS)
+                .help("Put this scene back to how it sounds by default")
+                #endif
+                .confirmReset(isPresented: $confirming)
+        }
+    }
+}
+
+extension View {
+    /// Asks before putting the scene back to how it sounds by default, since that loses your tuning.
+    func confirmReset(isPresented: Binding<Bool>) -> some View {
+        modifier(ConfirmReset(isPresented: isPresented))
+    }
+}
+
+private struct ConfirmReset: ViewModifier {
+    @Environment(Mixer.self) private var mixer
+    @Binding var isPresented: Bool
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog("Reset this scene?", isPresented: $isPresented, titleVisibility: .visible) {
+            Button("Reset", role: .destructive) {
+                Haptics.tap(.light)
+                withAnimation(.smooth) { mixer.resetCurrentPlace() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Your changes to its sounds will be lost.")
+        }
+    }
+}
+
+/// The way to Teleport, as the start of a sentence: "Take me to…".
+/// At its end, Surprise me: somewhere new, chosen for you.
+private struct TakeMeBar: View {
+    @Environment(Mixer.self) private var mixer
+    let action: () -> Void
+    @State private var surprises = 0
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Button(action: action) {
+                HStack(spacing: 10) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 15))
+                    Text("Take me to…")
+                        .font(Theme.label(15))
+                    Spacer(minLength: 0)
+                }
+                .padding(.leading, 18)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Teleport")
+            .accessibilityHint("Build a scene, or say where to go")
+
+            Button { surprise() } label: {
+                Image(systemName: Atmosphere.surpriseSymbol)
+                    .font(.system(size: 15))
+                    .frame(width: 52, height: 48)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Surprise me")
+            .accessibilityHint("Teleports somewhere new")
+        }
+        .foregroundStyle(Theme.secondary)
+        .background(Capsule().fill(Color.white.opacity(0.06)))
+        .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+        .sensoryFeedback(.impact(weight: .medium), trigger: surprises)
+    }
+
+    private func surprise() {
+        var next = Atmosphere.random()
+        while next == mixer.atmosphere { next = Atmosphere.random() }
+        surprises += 1
+        withAnimation(.smooth(duration: 0.5)) { mixer.go(to: next) }
     }
 }
 

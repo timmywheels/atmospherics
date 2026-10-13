@@ -13,6 +13,10 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
     case traffic, highway, planes
     case lapping, palms, rocks, buoy, halyards
     case tram, motorbikes, fountain, templeBell, bazaar
+    // Wind of different kinds: a breeze in the leaves, wind in the trees, winter gusts, a howl at the window
+    case breeze, treeWind, gusts, howl
+    // The city late at night, after the day's hum
+    case cityNight
     // Synthesized focus tones
     case betaBeats, gammaBeats, betaPulse
 
@@ -22,9 +26,10 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .howlers, .jungleBirds, .parrots, .canopy, .treeFrogs, .owls, .loons, .wolves, .leaves,
              .waterfall, .caveDrips, .tentRain, .tinRoof, .whales, .lake,
              .cafe, .library, .cabin, .bells, .typing, .clock, .cityHum, .rainyStreet,
-             .rain, .lightRain, .heavyRain, .thunder, .fire, .crickets, .ocean, .birds, .stream, .train, .wind, .cicadas, .frogs,
+             .rain, .lightRain, .heavyRain, .thunder, .lightning, .fire, .crickets, .ocean, .birds, .stream, .train, .wind, .cicadas, .frogs,
              .winterBirds, .gulls, .foghorn, .peepers, .geese, .traffic, .highway, .planes,
-             .lapping, .palms, .rocks, .buoy, .halyards, .tram, .motorbikes, .fountain, .templeBell, .bazaar: true
+             .lapping, .palms, .rocks, .buoy, .halyards, .tram, .motorbikes, .fountain, .templeBell, .bazaar,
+             .breeze, .treeWind, .gusts, .howl, .cityNight, .chimes, .fan: true
         default: false
         }
     }
@@ -32,6 +37,23 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
     /// One-off events (a plane passing over, geese flying by, a tram, a temple bell) play through once from the start
     /// when they come on, instead of looping.
     var isEvent: Bool { [.planes, .geese, .tram, .templeBell].contains(self) }
+
+    /// Sounds heard as separate strikes rather than a loop: one of a few recordings at a time, with a
+    /// quiet spell of some seconds between, so a storm never repeats itself. Thunder rolls in from
+    /// the distance; lightning cracks close by (and lights up the screen just before you hear it).
+    var strikes: (clips: Int, gap: ClosedRange<Double>)? {
+        switch self {
+        case .thunder: (5, 9...35)
+        case .lightning: (5, 14...48)
+        default: nil
+        }
+    }
+
+    /// The recordings that make this sound: `rain.m4a`, or for strikes `thunder1.m4a`, `thunder2.m4a`…
+    var recordings: [String] {
+        guard let strikes else { return [rawValue] }
+        return (1...strikes.clips).map { "\(rawValue)\($0)" }
+    }
 
     /// This sound if the app has it, otherwise the closest synthesized one (or nothing).
     var playable: SoundKind? {
@@ -51,6 +73,8 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .templeBell: return .bells
         case .bells: return .chimes
         case .cabin: return .fan
+        case .breeze, .treeWind, .gusts, .howl: return .wind
+        case .cityNight: return .cityHum
         // Better silent than wrong: no stand-in for these (a spring chorus is no winter bird).
         default: return nil   // howlers, owls, loons, wolves, library, typing, clock, winter birds, gulls, foghorn, geese, planes, buoy, rigging, tram
         }
@@ -58,7 +82,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
 
     /// Recorded sounds whose file is actually in the app. Ones without a file are hidden.
     static let available: [SoundKind] = allCases.filter {
-        !$0.isRecorded || Bundle.main.url(forResource: $0.rawValue, withExtension: "m4a") != nil
+        !$0.isRecorded || Bundle.main.url(forResource: $0.recordings[0], withExtension: "m4a") != nil
     }
 
     var id: String { rawValue }
@@ -73,7 +97,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .brown, .pink, .white, .green, .grey, .blue, .violet: .noise
         case .rain, .lightRain, .heavyRain, .ocean, .stream, .wind, .thunder, .lightning: .water
         case .birds, .crickets, .cicadas, .frogs, .fire: .nature
-        case .cityHum, .train, .fan: .city
+        case .cityHum, .cityNight, .train, .fan: .city
         case .chimes, .drone, .bells: .calm
         case .howlers, .jungleBirds, .parrots, .canopy, .treeFrogs: .jungle
         case .owls, .loons, .wolves, .leaves: .night
@@ -86,6 +110,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .palms: .nature
         case .tram, .motorbikes, .bazaar: .city
         case .fountain: .water
+        case .breeze, .treeWind, .gusts, .howl: .water
         case .templeBell: .calm
         case .betaBeats, .gammaBeats, .betaPulse: .tones
         }
@@ -95,6 +120,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .brown, .pink, .white, .green, .grey, .blue, .violet: "\(short) noise"
         case .cityHum: "City street"
+        case .cityNight: "City at night"
         case .jungleBirds: "Jungle birds"
         case .treeFrogs: "Tree frogs"
         case .caveDrips: "Cave drips"
@@ -113,6 +139,8 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .buoy: "Bell buoy"
         case .halyards: "Sailboat rigging"
         case .templeBell: "Temple bell"
+        case .treeWind: "Wind in the trees"
+        case .howl: "Howling wind"
         case .betaBeats: "Beta beats, 16 Hz"
         case .gammaBeats: "Gamma beats, 40 Hz"
         case .betaPulse: "Beta pulse, 16 Hz"
@@ -123,6 +151,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
     var short: String {
         switch self {
         case .cityHum: "City"
+        case .cityNight: "City night"
         case .howlers: "Howlers"
         case .jungleBirds: "Jungle birds"
         case .treeFrogs: "Tree frogs"
@@ -137,10 +166,29 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .lapping: "Lapping"
         case .halyards: "Rigging"
         case .templeBell: "Temple bell"
+        case .treeWind: "Tree wind"
         case .betaBeats: "Beta beats"
         case .gammaBeats: "Gamma beats"
         case .betaPulse: "Beta pulse"
         default: rawValue.capitalized
+        }
+    }
+
+    /// How high up the sound comes from, 0 (the ground, the water) to 1 (the sky): owls up in the
+    /// trees, frogs in the grass, thunder overhead. The home screen's form leans each sound's
+    /// swell up or down by it.
+    var height: Double {
+        switch self {
+        case .planes, .lightning: 1
+        case .thunder, .geese: 0.9
+        case .owls, .jungleBirds, .parrots, .canopy, .howlers: 0.75
+        case .birds, .winterBirds, .gulls, .treeWind, .leaves, .gusts: 0.6
+        case .rain, .lightRain, .heavyRain, .wind, .breeze, .palms, .bells, .templeBell: 0.5
+        case .chimes, .halyards, .buoy, .howl, .tentRain, .tinRoof, .cicadas: 0.4
+        case .clock, .library, .cafe, .typing, .fan, .cabin, .train, .tram, .bazaar, .foghorn, .whales: 0.25
+        case .fire, .crickets, .cityHum, .cityNight, .traffic, .highway, .motorbikes, .rainyStreet, .waterfall, .fountain: 0.15
+        case .frogs, .treeFrogs, .peepers, .loons, .stream, .lake, .ocean, .lapping, .rocks, .caveDrips: 0.05
+        default: 0.3
         }
     }
 
@@ -165,6 +213,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .frogs: 150
         case .stream: 195
         case .cityHum: 325
+        case .cityNight: 295
         case .train: 245
         case .fan: 220
         case .chimes: 345
@@ -215,6 +264,10 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .rainyStreet: 235
         case .lightRain: 215
         case .heavyRain: 250
+        case .breeze: 165
+        case .treeWind: 155
+        case .gusts: 195
+        case .howl: 270
         }
     }
 
@@ -257,4 +310,8 @@ enum Theme {
     /// Words in capitals (the wordmark, tabs, section names) keep the monospace: the brand's
     /// voice, here and there. Sentences and names are in the sans.
     static func caps(_ size: CGFloat) -> Font { .system(size: size, weight: .medium, design: .monospaced) }
+    /// The monospace in sentence case, for a screen that speaks in it throughout (Layers).
+    static func mono(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
+        .system(size: size, weight: weight, design: .monospaced)
+    }
 }

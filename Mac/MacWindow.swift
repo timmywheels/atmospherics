@@ -39,6 +39,7 @@ struct MacWindow: View {
         .preferredColorScheme(.dark)
         .animation(.smooth(duration: 0.3), value: navigation.tab)
         .saveMixPrompt(isPresented: $navigation.saving)
+        .confirmReset(isPresented: $navigation.resetting)
         .alert("Audio error", isPresented: .constant(mixer.errorMessage != nil)) {
             Button("OK") { mixer.errorMessage = nil }
         } message: {

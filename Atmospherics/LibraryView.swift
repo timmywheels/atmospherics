@@ -11,6 +11,7 @@ struct LibraryView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var filter: Preset.Tag?
     @State private var showingYours: Bool
+    @State private var showingFavorites = false
     @State private var renaming: SavedMix?
     @State private var newName = ""
     @State private var deletes = 0
@@ -24,8 +25,10 @@ struct LibraryView: View {
         _showingYours = State(initialValue: current?.isSaved == true)
     }
 
-    private var yours: [SavedMix] { filter == nil ? mixer.savedMixes : [] }
-    private var builtIn: [Preset] { showingYours ? [] : Preset.all.filter { filter == nil || $0.tag == filter } }
+    private var yours: [SavedMix] { filter == nil && !showingFavorites ? mixer.savedMixes : [] }
+    private var builtIn: [Preset] {
+        showingYours || showingFavorites ? [] : Preset.all.filter { filter == nil || $0.tag == filter }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -35,12 +38,19 @@ struct LibraryView: View {
                 .padding(.horizontal, 4)
 
             HStack(spacing: 8) {
-                chip("All", selected: filter == nil && !showingYours) { filter = nil; showingYours = false }
+                chip("All", selected: filter == nil && !showingYours && !showingFavorites) {
+                    filter = nil; showingYours = false; showingFavorites = false
+                }
+                if !mixer.favorites.isEmpty || showingFavorites {
+                    chip("Favorites", selected: showingFavorites) { filter = nil; showingYours = false; showingFavorites = true }
+                }
                 if !mixer.savedMixes.isEmpty {
-                    chip("Yours", selected: showingYours) { filter = nil; showingYours = true }
+                    chip("Yours", selected: showingYours) { filter = nil; showingYours = true; showingFavorites = false }
                 }
                 ForEach(Preset.Tag.allCases, id: \.self) { tag in
-                    chip(tag.rawValue, selected: filter == tag && !showingYours) { filter = tag; showingYours = false }
+                    chip(tag.rawValue, selected: filter == tag && !showingYours && !showingFavorites) {
+                        filter = tag; showingYours = false; showingFavorites = false
+                    }
                 }
             }
             .padding(.top, 18)
@@ -63,6 +73,22 @@ struct LibraryView: View {
                         .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 4, trailing: 0))
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
+                    }
+                    if showingFavorites {
+                        ForEach(mixer.favoriteItems) { favorite in
+                            switch favorite {
+                            case .scene(let a): scene(a)
+                            case .mix(let p): item(p)
+                            }
+                        }
+                        if mixer.favorites.isEmpty {
+                            Text("Tap the ring on a scene or a mix to keep it here.")
+                                .font(Theme.label(12))
+                                .foregroundStyle(Theme.secondary)
+                                .padding(.vertical, 12)
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                        }
                     }
                     ForEach(yours) { mix in
                         item(mix.preset)
@@ -100,6 +126,8 @@ struct LibraryView: View {
         .presentationDragIndicator(.visible)
         .animation(.smooth(duration: 0.25), value: filter)
         .animation(.smooth(duration: 0.25), value: showingYours)
+        .animation(.smooth(duration: 0.25), value: showingFavorites)
+        .animation(.smooth(duration: 0.25), value: mixer.favorites)
         .alert("Rename mix", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Name", text: $newName)
             Button("Cancel", role: .cancel) {}
@@ -126,10 +154,33 @@ struct LibraryView: View {
             row(preset)
         }
         .buttonStyle(.plain)
+        .overlay(alignment: .bottomTrailing) { FavoriteToggle(key: Mixer.favoriteKey(preset)).padding(6) }
         .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
         .id(preset.id)
+    }
+
+    /// A favorite scene: tap to go there.
+    private func scene(_ a: Atmosphere) -> some View {
+        let page = mixer.page(for: .atmosphere(a))
+        let current = mixer.mode == .atmosphere && mixer.activePreset == nil && mixer.atmosphere == a
+        return Button {
+            Haptics.tap()
+            mixer.go(to: a)
+            if let done { done() } else { dismiss() }
+        } label: {
+            ColorCard(hues: page.orbs.sorted { $0.volume > $1.volume }.prefix(3).map(\.kind.hue),
+                      top: a.setting.info.name, title: page.title, sounds: page.orbs,
+                      badge: current ? (mixer.isPlaying ? "Playing" : "Here") : nil, outlined: current,
+                      trailingRoom: 30)
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .bottomTrailing) { FavoriteToggle(key: Mixer.favoriteKey(a)).padding(6) }
+        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .id(Mixer.favoriteKey(a))
     }
 
     private func delete(_ mix: SavedMix) {
@@ -159,7 +210,8 @@ struct LibraryView: View {
                          top: (preset.tag.map { "\($0.rawValue) · \(preset.length)" } ?? "Yours")
                              + (preset.evidence.map { " · \($0.rawValue)" } ?? ""),
                          title: preset.name, subtitle: preset.description,
-                         badge: current ? (mixer.isPlaying ? "Playing" : "Current") : nil, outlined: current)
+                         badge: current ? (mixer.isPlaying ? "Playing" : "Current") : nil, outlined: current,
+                         trailingRoom: 30)
     }
 }
 

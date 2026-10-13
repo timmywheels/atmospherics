@@ -1,7 +1,7 @@
 # Recorded sound sources
 
 Every recording is public domain or CC0 (no attribution required). Credited here anyway.
-Loops are made with `prepare.py` (60 s from the given start unless noted): each is mastered to -20 LUFS with its natural dynamics (a gentle compressor only tames events well above the recording's norm), then seam crossfaded.
+Thunder and lightning are strikes rather than loops: each clip is made with `prepare.py --once`, and the app plays one at a time at random intervals (`SoundKind.strikes`). Loops are made with `prepare.py` (60 s from the given start unless noted): each is mastered to -20 LUFS with its natural dynamics (a gentle compressor only tames events well above the recording's norm), then seam crossfaded.
 
 | Sound | Source | Author | License | Start |
 |---|---|---|---|---|
@@ -28,10 +28,21 @@ Loops are made with `prepare.py` (60 s from the given start unless noted): each 
 | clock | https://freesound.org/s/171043/ | ST303 | CC0 | 10 s |
 
 Freesound files were taken from their public HQ previews (about 128 kbps MP3).
-| cityHum (city street) | https://commons.wikimedia.org/wiki/File:Sunday_in_the_city_street_noise1.ogg | cori | Public domain | 20 s (90 s loop) |
+| cityHum (city street) | https://freesound.org/s/371250/ | risto_alcinov | CC0 | 8 s (100 s loop; distant evening traffic from a 5th-floor balcony, replacing a seaside town that had gulls in it) |
+| cityNight | https://freesound.org/s/330427/ | janbezouska | CC0 | 30 s (120 s loop; downtown LA late at night) |
+| breeze | https://freesound.org/s/579250/ | Danjocross | CC0 | 8 s (110 s loop) |
+| treeWind | https://freesound.org/s/577335/ | TRP | CC0 | 6 s (100 s loop) |
+| gusts | https://freesound.org/s/574565/ | TRP | CC0 | 80 s (130 s loop) |
+| howl | https://freesound.org/s/117610/ | swiftoid | CC0 | 2 s (52 s loop; wind howling at a window) |
 | rainyStreet | https://commons.wikimedia.org/wiki/File:Urban_Street_on_a_Rainy_Afternoon.flac | Extemporalist | CC0 | 300 s (90 s loop) |
 | rain | https://freesound.org/s/349488/ | zavoronok | CC0 | 15 s (80 s loop) |
-| thunder | https://freesound.org/s/635153/ | skinoku | CC0 | 10 s (90 s loop) |
+| thunder1 | https://freesound.org/s/683421/ | SholeColtis | CC0 | 0 s (6.7 s strike) |
+| thunder2 | https://freesound.org/s/696550/ | saha213131 | CC0 | 0 s (6.2 s strike) |
+| thunder3 | https://freesound.org/s/744723/ | Emulius | CC0 | 1.8 s (10 s strike) |
+| thunder4 | https://freesound.org/s/38250/ | nednednerb | CC0 | 0.5 s (9.5 s strike) |
+| thunder5 | https://freesound.org/s/522025/ | Nimlos | CC0 | 2.8 s (10 s strike) |
+| lightning1 | https://freesound.org/s/476739/ | elmoustachio | CC0 | 4.2 s (26 s strike) |
+| lightning2–5 | https://freesound.org/s/522025/ | Nimlos | CC0 | 27, 59.6, 93.8 and 124.6 s (four strikes, 15.5–19 s each) |
 | fire | https://freesound.org/s/729395/ | HECKFRICKER | CC0 | 10 s (90 s loop) |
 | crickets | https://freesound.org/s/453861/ | kyles | CC0 | 5 s (80 s loop) |
 | ocean | https://freesound.org/s/623052/ | goochiano | CC0 | 20 s (90 s loop) |
@@ -61,3 +72,5 @@ Freesound files were taken from their public HQ previews (about 128 kbps MP3).
 | fountain | https://freesound.org/s/572465/ | frnk_cnt | CC0 | 3 s (118 s loop) |
 | templeBell | https://freesound.org/s/397352/ | Vurca | CC0 | 0 s (29 s, one strike, plays once) |
 | bazaar | https://freesound.org/s/511005/ | 3bagbrew | CC0 | 14 s (52 s loop, before the singing starts) |
+| chimes | https://freesound.org/s/695627/ | SugarANDRocks | CC0 | 5 s (120 s loop; chimes in the night wind) |
+| fan | https://freesound.org/s/870765/ | CHallSmith | CC0 | 3 s (55 s loop; a house fan in a window) |

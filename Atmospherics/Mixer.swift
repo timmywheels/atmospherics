@@ -227,8 +227,14 @@ final class Mixer {
         timeOverride = defaults.string(forKey: "timeOverride").flatMap(TimeOverride.init(rawValue:)) ?? .live
         tweaks = defaults.dictionary(forKey: "placeTweaks") as? [String: [String: Double]] ?? [:]
         if let data = defaults.data(forKey: "savedMixes"), let saved = try? JSONDecoder().decode([SavedMix].self, from: data) {
-            // Layers used to be called the mixer.
-            savedMixes = saved.map { var mix = $0; mix.origin = mix.origin.replacingOccurrences(of: "Made in the mixer", with: "Made in Layers"); return mix }
+            // Layers was the mixer once, and Topology for a while.
+            savedMixes = saved.map { saved in
+                var mix = saved
+                for old in ["Made in the mixer", "Made in Topology"] {
+                    mix.origin = mix.origin.replacingOccurrences(of: old, with: "Made in Layers")
+                }
+                return mix
+            }
         }
         activePreset = defaults.string(forKey: "activePreset").flatMap { id in
             Preset.all.first { $0.id == id } ?? savedMixes.first { $0.id.uuidString == id }?.preset
@@ -559,14 +565,22 @@ final class Mixer {
         update(id) { $0.x = x; $0.y = y }
     }
 
-    /// Nudges an orb toward (positive) or away from (negative) the center. Used by VoiceOver.
+    /// Nudges a sound louder (positive) or quieter (negative). Used by VoiceOver.
     func adjustVolume(_ id: Orb.ID, by delta: Double) {
         guard let orb = orbs.first(where: { $0.id == id }) else { return }
-        let target = max(0, min(1, orb.volume + delta))
+        setVolume(id, to: orb.volume + delta)
+    }
+
+    /// Sets how loud a sound is, keeping which way it is from you (and so its spoke in the shape).
+    func setVolume(_ id: Orb.ID, to volume: Double) {
+        guard let orb = orbs.first(where: { $0.id == id }) else { return }
+        transition?.cancel()
+        visualTarget = nil
+        let target = max(0, min(0.995, volume))
         let dx = orb.x - 0.5, dy = orb.y - 0.5
-        let d = max(hypot(dx, dy), 0.0001)
-        let r = (1 - target) * 0.5
+        let d = hypot(dx, dy)
         let (ux, uy) = d < 0.001 ? (0.0, 1.0) : (dx / d, dy / d)
+        let r = (1 - target) * 0.5
         update(id) { $0.x = 0.5 + ux * r; $0.y = 0.5 + uy * r }
     }
 
@@ -635,7 +649,51 @@ final class Mixer {
     func delete(_ mix: SavedMix) {
         savedMixes.removeAll { $0.id == mix.id }
         persistSaved()
+        if isFavorite(Self.favoriteKey(mix.preset)) { toggleFavorite(Self.favoriteKey(mix.preset)) }
         if activePreset?.savedID == mix.id { setActivePreset(nil) }
+    }
+
+    // MARK: Favorites
+
+    /// What you've marked as a favorite, newest first: Library mixes (`mix:` and the mix's ID) and
+    /// scenes (`scene:` and the atmosphere's ID). Kept on this device.
+    private(set) var favorites: [String] = UserDefaults.standard.stringArray(forKey: "favorites") ?? []
+
+    func isFavorite(_ key: String) -> Bool { favorites.contains(key) }
+
+    func toggleFavorite(_ key: String) {
+        if let i = favorites.firstIndex(of: key) { favorites.remove(at: i) } else { favorites.insert(key, at: 0) }
+        defaults.set(favorites, forKey: "favorites")
+    }
+
+    nonisolated static func favoriteKey(_ preset: Preset) -> String { "mix:\(preset.id)" }
+    nonisolated static func favoriteKey(_ atmosphere: Atmosphere) -> String { "scene:\(atmosphere.id)" }
+
+    /// What's playing, as something to favorite: a Library mix or a scene (not your own weather).
+    var favoriteKey: String? {
+        if let p = activePreset { return Self.favoriteKey(p) }
+        if mode == .atmosphere, let a = atmosphere { return Self.favoriteKey(a) }
+        return nil
+    }
+
+    enum Favorite: Identifiable {
+        case scene(Atmosphere), mix(Preset)
+        var id: String {
+            switch self {
+            case .scene(let a): Mixer.favoriteKey(a)
+            case .mix(let p): Mixer.favoriteKey(p)
+            }
+        }
+    }
+
+    /// Your favorites, newest first, as things to play.
+    var favoriteItems: [Favorite] {
+        let mixes = savedMixes.map(\.preset) + Preset.all
+        return favorites.compactMap { key in
+            if key.hasPrefix("scene:"), let a = Atmosphere(id: String(key.dropFirst(6))) { return .scene(a) }
+            if key.hasPrefix("mix:"), let p = mixes.first(where: { Self.favoriteKey($0) == key }) { return .mix(p) }
+            return nil
+        }
     }
 
     func moveSavedMixes(from source: IndexSet, to destination: Int) {

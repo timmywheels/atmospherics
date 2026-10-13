@@ -16,7 +16,7 @@ struct FocusScienceView: View {
     private let findings: [Finding] = [
         Finding(title: "Steady sound beats changing sound", evidence: .strong,
                 text: "What breaks focus most is sound you can't help following: nearby voices, lyrics, and sounds that keep changing, like ticking or typing. Steady sound distracts least, and it covers nearby voices. Pink noise and water both mask speech; lab studies favor water, one long office trial didn't.",
-                mixes: "Speech Shield, Steady Rain, Reading Room",
+                mixes: "Quiet Car, Steady Rain, Reading Room",
                 sources: [("Perham & Currie, 2014, Applied Cognitive Psychology", nil),
                           ("Hongisto et al., 2017, Frontiers in Psychology", "https://pmc.ncbi.nlm.nih.gov/articles/PMC5515102/")]),
         Finding(title: "Noise for a wandering mind", evidence: .some,

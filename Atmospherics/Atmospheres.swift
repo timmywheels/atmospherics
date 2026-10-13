@@ -187,6 +187,8 @@ enum Setting: String, CaseIterable, Codable {
         let suits: ((Place, Conditions) -> Bool)?
         /// Indoors, the weather outside is heard through the walls: rain and wind this much quieter.
         var muffle: Double = 1
+        /// What wind sounds like here: open air, in the trees, mountain gusts, or a howl at the window.
+        var wind: SoundKind = .wind
     }
 
     var info: Info { Self.infos[self]! }
@@ -201,11 +203,12 @@ enum Setting: String, CaseIterable, Codable {
         switch self {
         case .cabin:
             return Info(name: "Log cabin", go: "to a log cabin", lead: "A log cabin", at: "in a log cabin", indoors: true,
-                        signature: [(.fire, 0.5), (.wind, 0.12), (.owls, 0.15), (.wolves, 0.1), (.leaves, 0.08)],
+                        signature: [(.fire, 0.5), (.howl, 0.12), (.clock, 0.2), (.owls, 0.15), (.wolves, 0.1), (.leaves, 0.08)],
                         core: [.fire], climate: .continental, latitude: 46, month: 1,
                         skies: [.snowstorm, .snow, .rain, .thunderstorm, .wind, .fog, .clear], times: all,
                         line: "A fire going, the weather outside", rainOn: nil,
-                        suits: { p, c in c.temperatureC < 12 && p.climate != .tropical && !has(p, .cityHum, 0.3) }, muffle: 0.5)
+                        suits: { p, c in c.temperatureC < 12 && p.climate != .tropical && !has(p, .cityHum, 0.3) }, muffle: 0.5,
+                        wind: .howl)
         case .city:
             return Info(name: "City", go: "to the city", lead: "The city", at: "in the city", indoors: false,
                         signature: [(.cityHum, 0.45), (.traffic, 0.3), (.tram, 0.15), (.bells, 0.1), (.cafe, 0.12),
@@ -234,15 +237,16 @@ enum Setting: String, CaseIterable, Codable {
                         core: [], climate: .temperate, latitude: 44, month: 7,
                         skies: [.rain, .thunderstorm, .downpour, .drizzle, .wind, .fog, .clear], times: all,
                         line: "The woods all around, close by", rainOn: .tentRain,
-                        suits: { p, c in c.temperatureC > 4 && (has(p, .leaves, 0.15) || has(p, .owls)) && !has(p, .cityHum, 0.3) })
+                        suits: { p, c in c.temperatureC > 4 && (has(p, .leaves, 0.15) || has(p, .owls)) && !has(p, .cityHum, 0.3) },
+                        wind: .treeWind)
         case .forest:
             return Info(name: "Forest", go: "to the forest", lead: "The forest", at: "in the forest", indoors: false,
-                        signature: [(.leaves, 0.35), (.birds, 0.3), (.stream, 0.2), (.owls, 0.2), (.wind, 0.08),
+                        signature: [(.leaves, 0.35), (.birds, 0.3), (.stream, 0.2), (.owls, 0.2), (.breeze, 0.15),
                                     (.frogs, 0.08), (.crickets, 0.08), (.geese, 0.05)],
                         core: [], climate: .temperate, latitude: 46, month: 5,
                         skies: [.clear, .rain, .drizzle, .fog, .snow, .wind, .thunderstorm], times: all,
                         line: "Trees, birdsong and a stream", rainOn: nil,
-                        suits: { p, _ in has(p, .leaves, 0.2) && !has(p, .cityHum, 0.3) })
+                        suits: { p, _ in has(p, .leaves, 0.2) && !has(p, .cityHum, 0.3) }, wind: .treeWind)
         case .jungle:
             return Info(name: "Jungle", go: "to the jungle", lead: "The jungle", at: "in the jungle", indoors: false,
                         signature: [(.canopy, 0.4), (.jungleBirds, 0.35), (.howlers, 0.25), (.parrots, 0.2), (.treeFrogs, 0.3),
@@ -250,7 +254,7 @@ enum Setting: String, CaseIterable, Codable {
                         core: [], climate: .tropical, latitude: 4, month: nil,
                         skies: [.clear, .rain, .downpour, .thunderstorm, .fog, .drizzle], times: all,
                         line: "The rainforest, wide awake", rainOn: nil,
-                        suits: { p, _ in has(p, .canopy) || has(p, .jungleBirds, 0.3) })
+                        suits: { p, _ in has(p, .canopy) || has(p, .jungleBirds, 0.3) }, wind: .treeWind)
         case .lake:
             return Info(name: "Lake", go: "to the lake", lead: "The lake", at: "at the lake", indoors: false,
                         signature: [(.lake, 0.4), (.loons, 0.4), (.peepers, 0.25), (.frogs, 0.25), (.crickets, 0.2),
@@ -258,7 +262,7 @@ enum Setting: String, CaseIterable, Codable {
                         core: [], climate: .continental, latitude: 45, month: 6,
                         skies: [.clear, .fog, .drizzle, .rain, .wind, .thunderstorm, .snow], times: all,
                         line: "Still water, loons across it", rainOn: nil,
-                        suits: { p, _ in has(p, .lake, 0.3) || has(p, .loons) })
+                        suits: { p, _ in has(p, .lake, 0.3) || has(p, .loons) }, wind: .treeWind)
         case .harbor:
             return Info(name: "Harbor", go: "to a harbor", lead: "A harbor", at: "at the harbor", indoors: false,
                         signature: [(.halyards, 0.35), (.buoy, 0.3), (.lapping, 0.3), (.gulls, 0.3), (.rocks, 0.12),
@@ -272,28 +276,30 @@ enum Setting: String, CaseIterable, Codable {
                         indoors: true, signature: [(.train, 0.6)], core: [.train], climate: .temperate, latitude: 45, month: nil,
                         skies: [.rain, .snow, .snowstorm, .clear, .thunderstorm, .fog], times: all,
                         line: "The rhythm of the rails", rainOn: nil,
-                        suits: { p, _ in p.climate != .tropical }, muffle: 0.5)
+                        suits: { p, _ in p.climate != .tropical }, muffle: 0.5, wind: .howl)
         case .library:
             return Info(name: "Library", go: "to a library", lead: "A library", at: "in a library", indoors: true,
-                        signature: [(.library, 0.5)], core: [.library], climate: .temperate, latitude: 45, month: nil,
+                        signature: [(.library, 0.5), (.clock, 0.35), (.fire, 0.18), (.cityHum, 0.06)],
+                        core: [.library, .clock], climate: .temperate, latitude: 45, month: nil,
                         skies: [.rain, .drizzle, .snow, .thunderstorm, .clear, .fog], times: [.now, .day, .dusk, .night],
-                        line: "Quiet pages, soft footsteps", rainOn: nil,
-                        suits: { _, _ in true }, muffle: 0.4)
+                        line: "Quiet pages, a clock, soft footsteps", rainOn: nil,
+                        suits: { _, _ in true }, muffle: 0.4, wind: .howl)
         case .temple:
             return Info(name: "Temple garden", go: "to a temple garden", lead: "A temple garden", at: "in a temple garden",
                         indoors: false,
-                        signature: [(.templeBell, 0.35), (.fountain, 0.25), (.stream, 0.2), (.birds, 0.25), (.chimes, 0.12), (.leaves, 0.15)],
+                        signature: [(.templeBell, 0.35), (.fountain, 0.25), (.stream, 0.2), (.birds, 0.25), (.chimes, 0.12), (.leaves, 0.15),
+                                    (.breeze, 0.1)],
                         core: [], climate: .subtropical, latitude: 35, month: 4,
                         skies: [.drizzle, .rain, .clear, .fog, .snow], times: all,
                         line: "A fountain, a bell, the garden", rainOn: nil,
-                        suits: { p, _ in has(p, .templeBell) })
+                        suits: { p, _ in has(p, .templeBell) }, wind: .treeWind)
         case .mountains:
             return Info(name: "Mountains", go: "to the mountains", lead: "The mountains", at: "in the mountains", indoors: false,
-                        signature: [(.wind, 0.35), (.stream, 0.25), (.waterfall, 0.15), (.wolves, 0.1), (.birds, 0.1), (.leaves, 0.08)],
+                        signature: [(.gusts, 0.35), (.stream, 0.25), (.waterfall, 0.15), (.wolves, 0.1), (.birds, 0.1), (.leaves, 0.08)],
                         core: [], climate: .subpolar, latitude: 47, month: nil,
                         skies: [.wind, .snow, .snowstorm, .clear, .fog, .rain, .thunderstorm], times: all,
                         line: "Wind over the ridges, water below", rainOn: nil,
-                        suits: { p, _ in has(p, .wind, 0.3) && !has(p, .cityHum, 0.2) })
+                        suits: { p, _ in has(p, .wind, 0.3) && !has(p, .cityHum, 0.2) }, wind: .gusts)
         case .tinRoof:
             return Info(name: "Tin roof", go: "under a tin roof", lead: "Under a tin roof", at: "under a tin roof", indoors: true,
                         signature: [(.frogs, 0.3), (.treeFrogs, 0.25), (.crickets, 0.2), (.palms, 0.12)],
@@ -305,11 +311,11 @@ enum Setting: String, CaseIterable, Codable {
             return Info(name: "Summer porch", go: "to a summer porch", lead: "A summer porch", at: "on a summer porch",
                         indoors: false,
                         signature: [(.crickets, 0.45), (.frogs, 0.3), (.cicadas, 0.25), (.chimes, 0.2), (.peepers, 0.15),
-                                    (.leaves, 0.15), (.birds, 0.1)],
+                                    (.leaves, 0.15), (.birds, 0.1), (.breeze, 0.12)],
                         core: [], climate: .subtropical, latitude: 36, month: 7,
                         skies: [.clear, .thunderstorm, .rain, .drizzle], times: all,
                         line: "Crickets, frogs and wind chimes", rainOn: nil,
-                        suits: { p, c in c.temperatureC >= 18 && has(p, .crickets, 0.15) })
+                        suits: { p, c in c.temperatureC >= 18 && has(p, .crickets, 0.15) }, wind: .treeWind)
         case .market:
             return Info(name: "Market", go: "to the market", lead: "The market", at: "at the market", indoors: false,
                         signature: [(.bazaar, 0.5), (.motorbikes, 0.2), (.fountain, 0.12), (.cafe, 0.12), (.bells, 0.05)],
@@ -319,7 +325,7 @@ enum Setting: String, CaseIterable, Codable {
                         suits: { p, _ in has(p, .bazaar) })
         case .flight:
             return Info(name: "Long flight", go: "on a long flight", lead: "A long flight", at: "on a long flight", indoors: true,
-                        signature: [(.cabin, 0.6)], core: [.cabin], climate: .temperate, latitude: 45, month: nil,
+                        signature: [(.cabin, 0.6), (.brown, 0.18)], core: [.cabin, .brown], climate: .temperate, latitude: 45, month: nil,
                         skies: [.clear], times: all,
                         line: "The steady hum of the cabin, far above the weather", rainOn: nil,
                         suits: nil)
@@ -347,6 +353,14 @@ struct Atmosphere: Hashable, Codable, Identifiable {
     }
 
     var id: String { "\(setting.rawValue).\(sky.rawValue).\(time.rawValue)" }
+
+    /// Back from an `id` ("cabin.snowstorm.night"), or nil if it names nothing.
+    init?(id: String) {
+        let parts = id.split(separator: ".").map(String.init)
+        guard parts.count == 3, let setting = Setting(rawValue: parts[0]), let sky = Sky(rawValue: parts[1]),
+              let time = TimeOfDay(rawValue: parts[2]) else { return nil }
+        self.init(setting, sky, time)
+    }
 
     /// Where changes you make to it in Layers are kept.
     var tweakKey: String { "atmosphere:\(id)" }
@@ -456,7 +470,7 @@ struct Atmosphere: Hashable, Codable, Identifiable {
     func mix(in c: Conditions, now: Date = Date(), playableOnly: Bool = true) -> [(SoundKind, Double)] {
         let info = setting.info
         return Soundscape.compose(c, place: setting.place, now: now, playableOnly: playableOnly,
-                                  core: info.core, rainOn: info.rainOn, muffle: info.muffle)
+                                  core: info.core, rainOn: info.rainOn, muffle: info.muffle, wind: info.wind)
     }
 
     // MARK: Picking one
@@ -494,6 +508,9 @@ struct Atmosphere: Hashable, Codable, Identifiable {
     ]
 
     /// Any setting, in weather that suits it, mostly on your clock.
+    /// The symbol for Surprise me, wherever it's offered.
+    static let surpriseSymbol = "shuffle"
+
     static func random() -> Atmosphere {
         let setting = Setting.allCases.randomElement()!
         let info = setting.info

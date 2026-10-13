@@ -13,6 +13,8 @@ struct ColorCard: View {
     var badge: String? = nil
     var outlined = false
     var minHeight: CGFloat = 132
+    /// Room kept clear at the bottom right, for a control laid over the card.
+    var trailingRoom: CGFloat = 0
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -32,19 +34,22 @@ struct ColorCard: View {
                 }
             }
             Spacer(minLength: 18)
-            Text(title)
-                .font(Theme.body(21))
-                .lineLimit(1)
-            if let sounds {
-                LayerStrip(orbs: sounds, color: .white.opacity(0.68))
-                    .padding(.top, 6)
-            } else if let subtitle {
-                Text(subtitle)
-                    .font(Theme.label(10.5))
-                    .foregroundStyle(.white.opacity(0.62))
+            Group {
+                Text(title)
+                    .font(Theme.body(21))
                     .lineLimit(1)
-                    .padding(.top, 4)
+                if let sounds {
+                    LayerStrip(orbs: sounds, color: .white.opacity(0.68))
+                        .padding(.top, 6)
+                } else if let subtitle {
+                    Text(subtitle)
+                        .font(Theme.label(10.5))
+                        .foregroundStyle(.white.opacity(0.62))
+                        .lineLimit(1)
+                        .padding(.top, 4)
+                }
             }
+            .padding(.trailing, trailingRoom)
         }
         .foregroundStyle(.white)
         .padding(16)

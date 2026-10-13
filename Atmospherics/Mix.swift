@@ -47,8 +47,10 @@ extension SoundKind {
         // Weather and water: the air of a scene.
         case .heavyRain, .brown: 0
         case .rain, .thunder, .waterfall, .cabin, .fan, .pink, .green, .betaPulse: -1
-        case .ocean, .rocks, .rainyStreet, .cityHum, .grey: -2
-        case .tentRain, .tinRoof, .wind: -3
+        case .ocean, .rocks, .rainyStreet, .cityHum, .cityNight, .grey: -2
+        case .tentRain, .tinRoof, .wind, .treeWind, .gusts: -3
+        case .howl: -5
+        case .breeze: -6
         case .cafe, .train, .fire, .white, .blue, .lapping: -4
         case .violet, .traffic, .bazaar: -5
         case .highway: -6
@@ -88,10 +90,7 @@ extension SoundKind {
         case .grey: measured = -10.6
         case .blue: measured = -7.2
         case .violet: measured = -11.4
-        case .fan: measured = -12.4
-        case .chimes: measured = -22.7
         case .drone: measured = -22.4
-        case .lightning: measured = -15.1
         case .betaBeats: measured = -12.7
         case .gammaBeats: measured = -12.6
         case .betaPulse: measured = -12.8
