@@ -34,27 +34,6 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    /// One-off events (a plane passing over, geese flying by, a tram, a temple bell) play through once from the start
-    /// when they come on, instead of looping.
-    var isEvent: Bool { [.planes, .geese, .tram, .templeBell].contains(self) }
-
-    /// Sounds heard as separate strikes rather than a loop: one of a few recordings at a time, with a
-    /// quiet spell of some seconds between, so a storm never repeats itself. Thunder rolls in from
-    /// the distance; lightning cracks close by (and lights up the screen just before you hear it).
-    var strikes: (clips: Int, gap: ClosedRange<Double>)? {
-        switch self {
-        case .thunder: (5, 9...35)
-        case .lightning: (5, 14...48)
-        default: nil
-        }
-    }
-
-    /// The recordings that make this sound: `rain.m4a`, or for strikes `thunder1.m4a`, `thunder2.m4a`…
-    var recordings: [String] {
-        guard let strikes else { return [rawValue] }
-        return (1...strikes.clips).map { "\(rawValue)\($0)" }
-    }
-
     /// This sound if the app has it, otherwise the closest synthesized one (or nothing).
     var playable: SoundKind? {
         if !isRecorded || SoundKind.available.contains(self) { return self }
@@ -294,13 +273,16 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
 enum Theme {
     static let background = Color(hex: 0x0c0e13)
     static let text = Color(hex: 0xeceef2)
-    static let secondary = Color(hex: 0xb9bec8)
-    static let muted = Color(hex: 0x9aa0ab)
+    /// Quieter text is white let through rather than a fixed grey, so it takes on the color of the
+    /// scene behind it: as dim as a grey, without sitting cold on a warm sky.
+    static let secondary = Color.white.opacity(0.72)
+    static let muted = Color.white.opacity(0.55)
     static let orbLabel = Color(hex: 0xc9ced8)
     static let hairline = Color.white.opacity(0.14)
 
-    /// Stands in for Geist Light.
-    static func display(_ size: CGFloat) -> Font { .system(size: size, weight: .light) }
+    /// Titles and names (a scene, a mix, a layer) in Instrument Serif: calm, and set apart from
+    /// the data around them, which stays in the monospace.
+    static func display(_ size: CGFloat) -> Font { .custom("InstrumentSerif-Regular", fixedSize: size) }
     static func body(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font { .system(size: size, weight: weight) }
     /// Small labels and captions, in the same clean sans as everything else (a point larger than
     /// the monospace they replaced, which ran wider). Tracked out when in capitals.
@@ -310,7 +292,7 @@ enum Theme {
     /// Words in capitals (the wordmark, tabs, section names) keep the monospace: the brand's
     /// voice, here and there. Sentences and names are in the sans.
     static func caps(_ size: CGFloat) -> Font { .system(size: size, weight: .medium, design: .monospaced) }
-    /// The monospace in sentence case, for a screen that speaks in it throughout (Layers).
+    /// The monospace in sentence case, for a line of instructions among the data (Layers' hint).
     static func mono(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
         .system(size: size, weight: weight, design: .monospaced)
     }

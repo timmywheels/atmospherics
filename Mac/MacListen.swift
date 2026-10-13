@@ -45,7 +45,7 @@ struct MacListen: View {
                 .frame(minHeight: 340, maxHeight: .infinity)
                 .overlay { TravelArrows() }
 
-            Waveform()
+            VolumeLine()
                 .frame(height: 40)
                 .padding(.top, 6)
 
@@ -67,17 +67,11 @@ struct MacListen: View {
         .onKeyPress(.rightArrow) { mixer.requestTravel(forward: true); return .handled }
         .onAppear { focused = true }
         .overlay(alignment: .bottom) {
-            if let hint {
-                Text(hint)
-                    .font(Theme.label(11))
-                    .padding(.vertical, 10)
-                    .padding(.horizontal, 16)
-                    .background(Capsule().fill(.ultraThinMaterial))
-                    .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
-                    .padding(.bottom, 130)
-                    .transition(.opacity.combined(with: .offset(y: 8)))
-                    .allowsHitTesting(false)
+            ZStack {
+                if let text = mixer.notice ?? hint { HintBubble(text: text) }
             }
+            .padding(.bottom, 130)
+            .animation(.smooth(duration: 0.3), value: mixer.notice)
         }
         .task { await runHints() }
         .sensoryFeedback(.impact(weight: .medium), trigger: mixer.shuffleCount)

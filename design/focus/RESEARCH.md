@@ -27,10 +27,12 @@ None of this is medical advice, and the app makes no medical claims.
   778–788. https://pmc.ncbi.nlm.nih.gov/articles/PMC11283987/
   - 13 studies, N = 335: small benefit for ADHD or elevated symptoms (g = 0.249, 95% CI
     0.135–0.363); a small cost for non-ADHD comparison groups (g ≈ −0.21).
-  - No studies of brown noise.
+  - No studies of brown, green or grey noise.
 - Proposed mechanism: moderate brain arousal / stochastic resonance (Söderlund et al., 2007),
   plausible but not established.
-- **In the app:** Restless Mind (pink + white), framed as "try it if your mind wanders".
+- **In the app:** Restless Mind (pink + white), framed as "try it if your mind wanders", and Pink
+  Noise and White Noise on their own. Brown, Green and Grey Noise are there too, with no evidence
+  label, because people like them.
 
 ## 3. Beta-rate amplitude modulation (early)
 
@@ -39,9 +41,14 @@ None of this is medical advice, and the app makes no medical claims.
   - Music with added amplitude modulation; beta-range modulation helped sustained attention more
     for participants with more ADHD symptoms; greater attention-network activity (fMRI) and
     stimulus–brain coupling (EEG).
-  - One paper; the authors work with Brain.fm, whose music was used.
-- **In the app:** Beta Pulse (pink noise modulated at 16 Hz, depth 0.5, both ears in phase so it
-  works on a speaker), with soft rain.
+  - One paper; the authors work with Brain.fm, whose music was used. Pink noise was a control
+    condition, unmodulated; the modulation was only ever applied to music.
+- **In the app:** Beta Pulse (pink noise modulated at 16 Hz, depth 0.3, both ears in phase so it
+  works on a speaker), set well back (−7 dB) under soft rain. The paper tested 8, 16 and 32 Hz,
+  all at "medium" depth (given only as a step on its own spectral metric, not a number); 16 Hz
+  did best for listeners with more ADHD traits, and depth made no significant difference, so the
+  app keeps 16 Hz and a gentle depth. That's an extrapolation (the study's modulated stimulus was
+  music), and the science page says so.
 
 ## 4. Binaural beats (mixed)
 

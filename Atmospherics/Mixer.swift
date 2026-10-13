@@ -196,7 +196,20 @@ final class Mixer {
     @ObservationIgnored private var lastWeatherFetch: Date?
     @ObservationIgnored private var transition: Task<Void, Never>?
 
+    /// How loud Atmospherics plays, on its own scale apart from the system volume, so a soundscape
+    /// can sit low while notifications stay loud. As on the slider, 0…1; the gain is its square,
+    /// so even steps sound even.
+    var volume: Double = 1 {
+        didSet {
+            engine.setVolume(Float(volume * volume))
+            defaults.set(volume, forKey: "volume")
+        }
+    }
+
     init() {
+        let savedVolume = defaults.object(forKey: "volume") as? Double ?? 1
+        volume = savedVolume
+        engine.setVolume(Float(savedVolume * savedVolume))
         if let data = defaults.data(forKey: "fields"),
            let saved = try? JSONDecoder().decode([String: [Orb]].self, from: data) {
             fields = Dictionary(uniqueKeysWithValues: Mode.allCases.map { ($0, saved[$0.rawValue] ?? []) })
@@ -662,8 +675,28 @@ final class Mixer {
     func isFavorite(_ key: String) -> Bool { favorites.contains(key) }
 
     func toggleFavorite(_ key: String) {
-        if let i = favorites.firstIndex(of: key) { favorites.remove(at: i) } else { favorites.insert(key, at: 0) }
+        if let i = favorites.firstIndex(of: key) {
+            favorites.remove(at: i)
+            announce("Removed from Favorites")
+        } else {
+            favorites.insert(key, at: 0)
+            announce("Added to Favorites in your Library")
+        }
         defaults.set(favorites, forKey: "favorites")
+    }
+
+    /// A word on what you just did ("Added to Favorites…"), shown for a moment where the hints appear.
+    private(set) var notice: String?
+    @ObservationIgnored private var noticeTask: Task<Void, Never>?
+
+    func announce(_ text: String) {
+        notice = text
+        noticeTask?.cancel()
+        noticeTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled else { return }
+            self?.notice = nil
+        }
     }
 
     nonisolated static func favoriteKey(_ preset: Preset) -> String { "mix:\(preset.id)" }

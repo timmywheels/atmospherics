@@ -36,7 +36,7 @@ struct ColorCard: View {
             Spacer(minLength: 18)
             Group {
                 Text(title)
-                    .font(Theme.body(21))
+                    .font(Theme.display(25))
                     .lineLimit(1)
                 if let sounds {
                     LayerStrip(orbs: sounds, color: .white.opacity(0.68))

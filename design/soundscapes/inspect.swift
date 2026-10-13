@@ -1,6 +1,6 @@
 // Prints what each place sounds like: right now (live weather), and across seasons and hours.
 // Build and run from the repo root:
-//   swiftc -parse-as-library -o /tmp/inspect Atmospherics/Sound.swift Atmospherics/Mix.swift Atmospherics/Places.swift \
+//   swiftc -parse-as-library -o /tmp/inspect Atmospherics/Sound.swift Atmospherics/Rhythm.swift Atmospherics/Mix.swift Atmospherics/Places.swift \
 //     Atmospherics/Weather.swift Atmospherics/Ecology.swift Atmospherics/Atmospheres.swift Shared/Color+OKLCH.swift \
 //     design/soundscapes/inspect.swift
 // Each sound shows its estimated loudness in LUFS; the scene's total is in brackets.

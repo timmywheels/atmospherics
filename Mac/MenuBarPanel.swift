@@ -18,6 +18,11 @@ struct MenuBarPanel: View {
                 .padding(.top, 14)
                 .padding(.horizontal, 18)
 
+            VolumeLine()
+                .frame(height: 32)
+                .padding(.top, 10)
+                .padding(.horizontal, 18)
+
             timer
                 .padding(.top, 16)
                 .padding(.horizontal, 18)
@@ -54,8 +59,7 @@ struct MenuBarPanel: View {
             .clipShape(Circle())
             VStack(alignment: .leading, spacing: 4) {
                 Text(mixer.title)
-                    .font(Theme.display(22))
-                    .tracking(-0.4)
+                    .font(Theme.display(26))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Text(subtitle)

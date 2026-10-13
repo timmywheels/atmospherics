@@ -30,6 +30,7 @@ struct AtmosphericsMacApp: App {
                 .environment(navigation)
         }
         .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unified(showsTitle: false))
         .defaultSize(width: 480, height: 760)
         .windowResizability(.contentMinSize)
         .commands { MacCommands(mixer: mixer, navigation: navigation) }

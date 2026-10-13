@@ -1,29 +1,29 @@
 # Recorded sound sources
 
 Every recording is public domain or CC0 (no attribution required). Credited here anyway.
-Thunder and lightning are strikes rather than loops: each clip is made with `prepare.py --once`, and the app plays one at a time at random intervals (`SoundKind.strikes`). Loops are made with `prepare.py` (60 s from the given start unless noted): each is mastered to -20 LUFS with its natural dynamics (a gentle compressor only tames events well above the recording's norm), then seam crossfaded.
+Sounds that come and go (`SoundKind.rhythm`, in Atmospherics/Rhythm.swift) play one take at a time with quiet between, instead of looping. Thunder and lightning clips are made with `prepare.py --once`. The calls of wolves, owls, loons, howlers and whales, the foghorn's blasts and the church bells' tolling are cut from their loops (kept in design/sounds/loops/, out of the app) by `calls.swift`. Planes, the tram, geese and the temple bell play their one recording. Loops are made with `prepare.py` (60 s from the given start unless noted): each is mastered to -20 LUFS with its natural dynamics (a gentle compressor only tames events well above the recording's norm), then seam crossfaded.
 
 | Sound | Source | Author | License | Start |
 |---|---|---|---|---|
-| howlers | https://freesound.org/s/490315/ | Lenguaverde | CC0 | 10 s |
+| howlers | https://freesound.org/s/490315/ | Lenguaverde | CC0 | 10 s (takes cut by calls.swift) |
 | jungleBirds | https://freesound.org/s/737513/ | alberto_cendra_woodman | CC0 | 20 s |
 | parrots (toucans) | https://commons.wikimedia.org/wiki/File:404114_felix-blume_toucans-singing-in-the-amazonian-rainforest-brazil.ogg | Felix Blume | CC0 | 30 s |
 | canopy | https://freesound.org/s/259510/ | missteik | CC0 | 20 s |
 | treeFrogs | https://freesound.org/s/824225/ | YouMightLikeThis | CC0 | 10 s |
-| owls | https://freesound.org/s/151241/ | kvgarlic | CC0 | 5 s |
-| loons | https://commons.wikimedia.org/wiki/File:Yellowstone_sound_library_-_Common_Loon_-_001.mp3 | NPS & MSU Acoustic Atlas (Jennifer Jerrett) | Public domain | 5 s |
-| wolves | https://freesound.org/s/500646/ | betchkal | CC0 | 2 s (48 s loop) |
+| owls | https://freesound.org/s/151241/ | kvgarlic | CC0 | 5 s (takes cut by calls.swift) |
+| loons | https://commons.wikimedia.org/wiki/File:Yellowstone_sound_library_-_Common_Loon_-_001.mp3 | NPS & MSU Acoustic Atlas (Jennifer Jerrett) | Public domain | 5 s (takes cut by calls.swift) |
+| wolves | https://freesound.org/s/500646/ | betchkal | CC0 | 2 s (48 s loop; takes cut by calls.swift) |
 | leaves | https://freesound.org/s/183496/ | ecfike | CC0 | 20 s |
 | waterfall | https://freesound.org/s/632107/ | BassmanJourney | CC0 | 10 s |
 | caveDrips | https://commons.wikimedia.org/wiki/File:Smodinkna_pe%C4%8Dina,_vodne_kapljice.flac | Bojan Marušič | CC0 | 120 s |
 | tentRain | https://freesound.org/s/251233/ | pulswelle | CC0 | 20 s |
 | tinRoof | https://freesound.org/s/521773/ | MrFossy | CC0 | 10 s |
-| whales | https://commons.wikimedia.org/wiki/File:Humpback_whale_wheezeblow.ogg | US National Park Service, Glacier Bay | Public domain | 1 s (55 s loop) |
+| whales | https://commons.wikimedia.org/wiki/File:Humpback_whale_wheezeblow.ogg | US National Park Service, Glacier Bay | Public domain | 1 s (55 s loop; takes cut by calls.swift) |
 | lake | https://freesound.org/s/614299/ | TheFlyFishingFilmmaker | CC0 | 20 s |
 | cafe | https://freesound.org/s/46310/ | moxobna | CC0 | 30 s |
 | library | https://freesound.org/s/620683/ | xkeril | CC0 | 30 s |
 | cabin | https://freesound.org/s/447825/ | courter | CC0 | 30 s |
-| bells | https://freesound.org/s/413157/ | lazymonk | CC0 | 30 s |
+| bells | https://freesound.org/s/413157/ | lazymonk | CC0 | 30 s (takes cut by calls.swift) |
 | typing | https://freesound.org/s/489424/ | SamsterBirdies | CC0 | 10 s |
 | clock | https://freesound.org/s/171043/ | ST303 | CC0 | 10 s |
 
@@ -56,7 +56,7 @@ Freesound files were taken from their public HQ previews (about 128 kbps MP3).
 | heavyRain | https://freesound.org/s/717843/ | TRP | CC0 | 10 s (100 s loop) |
 | winterBirds | https://freesound.org/s/454024/ | kyles | CC0 | 15 s (100 s loop) |
 | gulls | https://freesound.org/s/208074/ | Further_Roman | CC0 | 10 s (100 s loop) |
-| foghorn | https://freesound.org/s/140898/ | exuberate | CC0 | 4 s (86 s loop, exactly four blasts) |
+| foghorn | https://freesound.org/s/140898/ | exuberate | CC0 | 4 s (86 s loop, exactly four blasts; takes cut by calls.swift) |
 | peepers | https://freesound.org/s/423812/ | kvgarlic | CC0 | 10 s (110 s loop) |
 | geese | https://freesound.org/s/842773/ | onionaire | CC0 | 2 s (92 s, one flyover, plays once) |
 | traffic | https://freesound.org/s/110310/ | nickpursehouse | CC0 | 60 s (120 s loop) |

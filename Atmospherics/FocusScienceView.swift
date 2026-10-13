@@ -20,11 +20,11 @@ struct FocusScienceView: View {
                 sources: [("Perham & Currie, 2014, Applied Cognitive Psychology", nil),
                           ("Hongisto et al., 2017, Frontiers in Psychology", "https://pmc.ncbi.nlm.nih.gov/articles/PMC5515102/")]),
         Finding(title: "Noise for a wandering mind", evidence: .some,
-                text: "A 2024 review of 13 studies found white or pink noise gave a small lift to attention for people with ADHD or attention difficulties, and a small drop for everyone else. Try it if your mind wanders, and skip it if it doesn't help. No study has tested brown noise yet.",
-                mixes: "Restless Mind",
+                text: "A 2024 review of 13 studies found white or pink noise gave a small lift to attention for people with ADHD or attention difficulties, and a small drop for everyone else. Try it if your mind wanders, and skip it if it doesn't help. No study has tested brown, green or grey noise yet.",
+                mixes: "Restless Mind, Pink Noise, White Noise",
                 sources: [("Nigg et al., 2024, Journal of the American Academy of Child and Adolescent Psychiatry", "https://pmc.ncbi.nlm.nih.gov/articles/PMC11283987/")]),
         Finding(title: "A pulse at beta rate", evidence: .early,
-                text: "Music whose loudness pulsed quickly, in the beta range around 16 times a second, helped sustained attention most for listeners with more ADHD traits, and it showed in their brain activity. It's one study, by researchers working with a focus-music company.",
+                text: "Music whose loudness pulsed quickly, in the beta range around 16 times a second, helped sustained attention most for listeners with more ADHD traits, and it showed in their brain activity. It's one study, by researchers working with a focus-music company. Beta Pulse puts the same pulse on pink noise, which the study didn't test: it played plain pink noise as a comparison.",
                 mixes: "Beta Pulse",
                 sources: [("Woods et al., 2024, Communications Biology", "https://doi.org/10.1038/s42003-024-07026-3")]),
         Finding(title: "Binaural beats", evidence: .mixed,
@@ -50,8 +50,7 @@ struct FocusScienceView: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Sounds for focus")
-                        .font(Theme.display(30))
-                        .tracking(-0.6)
+                        .font(Theme.display(36))
                     Spacer()
                     Button { dismiss() } label: {
                         Image(systemName: "xmark").font(.system(size: 15, weight: .medium)).padding(8)

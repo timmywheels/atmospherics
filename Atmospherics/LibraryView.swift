@@ -33,8 +33,7 @@ struct LibraryView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Library")
-                .font(Theme.display(30))
-                .tracking(-0.6)
+                .font(Theme.display(36))
                 .padding(.horizontal, 4)
 
             HStack(spacing: 8) {
@@ -121,6 +120,7 @@ struct LibraryView: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 28)
+        .notices(above: 28)
         .foregroundStyle(Theme.text)
         .presentationBackground(Theme.background)
         .presentationDragIndicator(.visible)

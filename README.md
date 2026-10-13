@@ -59,3 +59,5 @@ xcodebuild -exportArchive -archivePath build/AtmosphericsMac.xcarchive -exportOp
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+Titles and names are set in [Instrument Serif](https://github.com/Instrument/instrument-serif) (© 2022 The Instrument Serif Project Authors), under the SIL Open Font License 1.1, which the font file carries with it.

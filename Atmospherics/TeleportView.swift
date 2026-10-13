@@ -107,6 +107,7 @@ struct TeleportView: View {
         }
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
+        .notices(above: 28)
         .foregroundStyle(Theme.text)
         .background { SceneWash(orbs: preview.orbs) }
         .presentationBackground(Theme.background)
@@ -128,8 +129,7 @@ struct TeleportView: View {
             part(draft.sky.phrase, .sky)
             part(draft.time.phrase, .time)
         }
-        .font(Theme.display(34))
-        .tracking(-0.8)
+        .font(Theme.display(40))
         .lineLimit(1)
         .minimumScaleFactor(0.6)
     }

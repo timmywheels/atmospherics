@@ -27,7 +27,8 @@ func makeGenerator(for kind: SoundKind, sampleRate sr: Float, seed: UInt32) -> S
     // Left and right voices are told apart by their seeds, as for lightning.
     case .betaBeats: return BinauralBeat(sr: sr, carrier: 200, beat: 16, left: seed < 5000)
     case .gammaBeats: return BinauralBeat(sr: sr, carrier: 240, beat: 40, left: seed < 5000)
-    case .betaPulse: return Pulse(sr: sr, rate: 16, depth: 0.5)
+    // A medium pulse, as in the study (it gives no number): a shimmer under the sound, not a flutter.
+    case .betaPulse: return Pulse(sr: sr, rate: 16, depth: 0.3)
     default: return nil
     }
 }

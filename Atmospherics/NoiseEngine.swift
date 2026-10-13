@@ -81,6 +81,10 @@ final class NoiseEngine {
     }
 
     /// `gain` comes from `Mix.gains`; synthesized sounds are calibrated to the recordings here.
+    /// How loud the app plays overall, apart from the system volume (a gain, 0…1). It's applied
+    /// after the soft clip, so turning it down changes only the level, never the sound.
+    func setVolume(_ gain: Float) { engine.mainMixerNode.outputVolume = gain }
+
     func setLevel(_ gain: Float, for kind: SoundKind) {
         let gain = max(0, min(1, gain))
         if kind.isRecorded { samples.setLevel(gain, for: kind); return }

@@ -10,8 +10,8 @@ let W: CGFloat = 2880, H: CGFloat = 1800
 let shots: [(file: String, title: String, sub: String, glow: NSColor, height: CGFloat, trimTop: CGFloat)] = [
     ("1-listen", "Teleport\nby sound", "A snowy night in the mountains, at your desk.", NSColor(srgbRed: 0.3, green: 0.7, blue: 0.75, alpha: 1), 1520, 0),
     ("2-teleport", "Take me\nanywhere", "Build a scene in a sentence, or say it.", NSColor(srgbRed: 0.3, green: 0.5, blue: 0.85, alpha: 1), 1520, 0),
-    ("3-layers", "A landscape of\nwhat you hear", "Drag a sound closer to hear more.", NSColor(srgbRed: 0.35, green: 0.65, blue: 0.5, alpha: 1), 1520, 0),
-    ("4-menubar", "Always in your\nmenu bar", "Scenes, sleep timer and play, a click away.", NSColor(srgbRed: 0.3, green: 0.6, blue: 0.7, alpha: 1), 1300, 12),
+    ("3-layers", "Every sound,\nyour level", "Tap or drag across a layer to set it.", NSColor(srgbRed: 0.35, green: 0.65, blue: 0.5, alpha: 1), 1520, 0),
+    ("4-menubar", "Always in your\nmenu bar", "Scenes, volume, sleep timer and play, a click away.", NSColor(srgbRed: 0.3, green: 0.6, blue: 0.7, alpha: 1), 1300, 64),
 ]
 
 for dir in ["framed", "upload"] { try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true) }
