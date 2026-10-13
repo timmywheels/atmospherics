@@ -139,9 +139,9 @@ struct LibraryView: View {
                 .frame(width: 540, height: 680)
                 #endif
         }
-        .sensoryFeedback(.selection, trigger: filter)
-        .sensoryFeedback(.impact(weight: .medium), trigger: deletes)
-        .sensoryFeedback(.selection, trigger: mixer.savedMixes.map(\.id))
+        .sensoryFeedback(.impact(weight: .medium), trigger: filter)
+        .sensoryFeedback(.impact(weight: .heavy), trigger: deletes)
+        .sensoryFeedback(.impact(weight: .medium), trigger: mixer.savedMixes.map(\.id))
     }
 
     /// One row of the list: tap to play it.

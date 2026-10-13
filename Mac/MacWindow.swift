@@ -30,7 +30,8 @@ struct MacWindow: View {
                 .background(Theme.background)
                 .ignoresSafeArea()
         }
-        .frame(minWidth: 440, minHeight: 640)
+        // Wide enough for the toolbar's one piece (back and the four tabs) beside the window buttons.
+        .frame(minWidth: 480, minHeight: 640)
         .foregroundStyle(Theme.text)
         .tint(Theme.text)
         .preferredColorScheme(.dark)
@@ -51,26 +52,32 @@ struct MacWindow: View {
     }
 }
 
-/// The toolbar, as tall as a Mac's (the window buttons centered in it): a way back beside the
-/// window buttons, and the four parts as pills in the middle. Plain, without the glass a
-/// toolbar item gets by default.
+/// The toolbar, as tall as a Mac's (the window buttons centered in it): a way back and the four
+/// parts as pills, as one piece in the middle. One piece, so the toolbar never has to fit two
+/// side by side and tuck one into an overflow menu when the window is narrow. Plain, without the
+/// glass a toolbar item gets by default.
 private struct WindowBar: ViewModifier {
     @Binding var selection: MacNavigation.Tab
 
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
             content.toolbar {
-                ToolbarItem(placement: .navigation) { BackButton(selection: $selection) }
-                    .sharedBackgroundVisibility(.hidden)
-                ToolbarItem(placement: .principal) { TabPills(selection: $selection) }
+                ToolbarItem(placement: .principal) { bar }
                     .sharedBackgroundVisibility(.hidden)
             }
         } else {
             content.toolbar {
-                ToolbarItem(placement: .navigation) { BackButton(selection: $selection) }
-                ToolbarItem(placement: .principal) { TabPills(selection: $selection) }
+                ToolbarItem(placement: .principal) { bar }
             }
         }
+    }
+
+    private var bar: some View {
+        HStack(spacing: 8) {
+            BackButton(selection: $selection)
+            TabPills(selection: $selection)
+        }
+        .fixedSize()
     }
 }
 
@@ -85,10 +92,10 @@ private struct TabPills: View {
             ForEach(MacNavigation.Tab.allCases) { tab in
                 Button { selection = tab } label: {
                     Text(tab.rawValue.uppercased())
-                        .font(Theme.caps(10.5))
-                        .tracking(1.1)
+                        .font(Theme.caps(10))
+                        .tracking(0.9)
                         .foregroundStyle(selection == tab ? Theme.text : hovered == tab ? Theme.secondary : Theme.muted)
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, 9)
                         .frame(height: 24)
                         .background {
                             if selection == tab {
@@ -114,37 +121,34 @@ private struct TabPills: View {
 }
 
 /// From Teleport, Layers or the Library, back to listening; while listening, back to the place
-/// before this one (as swiping right does), once there's been one.
+/// before this one (as swiping right does). Always there, so the tabs never shift; dimmed when
+/// there's nowhere to go back to.
 private struct BackButton: View {
     @Environment(Mixer.self) private var mixer
     @Binding var selection: MacNavigation.Tab
     @State private var hovering = false
 
     var body: some View {
-        Group {
-            if selection != .listen {
-                button("Back to Listen") { selection = .listen }
-            } else if let last = mixer.backStack.last {
-                button("Back to \(mixer.page(for: last).title)  ←") { mixer.requestTravel(forward: false) }
-            }
-        }
-        .animation(.smooth(duration: 0.25), value: selection == .listen && mixer.backStack.isEmpty)
-    }
-
-    private func button(_ label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        let last = selection == .listen ? mixer.backStack.last : nil
+        let enabled = selection != .listen || last != nil
+        let label = selection != .listen ? "Back to Listen" : last.map { "Back to \(mixer.page(for: $0).title)  ←" } ?? "Back"
+        Button {
+            if selection != .listen { selection = .listen } else { mixer.requestTravel(forward: false) }
+        } label: {
             Image(systemName: "chevron.left")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(hovering ? Theme.text : Theme.secondary)
+                .foregroundStyle(hovering && enabled ? Theme.text : Theme.secondary)
                 .frame(width: 28, height: 28)
-                .background(Circle().fill(.white.opacity(hovering ? 0.12 : 0.05)))
+                .background(Circle().fill(.white.opacity(hovering && enabled ? 0.12 : 0.05)))
                 .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.35)
         .onHover { hovering = $0 }
         .help(label)
         .accessibilityLabel(label)
-        .transition(.opacity)
+        .animation(.smooth(duration: 0.2), value: enabled)
     }
 }

@@ -9,7 +9,7 @@ struct NowPlayingView: View {
     @State private var dragX: CGFloat = 0
     @State private var showMixer = false
     @State private var showTeleport = false
-    /// Teleport opened from the Take me to… bar starts with the keyboard up.
+    /// Teleport opened from Describe the vibe… starts with the keyboard up.
     @State private var teleportTyping = false
     @State private var saving = false
     @State private var hint: String?
@@ -54,7 +54,7 @@ struct NowPlayingView: View {
         }
     }
 
-    /// Teleport as the sentence to change, or (from the Take me to… bar) ready to type.
+    /// Teleport as the sentence to change, or (from Describe the vibe…) ready to type.
     private func openTeleport(typing: Bool) {
         teleportTyping = typing
         showTeleport = true
@@ -132,7 +132,7 @@ struct NowPlayingView: View {
                      openLibrary: { showLibrary = true })
                 .frame(minHeight: 400, maxHeight: .infinity)
 
-            .sensoryFeedback(.selection, trigger: mixer.mode)
+            .sensoryFeedback(.impact(weight: .medium), trigger: mixer.mode)
 
             // What's playing, a way back if you've tuned it, and the sleep timer if there is one.
             HStack(spacing: 14) {
@@ -158,7 +158,7 @@ struct NowPlayingView: View {
 
             // Where to go next, and play, in reach of a thumb.
             HStack(spacing: 12) {
-                TakeMeBar { openTeleport(typing: true) }
+                DescribeBar(teleport: { openTeleport(typing: false) }, describe: { openTeleport(typing: true) })
                 PlayButton()
             }
             .padding(.top, 10)
@@ -203,9 +203,9 @@ struct NowPlayingView: View {
         .sheet(isPresented: $showTeleport) {
             TeleportView(start: mixer.mode == .atmosphere ? mixer.atmosphere : nil, typing: teleportTyping)
         }
-        .sensoryFeedback(.impact(weight: .medium), trigger: mixer.shuffleCount)
-        .sensoryFeedback(.impact(flexibility: .soft), trigger: mixer.skyOverride)
-        .sensoryFeedback(.impact(flexibility: .soft), trigger: mixer.atmosphere?.sky)
+        .sensoryFeedback(.impact(weight: .heavy), trigger: mixer.shuffleCount)
+        .sensoryFeedback(.impact(flexibility: .solid, intensity: 1), trigger: mixer.skyOverride)
+        .sensoryFeedback(.impact(flexibility: .solid, intensity: 1), trigger: mixer.atmosphere?.sky)
     }
 
 }
@@ -272,7 +272,7 @@ struct Carousel: View {
         }
         .onAppear { mixer.carouselShowing = true }
         .onDisappear { mixer.carouselShowing = false }
-        .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.6), trigger: pastThreshold) { _, now in now }
+        .sensoryFeedback(.impact(flexibility: .solid, intensity: 1), trigger: pastThreshold) { _, now in now }
         .accessibilityAction(named: "Travel somewhere new") { mixer.travel(forward: true) }
         .accessibilityAction(named: "Go back") { mixer.travel(forward: false) }
     }
@@ -309,7 +309,7 @@ struct Carousel: View {
                 #endif
             }
             .contextMenu {
-                Button("Teleport…", systemImage: "arrow.triangle.2.circlepath") { teleport() }
+                Button("Teleport…", systemImage: Atmosphere.teleportSymbol) { teleport() }
                 Button("Save this mix", systemImage: "bookmark") { saving = true }
                 Button("Library", systemImage: "books.vertical") { openLibrary() }
             }
@@ -687,30 +687,35 @@ private struct ConfirmReset: ViewModifier {
     }
 }
 
-/// The way to Teleport, as the start of a sentence: "Take me to…".
+/// Teleport's globe, then where to go in your own words: "Describe the vibe…".
 /// At its end, Surprise me: somewhere new, chosen for you.
-private struct TakeMeBar: View {
+private struct DescribeBar: View {
     @Environment(Mixer.self) private var mixer
-    let action: () -> Void
+    let teleport: () -> Void
+    let describe: () -> Void
     @State private var surprises = 0
 
     var body: some View {
         HStack(spacing: 0) {
-            Button(action: action) {
-                HStack(spacing: 10) {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 15))
-                    Text("Take me to…")
-                        .font(Theme.label(15))
-                    Spacer(minLength: 0)
-                }
-                .padding(.leading, 18)
-                .frame(maxWidth: .infinity, minHeight: 48)
-                .contentShape(Rectangle())
+            Button(action: teleport) {
+                Image(systemName: Atmosphere.teleportSymbol)
+                    .font(.system(size: 15))
+                    .frame(width: 44, height: 48)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .padding(.leading, 6)
             .accessibilityLabel("Teleport")
-            .accessibilityHint("Build a scene, or say where to go")
+            .accessibilityHint("Build a scene to go to")
+
+            Button(action: describe) {
+                Text("Describe the vibe…")
+                    .font(Theme.label(15))
+                    .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Say where to go in your own words")
 
             Button { surprise() } label: {
                 Image(systemName: Atmosphere.surpriseSymbol)
@@ -725,7 +730,7 @@ private struct TakeMeBar: View {
         .foregroundStyle(Theme.secondary)
         .background(Capsule().fill(Color.white.opacity(0.06)))
         .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
-        .sensoryFeedback(.impact(weight: .medium), trigger: surprises)
+        .sensoryFeedback(.impact(weight: .heavy), trigger: surprises)
     }
 
     private func surprise() {
@@ -772,9 +777,9 @@ private struct PlayButton: View {
                 }
             }
         }
-        .sensoryFeedback(.impact(weight: .medium), trigger: mixer.isPlaying)
+        .sensoryFeedback(.impact(weight: .heavy), trigger: mixer.isPlaying)
         .sensoryFeedback(.impact(weight: .heavy), trigger: held)
-        .sensoryFeedback(.selection, trigger: mixer.timer)
+        .sensoryFeedback(.impact(weight: .medium), trigger: mixer.timer)
         .accessibilityElement()
         .accessibilityAddTraits(.isButton)
         .accessibilityLabel(mixer.isPlaying ? "Pause" : "Play")
@@ -853,7 +858,7 @@ struct VolumeLine: View {
         }
         .animation(.snappy(duration: 0.15), value: sliding)
         // A tick per 10% as it slides.
-        .sensoryFeedback(.selection, trigger: Int((mixer.volume * 10).rounded(.down))) { _, _ in sliding }
+        .sensoryFeedback(.impact(flexibility: .rigid, intensity: 0.8), trigger: Int((mixer.volume * 10).rounded(.down))) { _, _ in sliding }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Volume")
         .accessibilityValue(mixer.volume < 0.01 ? "Muted" : "\(Int((mixer.volume * 100).rounded())) percent")

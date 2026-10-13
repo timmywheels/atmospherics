@@ -21,7 +21,7 @@ struct FavoriteToggle: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .sensoryFeedback(.selection, trigger: taps)
+        .sensoryFeedback(.impact(weight: .medium), trigger: taps)
         .accessibilityLabel(on ? "Remove from favorites" : "Add to favorites")
         #if os(macOS)
         .help(on ? "Remove from favorites" : "Add to favorites")

@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Listening: the halo and the scene's name, with the ones before and after beside it. Swipe
 /// with two fingers or press ← → to travel, click the light for its layers or drag it to turn it,
-/// click the name to teleport. Along the bottom, what's playing, the sleep timer and play.
+/// click the name to teleport. Along the bottom, what's playing, Teleport and Surprise me, the
+/// sleep timer and play.
 struct MacListen: View {
     @Environment(Mixer.self) private var mixer
     @Environment(MacNavigation.self) private var navigation
@@ -52,6 +53,13 @@ struct MacListen: View {
             HStack(spacing: 14) {
                 LayerStrip(orbs: mixer.byVolume)
                 ResetTuning()
+                BarButton(symbol: Atmosphere.teleportSymbol, label: "Teleport", help: "Teleport  ⌘K") {
+                    navigation.tab = .teleport
+                }
+                // On to somewhere new, as → and a swipe do.
+                BarButton(symbol: Atmosphere.surpriseSymbol, label: "Surprise me", help: "Surprise me  →") {
+                    mixer.requestTravel(forward: true)
+                }
                 TimerMenu()
                 MacPlayButton()
             }
@@ -124,6 +132,29 @@ private struct TravelArrows: View {
         .opacity(enabled ? 1 : 0)
         .disabled(!enabled)
         .help(label)
+        .accessibilityLabel(label)
+    }
+}
+
+/// A quiet symbol along the bottom that lights up under the pointer.
+private struct BarButton: View {
+    let symbol: String
+    let label: String
+    let help: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(hovering ? Theme.text : Theme.muted)
+                .padding(6)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(help)
         .accessibilityLabel(label)
     }
 }

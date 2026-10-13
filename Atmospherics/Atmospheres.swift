@@ -97,6 +97,14 @@ enum Sky: String, CaseIterable, Codable {
         }
     }
 
+    /// Weather named together, as one: snow and wind is a snowstorm. Otherwise the stormiest of
+    /// them, so "foggy and rainy" is rain and "a clear, windy night" is windy.
+    static func together(_ skies: [Sky]) -> Sky? {
+        let named = Set(skies)
+        if named.contains(.snow) && named.contains(.wind) { return .snowstorm }
+        return [Sky.snowstorm, .thunderstorm, .downpour, .rain, .drizzle, .snow, .wind, .fog, .clear].first(where: named.contains)
+    }
+
     /// Snow belongs to winter and thunderstorms to summer, whatever the month.
     fileprivate var month: Int? {
         switch self {
@@ -507,10 +515,11 @@ struct Atmosphere: Hashable, Codable, Identifiable {
         Atmosphere(.porch, .clear, .night),
     ]
 
-    /// Any setting, in weather that suits it, mostly on your clock.
-    /// The symbol for Surprise me, wherever it's offered.
+    /// The symbols for Teleport and for Surprise me, wherever they're offered.
+    static let teleportSymbol = "globe"
     static let surpriseSymbol = "shuffle"
 
+    /// Any setting, in weather that suits it, mostly on your clock.
     static func random() -> Atmosphere {
         let setting = Setting.allCases.randomElement()!
         let info = setting.info
@@ -520,36 +529,45 @@ struct Atmosphere: Hashable, Codable, Identifiable {
 
     // MARK: From words
 
-    /// Reads "take me to a log cabin in a snowstorm at night" into an atmosphere. Settings are
-    /// found first, so "rainforest" isn't read as rain. Weather a setting can't have becomes the
-    /// nearest it can; with no setting, it picks one that suits the weather.
+    /// Reads "take me to a log cabin in a snowstorm at night" into an atmosphere. Weather a setting
+    /// can't have becomes the nearest it can; with no setting, it picks one that suits the weather.
     static func parse(_ text: String) -> Atmosphere? {
-        var t = " " + text.lowercased().replacingOccurrences(of: "’", with: "'") + " "
-        func take<T>(_ table: [(T, [String])]) -> T? {
-            let words = table.flatMap { entry in entry.1.map { (entry.0, $0) } }.sorted { $0.1.count > $1.1.count }
-            for (value, word) in words {
-                if let range = t.range(of: word) {
-                    t.replaceSubrange(range, with: " ")
-                    return value
-                }
-            }
-            return nil
-        }
-        let setting = take(settingWords)
-        let sky = take(skyWords)
-        let time = take(timeWords) ?? .now
-        guard setting != nil || sky != nil else { return nil }
+        let named = named(in: text)
+        guard named.setting != nil || named.sky != nil else { return nil }
+        return suited(named.setting, named.sky, named.time ?? .now)
+    }
+
+    /// The setting, weather and time of day a text names outright, each nil if it doesn't.
+    /// Settings are found first, so "rainforest" isn't read as rain; the longest name wins, so
+    /// "sleeper train" is a train and "light rain" is drizzle.
+    static func named(in text: String) -> (setting: Setting?, sky: Sky?, time: TimeOfDay?, skies: [Sky]) {
+        var words = Words(text)
+        return named(in: &words)
+    }
+
+    /// The same, taking what it finds out of `words`. Weather named more than once comes
+    /// together ("snowy and windy" is a snowstorm); `skies` is each as it was named.
+    static func named(in words: inout Words) -> (setting: Setting?, sky: Sky?, time: TimeOfDay?, skies: [Sky]) {
+        let setting = words.take(settingWords)
+        var skies: [Sky] = []
+        while let sky = words.take(skyWords) { skies.append(sky) }
+        return (setting, Sky.together(skies), words.take(timeWords), skies)
+    }
+
+    /// A setting in the weather asked for, or the nearest it can have (its own first if none was);
+    /// with no setting, one that suits the weather.
+    static func suited(_ setting: Setting?, _ sky: Sky?, _ time: TimeOfDay) -> Atmosphere {
         if let setting {
             let skies = setting.info.skies
             let chosen = sky.flatMap { s in skies.contains(s) ? s : nearest(s, in: skies) } ?? skies[0]
             return Atmosphere(setting, chosen, time)
         }
-        guard let sky else { return nil }
+        let sky = sky ?? .clear
         let options = Setting.allCases.filter { $0 != .flight && $0.info.skies.contains(sky) }
         return Atmosphere(options.randomElement() ?? .cabin, sky, time)
     }
 
-    private static func nearest(_ sky: Sky, in skies: [Sky]) -> Sky? {
+    static func nearest(_ sky: Sky, in skies: [Sky]) -> Sky? {
         let order: [Sky: [Sky]] = [
             .snowstorm: [.snow, .wind, .thunderstorm, .rain], .snow: [.snowstorm, .fog, .drizzle, .rain],
             .thunderstorm: [.downpour, .rain, .wind], .downpour: [.rain, .thunderstorm, .drizzle],
@@ -570,7 +588,7 @@ struct Atmosphere: Hashable, Codable, Identifiable {
         (.lake, ["lake", "lakeside", "pond", "loons"]),
         (.harbor, ["harbor", "harbour", "marina", "port", "dock", "sailboats", "boats"]),
         (.train, ["sleeper train", "night train", "train", "railway"]),
-        (.library, ["library", "reading room", "books", "study"]),
+        (.library, ["library", "reading room", "books", "study", "studying", "reading"]),
         (.temple, ["temple", "shrine", "zen garden", "monastery", "garden"]),
         (.mountains, ["mountains", "mountain", "peak", "ridge", "alps", "summit"]),
         (.tinRoof, ["tin roof", "roof", "hut", "shack"]),
@@ -593,8 +611,57 @@ struct Atmosphere: Hashable, Codable, Identifiable {
 
     private static let timeWords: [(TimeOfDay, [String])] = [
         (.dawn, ["dawn", "sunrise", "daybreak", "early morning"]),
-        (.day, ["afternoon", "morning", "daytime", "midday", "noon", " day "]),
+        (.day, ["afternoon", "morning", "daytime", "midday", "noon", "day"]),
         (.dusk, ["dusk", "sunset", "evening", "twilight"]),
         (.night, ["midnight", "night", "nighttime", "late"]),
     ]
+}
+
+/// A text as its words, for finding names in it: lowercased, with apostrophes kept ("don't") and
+/// punctuation as words of its own, so a list ("wind, birds") can be told from a phrase.
+struct Words {
+    private(set) var tokens: [String]
+
+    init(_ text: String) {
+        var tokens: [String] = [], word = ""
+        for ch in text.lowercased().replacingOccurrences(of: "’", with: "'") {
+            if ch.isLetter || ch.isNumber || ch == "'" {
+                word.append(ch)
+                continue
+            }
+            if !word.isEmpty { tokens.append(word); word = "" }
+            if ",.;:!?&/+".contains(ch) { tokens.append(String(ch)) }
+        }
+        if !word.isEmpty { tokens.append(word) }
+        self.tokens = tokens
+    }
+
+    init(tokens: [String]) { self.tokens = tokens }
+
+    /// Where `phrase` ends if it starts at word `i`. Its last word may be plural: "owl" finds "owls".
+    func match(_ phrase: [String], at i: Int) -> Int? {
+        guard i >= 0, i + phrase.count <= tokens.count else { return nil }
+        for (k, p) in phrase.enumerated() {
+            let t = tokens[i + k]
+            guard t == p || (k == phrase.count - 1 && (t == p + "s" || t == p + "es")) else { return nil }
+        }
+        return i + phrase.count
+    }
+
+    /// The value of the longest name from `table` anywhere in the words (between names as long,
+    /// the one listed first), taken out so nothing else is found in it.
+    mutating func take<T>(_ table: [(T, [String])]) -> T? {
+        let names = table.enumerated().flatMap { index, entry in
+            entry.1.map { (value: entry.0, words: $0.split(separator: " ").map(String.init), length: $0.count, index: index) }
+        }
+        .sorted { ($0.length, -$0.index) > ($1.length, -$1.index) }
+        for name in names {
+            for i in tokens.indices {
+                guard let end = match(name.words, at: i) else { continue }
+                for k in i..<end { tokens[k] = "" }
+                return name.value
+            }
+        }
+        return nil
+    }
 }
