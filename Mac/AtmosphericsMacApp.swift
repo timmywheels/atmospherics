@@ -15,6 +15,7 @@ struct AtmosphericsMacApp: App {
         let mixer = Mixer()
         _mixer = State(initialValue: mixer)
         AppDelegate.mixer = mixer
+        IconBreath.shared.follow(mixer)
         // Follow the weather for as long as the app runs, with or without the window open.
         Task { @MainActor in
             while !Task.isCancelled {
