@@ -2,7 +2,8 @@ import AVFoundation
 
 /// Plays recorded sounds as seamless loops, one player per sound, loaded only while
 /// the sound is on the field. Volumes glide on the main thread so changes never click.
-/// Strikes (thunder, lightning) play one recording at a time instead, with quiet spells between.
+/// Sounds that come and go (a wolf, a foghorn, thunder: `Rhythm`) play one take at a time
+/// instead, with quiet between.
 final class SampleBank {
     private let engine: AVAudioEngine
     private let bus = AVAudioMixerNode()
@@ -37,8 +38,8 @@ final class SampleBank {
     func resume() {
         guard masterTarget > 0 else { return }
         players.values.forEach { if !$0.isPlaying { $0.play() } }
-        // A restarted engine can drop what was queued, and with it the next strike: start afresh.
-        for (kind, player) in players where kind.strikes != nil { scheduleStrike(kind, player: player, after: 2) }
+        // A restarted engine can drop what was queued, and with it the next take: start afresh.
+        for (kind, player) in players where kind.rhythm != .bed { scheduleTake(kind, player: player, after: 2) }
     }
 
     private var files: [SoundKind: AVAudioFile] = [:]
@@ -47,7 +48,7 @@ final class SampleBank {
     /// one ahead, so it starts instantly, loops without gaps, and never holds the decoded audio in memory.
     private func ensurePlayer(_ kind: SoundKind) {
         guard players[kind] == nil else { return }
-        if kind.strikes != nil { return ensureStrikes(kind) }
+        if kind.rhythm != .bed { return ensureTakes(kind) }
         guard let url = Bundle.main.url(forResource: kind.rawValue, withExtension: "m4a"),
               let file = try? AVAudioFile(forReading: url), file.length > 0 else { return }
         let player = AVAudioPlayerNode()
@@ -58,70 +59,67 @@ final class SampleBank {
         files[kind] = file
         current[kind] = 0
 
-        if kind.isEvent {
-            // A plane passing over plays once, from its first approach.
-            player.scheduleFile(file, at: nil)
-        } else {
-            // Start somewhere random so a sound doesn't always begin at the same moment.
-            let start = AVAudioFramePosition(Double.random(in: 0..<0.8) * Double(file.length))
-            player.scheduleSegment(file, startingFrame: start, frameCount: AVAudioFrameCount(file.length - start), at: nil)
-            queueRepeat(kind, player: player)
-            queueRepeat(kind, player: player)
-        }
+        // Start somewhere random so a sound doesn't always begin at the same moment.
+        let start = AVAudioFramePosition(Double.random(in: 0..<0.8) * Double(file.length))
+        player.scheduleSegment(file, startingFrame: start, frameCount: AVAudioFrameCount(file.length - start), at: nil)
+        queueRepeat(kind, player: player)
+        queueRepeat(kind, player: player)
         if engine.isRunning && masterTarget > 0 { player.play() }
     }
 
-    // MARK: Strikes
+    // MARK: Takes
 
-    private var strikeFiles: [SoundKind: [AVAudioFile]] = [:]
-    private var lastStrike: [SoundKind: AVAudioFile] = [:]
-    /// How loud this strike is (a near one, a farther one), on top of the sound's own level.
-    private var strikeGain: [SoundKind: Float] = [:]
-    /// Bumped to call off a pending strike when a new run of them starts.
-    private var strikeRun: [SoundKind: Int] = [:]
+    private var takes: [SoundKind: [AVAudioFile]] = [:]
+    private var lastTake: [SoundKind: AVAudioFile] = [:]
+    private var pacing: [SoundKind: Pacing] = [:]
+    /// Bumped to call off a pending take when a new run of them starts.
+    private var takeRun: [SoundKind: Int] = [:]
 
-    private func ensureStrikes(_ kind: SoundKind) {
-        let clips = kind.recordings.compactMap { name -> AVAudioFile? in
+    private func ensureTakes(_ kind: SoundKind) {
+        let files = kind.recordings.compactMap { name -> AVAudioFile? in
             guard let url = Bundle.main.url(forResource: name, withExtension: "m4a") else { return nil }
             return try? AVAudioFile(forReading: url)
         }
-        guard let first = clips.first else { return }
+        guard let first = files.first else { return }
         let player = AVAudioPlayerNode()
         engine.attach(player)
         engine.connect(player, to: bus, format: first.processingFormat)
         player.volume = 0
         players[kind] = player
-        strikeFiles[kind] = clips
+        takes[kind] = files
+        pacing[kind] = Pacing(kind.rhythm)
         current[kind] = 0
         if engine.isRunning && masterTarget > 0 { player.play() }
-        // The first one soon after it comes on, so you hear what you added.
-        scheduleStrike(kind, player: player, after: .random(in: 2...6))
+        scheduleTake(kind, player: player, after: .random(in: Pacing.first))
     }
 
-    /// After `delay`, plays a recording (not the last one again), from a random side and at a random
-    /// strength; when it's done, waits a while and goes again.
-    private func scheduleStrike(_ kind: SoundKind, player: AVAudioPlayerNode, after delay: Double) {
-        let run = (strikeRun[kind] ?? 0) + 1
-        strikeRun[kind] = run
+    /// After `delay`, plays a take (not the last one again), placed by the sound's `Pacing`; when
+    /// it's done, waits as long as its rhythm says and goes again.
+    private func scheduleTake(_ kind: SoundKind, player: AVAudioPlayerNode, after delay: Double) {
+        let run = (takeRun[kind] ?? 0) + 1
+        takeRun[kind] = run
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak player] in
-            guard let self, let player, self.players[kind] === player, self.strikeRun[kind] == run,
-                  let clips = self.strikeFiles[kind], let gap = kind.strikes?.gap else { return }
-            // Paused: hold the next strike rather than piling them up for later.
+            guard let self, let player, self.players[kind] === player, self.takeRun[kind] == run,
+                  let files = self.takes[kind], self.pacing[kind] != nil else { return }
+            // Paused: hold the next take rather than piling them up for later.
             guard self.masterTarget > 0, player.isPlaying else {
-                self.scheduleStrike(kind, player: player, after: 2)
+                self.scheduleTake(kind, player: player, after: 2)
                 return
             }
-            let choices = clips.count > 1 ? clips.filter { $0 !== self.lastStrike[kind] } : clips
-            guard let clip = choices.randomElement() else { return }
-            self.lastStrike[kind] = clip
-            self.strikeGain[kind] = .random(in: 0.7...1)
-            player.pan = .random(in: -0.6...0.6)
+            let choices = files.count > 1 ? files.filter { $0 !== self.lastTake[kind] } : files
+            guard let take = choices.randomElement() else { return }
+            self.lastTake[kind] = take
+            self.pacing[kind]?.next()
+            player.pan = self.pacing[kind]?.pan ?? 0
+            player.volume = (self.current[kind] ?? 0) * (self.pacing[kind]?.gain ?? 1)
             // Lightning is seen before it's heard: the flash comes with the strike's first moment.
             if kind == .lightning { LightningFlash.strikes.pointee &+= 1 }
-            player.scheduleFile(clip, at: nil, completionCallbackType: .dataPlayedBack) { [weak self, weak player] _ in
+            let length = Double(take.length) / take.processingFormat.sampleRate
+            player.scheduleFile(take, at: nil, completionCallbackType: .dataPlayedBack) { [weak self, weak player] _ in
                 DispatchQueue.main.async {
-                    guard let self, let player, self.strikeRun[kind] == run else { return }
-                    self.scheduleStrike(kind, player: player, after: .random(in: gap))
+                    guard let self, let player, self.takeRun[kind] == run,
+                          let pause = self.pacing[kind]?.pause(after: length) else { return }
+                    self.scheduleTake(kind, player: player, after: pause)
                 }
             }
             self.startTimer()
@@ -156,7 +154,7 @@ final class SampleBank {
             v += (target - v) * 0.2
             if abs(target - v) < 0.002 { v = target } else { settled = false }
             current[kind] = v
-            player.volume = v * (strikeGain[kind] ?? 1)
+            player.volume = v * (pacing[kind]?.gain ?? 1)
 
             // Free a sound that's been silent for a while.
             if target == 0 && v == 0 {
@@ -165,10 +163,10 @@ final class SampleBank {
                 if Date().timeIntervalSince(since) > 10 {
                     players[kind] = nil
                     files[kind] = nil
-                    strikeFiles[kind] = nil
-                    lastStrike[kind] = nil
-                    strikeGain[kind] = nil
-                    strikeRun[kind] = nil
+                    takes[kind] = nil
+                    lastTake[kind] = nil
+                    pacing[kind] = nil
+                    takeRun[kind] = nil
                     player.stop()
                     engine.detach(player)
                     silentSince[kind] = nil

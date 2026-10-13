@@ -34,27 +34,6 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    /// One-off events (a plane passing over, geese flying by, a tram, a temple bell) play through once from the start
-    /// when they come on, instead of looping.
-    var isEvent: Bool { [.planes, .geese, .tram, .templeBell].contains(self) }
-
-    /// Sounds heard as separate strikes rather than a loop: one of a few recordings at a time, with a
-    /// quiet spell of some seconds between, so a storm never repeats itself. Thunder rolls in from
-    /// the distance; lightning cracks close by (and lights up the screen just before you hear it).
-    var strikes: (clips: Int, gap: ClosedRange<Double>)? {
-        switch self {
-        case .thunder: (5, 9...35)
-        case .lightning: (5, 14...48)
-        default: nil
-        }
-    }
-
-    /// The recordings that make this sound: `rain.m4a`, or for strikes `thunder1.m4a`, `thunder2.m4a`…
-    var recordings: [String] {
-        guard let strikes else { return [rawValue] }
-        return (1...strikes.clips).map { "\(rawValue)\($0)" }
-    }
-
     /// This sound if the app has it, otherwise the closest synthesized one (or nothing).
     var playable: SoundKind? {
         if !isRecorded || SoundKind.available.contains(self) { return self }

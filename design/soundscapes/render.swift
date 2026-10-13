@@ -1,6 +1,6 @@
 // Renders sounds offline with the app's own sound code, to measure them and to preview mixes.
 // Build from the repo root:
-//   swiftc -parse-as-library -O -o /tmp/render Atmospherics/Sound.swift Atmospherics/Mix.swift \
+//   swiftc -parse-as-library -O -o /tmp/render Atmospherics/Sound.swift Atmospherics/Rhythm.swift Atmospherics/Mix.swift \
 //     Atmospherics/Places.swift Atmospherics/Weather.swift Atmospherics/Ecology.swift Atmospherics/NoiseEngine.swift \
 //     Atmospherics/SampleBank.swift Atmospherics/Generators.swift Shared/Color+OKLCH.swift design/soundscapes/render.swift
 //   /tmp/render synth <dir>                            each synthesized sound alone at gain 1 (uncalibrated), as WAV
@@ -68,35 +68,36 @@ struct Render {
         }
     }
 
-    /// Recordings looped from a random point, plus the synthesized sounds, at engine gains.
+    /// Recordings looped from a random point (or their takes, now and then), plus the synthesized
+    /// sounds, at engine gains.
     static func mixdown(_ gains: [(SoundKind, Double)], from dir: URL, seconds: Double, calibrated: Bool) throws -> [[Float]] {
         var out = synth(gains.filter { !$0.0.isRecorded }, seconds: seconds, calibrated: calibrated)
         for (kind, gain) in gains where kind.isRecorded && gain > 0 {
-            if let strikes = kind.strikes {
-                // Strikes, as SampleBank plays them: one recording at a time (never the same twice
-                // running), from a random side and strength, with a quiet spell between.
-                let clips = try kind.recordings.map { try decode(dir.appendingPathComponent("\($0).m4a")) }
-                var t = Int(Double.random(in: 2...6) * rate), last = -1
+            if kind.rhythm != .bed {
+                // Takes, as SampleBank plays them: one at a time (never the same twice running),
+                // placed and paced by the sound's rhythm.
+                let names = kind.recordings { FileManager.default.fileExists(atPath: dir.appendingPathComponent("\($0).m4a").path) }
+                let takes = try names.map { try decode(dir.appendingPathComponent("\($0).m4a")) }
+                var pacing = Pacing(kind.rhythm)
+                var t = Int(Double.random(in: Pacing.first) * rate), last = -1
                 while t < out[0].count {
-                    var pick = Int.random(in: 0..<clips.count)
-                    if pick == last && clips.count > 1 { pick = (pick + 1) % clips.count }
+                    var pick = Int.random(in: 0..<takes.count)
+                    if pick == last && takes.count > 1 { pick = (pick + 1) % takes.count }
                     last = pick
-                    let clip = clips[pick], g = Float(gain) * Float.random(in: 0.7...1), pan = Float.random(in: -0.6...0.6)
-                    let side: [Float] = [g * min(1, 1 - pan), g * min(1, 1 + pan)]
+                    pacing.next()
+                    let take = takes[pick], g = Float(gain) * pacing.gain
+                    let side: [Float] = [g * min(1, 1 - pacing.pan), g * min(1, 1 + pacing.pan)]
                     for c in 0..<2 {
-                        for i in 0..<clip[c].count where t + i < out[c].count { out[c][t + i] += side[c] * clip[c][i] }
+                        for i in 0..<take[c].count where t + i < out[c].count { out[c][t + i] += side[c] * take[c][i] }
                     }
-                    t += clip[0].count + Int(Double.random(in: strikes.gap) * rate)
+                    t += take[0].count + Int(pacing.pause(after: Double(take[0].count) / rate) * rate)
                 }
                 continue
             }
             let loop = try decode(dir.appendingPathComponent("\(kind.rawValue).m4a"))
-            // Events (a plane passing) play once from the start; everything else loops from a random point.
-            let start = kind.isEvent ? 0 : Int(Double.random(in: 0..<0.8) * Double(loop[0].count))
+            let start = Int(Double.random(in: 0..<0.8) * Double(loop[0].count))
             for c in 0..<2 {
-                for i in 0..<out[c].count where !kind.isEvent || i < loop[c].count {
-                    out[c][i] += Float(gain) * loop[c][(start + i) % loop[c].count]
-                }
+                for i in 0..<out[c].count { out[c][i] += Float(gain) * loop[c][(start + i) % loop[c].count] }
             }
         }
         return out
