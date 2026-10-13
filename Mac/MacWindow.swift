@@ -18,7 +18,7 @@ struct MacWindow: View {
                 case .listen: MacListen()
                 case .teleport:
                     TeleportView(start: mixer.mode == .atmosphere ? mixer.atmosphere : nil) { navigation.tab = .listen }
-                case .topology: MacTopology()
+                case .layers: MacLayers()
                 case .library: LibraryView(current: mixer.activePreset) { navigation.tab = .listen }
                 }
             }
@@ -27,9 +27,9 @@ struct MacWindow: View {
         }
         .ignoresSafeArea(edges: .top)
         .background {
-            // Listening and Topology sit in the scene's colors; Teleport and the Library have their own.
+            // Listening and Layers sit in the scene's colors; Teleport and the Library have their own.
             SceneWash(orbs: mixer.byVolume)
-                .opacity(navigation.tab == .listen || navigation.tab == .topology ? 1 : 0)
+                .opacity(navigation.tab == .listen || navigation.tab == .layers ? 1 : 0)
                 .background(Theme.background)
                 .ignoresSafeArea()
         }

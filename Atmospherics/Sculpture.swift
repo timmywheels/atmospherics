@@ -65,8 +65,8 @@ enum SculptureStyle {
     /// A compact form that drifts and breathes, for the home screen.
     case home
 
-    /// Each sound's direction out from the middle: its way around you on the field (as Topology
-    /// has it, the front toward -z), tilted up or down by how high it comes from.
+    /// Each sound's direction out from the middle: its way around you in the mix, tilted up or
+    /// down by how high it comes from.
     static func spokes(of orbs: [Orb]) -> [(Orb, SIMD3<Double>)] {
         orbs.filter { $0.volume > 0.02 }.map { orb in
             let dx = orb.x - 0.5, dz = 0.5 - orb.y

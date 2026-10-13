@@ -186,7 +186,7 @@ struct NowPlayingView: View {
         .accessibilityAction(named: "Library") { showLibrary = true }
         .accessibilityAction(named: "Teleport") { openTeleport(typing: false) }
         .accessibilityAction(named: "Change the weather") { inAtmosphere ? mixer.cycleAtmosphereSky() : mixer.cycleSky() }
-        .accessibilityAction(named: "Topology") { showMixer = true }
+        .accessibilityAction(named: "Layers") { showMixer = true }
         .navigationDestination(isPresented: $showMixer) { MixerView() }
         .overlay(alignment: .bottom) {
             if let hint {
@@ -650,7 +650,7 @@ private struct SoundsMenu: View {
     }
 }
 
-/// When you've tuned the scene playing (in Topology): a plain way back to how it sounds by default,
+/// When you've tuned the scene playing (in Layers): a plain way back to how it sounds by default,
 /// after asking.
 struct ResetTuning: View {
     @Environment(Mixer.self) private var mixer

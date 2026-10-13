@@ -362,7 +362,7 @@ struct Atmosphere: Hashable, Codable, Identifiable {
         self.init(setting, sky, time)
     }
 
-    /// Where changes you make to it in Topology are kept.
+    /// Where changes you make to it in Layers are kept.
     var tweakKey: String { "atmosphere:\(id)" }
 
     /// "Take me to a log cabin in a snowstorm right now", in its three parts.

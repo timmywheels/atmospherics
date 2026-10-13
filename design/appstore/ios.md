@@ -38,10 +38,10 @@ INSIDE, OUT OF THE RAIN
 Indoors, the walls soften the rain and the wind, while the fire, the café or the train keep going all night.
 
 A SHAPE OF LIGHT
-Every soundscape is a glowing glass form, one light for each sound, swelling toward the loudest. Turn it with your finger, or tap it to see its topology.
+Every soundscape is a glowing glass form, one light for each sound, swelling toward the loudest. Turn it with your finger, or tap it to see its layers.
 
-TOPOLOGY
-Every sound is a hill on a map around you, as high as it is loud. Drag one closer to hear more of it, or off the edge to let it go. Add rain, a fire, birds, wind, thunder, the ocean: more than 50 sounds in all.
+LAYERS
+Every sound in the mix is a layer you can tap or drag across to set how loud it is. Add rain, a fire, birds, wind, thunder, the ocean: more than 50 sounds in all.
 
 OUTSIDE
 Tap Outside to hear the weather at your own window, as it changes through the night.

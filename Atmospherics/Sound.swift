@@ -310,4 +310,8 @@ enum Theme {
     /// Words in capitals (the wordmark, tabs, section names) keep the monospace: the brand's
     /// voice, here and there. Sentences and names are in the sans.
     static func caps(_ size: CGFloat) -> Font { .system(size: size, weight: .medium, design: .monospaced) }
+    /// The monospace in sentence case, for a screen that speaks in it throughout (Layers).
+    static func mono(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
+        .system(size: size, weight: weight, design: .monospaced)
+    }
 }

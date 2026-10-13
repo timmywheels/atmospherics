@@ -40,7 +40,7 @@ struct MacListen: View {
             }
             .frame(height: 18)
 
-            Carousel(dragX: $dragX, openMixer: { navigation.tab = .topology }, teleport: { navigation.tab = .teleport },
+            Carousel(dragX: $dragX, openMixer: { navigation.tab = .layers }, teleport: { navigation.tab = .teleport },
                      openLibrary: { navigation.tab = .library })
                 .frame(minHeight: 340, maxHeight: .infinity)
                 .overlay { TravelArrows() }
