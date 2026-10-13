@@ -7,7 +7,8 @@ enum Haptics {
 
     static func tap(_ weight: Weight = .medium) {
         #if os(iOS)
-        UIImpactFeedbackGenerator(style: weight == .light ? .light : .medium).impactOccurred()
+        // A step firmer than the names say, so a tap is felt rather than guessed at.
+        UIImpactFeedbackGenerator(style: weight == .light ? .medium : .heavy).impactOccurred(intensity: 1)
         #else
         NSHapticFeedbackManager.defaultPerformer.perform(weight == .light ? .alignment : .generic, performanceTime: .now)
         #endif

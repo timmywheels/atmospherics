@@ -111,9 +111,9 @@ struct TeleportView: View {
         .foregroundStyle(Theme.text)
         .background { SceneWash(orbs: preview.orbs) }
         .presentationBackground(Theme.background)
-        .sensoryFeedback(.selection, trigger: draft)
-        .sensoryFeedback(.selection, trigger: slot)
-        .sensoryFeedback(.impact(weight: .medium), trigger: goes)
+        .sensoryFeedback(.impact(weight: .medium), trigger: draft)
+        .sensoryFeedback(.impact(weight: .medium), trigger: slot)
+        .sensoryFeedback(.impact(weight: .heavy), trigger: goes)
         #if os(macOS)
         .onExitCommand { leave() }
         #endif
@@ -190,10 +190,11 @@ struct TeleportView: View {
         draft = Atmosphere(setting, draft.sky, draft.time)
     }
 
+    /// Somewhere new, chosen for you, and straight there: no need to press Teleport after.
     private func surprise() {
         var next = Atmosphere.random()
-        while next == draft { next = Atmosphere.random() }
-        withAnimation(.smooth(duration: 0.35)) { draft = next }
+        while next == draft || next == mixer.atmosphere { next = Atmosphere.random() }
+        go(to: next)
     }
 
     // MARK: In your own words

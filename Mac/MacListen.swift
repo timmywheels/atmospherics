@@ -52,6 +52,7 @@ struct MacListen: View {
             HStack(spacing: 14) {
                 LayerStrip(orbs: mixer.byVolume)
                 ResetTuning()
+                SurpriseButton()
                 TimerMenu()
                 MacPlayButton()
             }
@@ -125,6 +126,26 @@ private struct TravelArrows: View {
         .disabled(!enabled)
         .help(label)
         .accessibilityLabel(label)
+    }
+}
+
+/// Surprise me: on to somewhere new, as → and a swipe do.
+private struct SurpriseButton: View {
+    @Environment(Mixer.self) private var mixer
+    @State private var hovering = false
+
+    var body: some View {
+        Button { mixer.requestTravel(forward: true) } label: {
+            Image(systemName: Atmosphere.surpriseSymbol)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(hovering ? Theme.text : Theme.muted)
+                .padding(6)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Surprise me  →")
+        .accessibilityLabel("Surprise me")
     }
 }
 

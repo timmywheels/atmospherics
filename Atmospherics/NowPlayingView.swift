@@ -132,7 +132,7 @@ struct NowPlayingView: View {
                      openLibrary: { showLibrary = true })
                 .frame(minHeight: 400, maxHeight: .infinity)
 
-            .sensoryFeedback(.selection, trigger: mixer.mode)
+            .sensoryFeedback(.impact(weight: .medium), trigger: mixer.mode)
 
             // What's playing, a way back if you've tuned it, and the sleep timer if there is one.
             HStack(spacing: 14) {
@@ -203,9 +203,9 @@ struct NowPlayingView: View {
         .sheet(isPresented: $showTeleport) {
             TeleportView(start: mixer.mode == .atmosphere ? mixer.atmosphere : nil, typing: teleportTyping)
         }
-        .sensoryFeedback(.impact(weight: .medium), trigger: mixer.shuffleCount)
-        .sensoryFeedback(.impact(flexibility: .soft), trigger: mixer.skyOverride)
-        .sensoryFeedback(.impact(flexibility: .soft), trigger: mixer.atmosphere?.sky)
+        .sensoryFeedback(.impact(weight: .heavy), trigger: mixer.shuffleCount)
+        .sensoryFeedback(.impact(flexibility: .solid, intensity: 1), trigger: mixer.skyOverride)
+        .sensoryFeedback(.impact(flexibility: .solid, intensity: 1), trigger: mixer.atmosphere?.sky)
     }
 
 }
@@ -272,7 +272,7 @@ struct Carousel: View {
         }
         .onAppear { mixer.carouselShowing = true }
         .onDisappear { mixer.carouselShowing = false }
-        .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.6), trigger: pastThreshold) { _, now in now }
+        .sensoryFeedback(.impact(flexibility: .solid, intensity: 1), trigger: pastThreshold) { _, now in now }
         .accessibilityAction(named: "Travel somewhere new") { mixer.travel(forward: true) }
         .accessibilityAction(named: "Go back") { mixer.travel(forward: false) }
     }
@@ -309,7 +309,7 @@ struct Carousel: View {
                 #endif
             }
             .contextMenu {
-                Button("Teleport…", systemImage: "arrow.triangle.2.circlepath") { teleport() }
+                Button("Teleport…", systemImage: "globe") { teleport() }
                 Button("Save this mix", systemImage: "bookmark") { saving = true }
                 Button("Library", systemImage: "books.vertical") { openLibrary() }
             }
@@ -698,13 +698,11 @@ private struct TakeMeBar: View {
         HStack(spacing: 0) {
             Button(action: action) {
                 HStack(spacing: 10) {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 15))
                     Text("Take me to…")
                         .font(Theme.label(15))
                     Spacer(minLength: 0)
                 }
-                .padding(.leading, 18)
+                .padding(.leading, 20)
                 .frame(maxWidth: .infinity, minHeight: 48)
                 .contentShape(Rectangle())
             }
@@ -725,7 +723,7 @@ private struct TakeMeBar: View {
         .foregroundStyle(Theme.secondary)
         .background(Capsule().fill(Color.white.opacity(0.06)))
         .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
-        .sensoryFeedback(.impact(weight: .medium), trigger: surprises)
+        .sensoryFeedback(.impact(weight: .heavy), trigger: surprises)
     }
 
     private func surprise() {
@@ -772,9 +770,9 @@ private struct PlayButton: View {
                 }
             }
         }
-        .sensoryFeedback(.impact(weight: .medium), trigger: mixer.isPlaying)
+        .sensoryFeedback(.impact(weight: .heavy), trigger: mixer.isPlaying)
         .sensoryFeedback(.impact(weight: .heavy), trigger: held)
-        .sensoryFeedback(.selection, trigger: mixer.timer)
+        .sensoryFeedback(.impact(weight: .medium), trigger: mixer.timer)
         .accessibilityElement()
         .accessibilityAddTraits(.isButton)
         .accessibilityLabel(mixer.isPlaying ? "Pause" : "Play")
@@ -853,7 +851,7 @@ struct VolumeLine: View {
         }
         .animation(.snappy(duration: 0.15), value: sliding)
         // A tick per 10% as it slides.
-        .sensoryFeedback(.selection, trigger: Int((mixer.volume * 10).rounded(.down))) { _, _ in sliding }
+        .sensoryFeedback(.impact(flexibility: .rigid, intensity: 0.8), trigger: Int((mixer.volume * 10).rounded(.down))) { _, _ in sliding }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Volume")
         .accessibilityValue(mixer.volume < 0.01 ? "Muted" : "\(Int((mixer.volume * 100).rounded())) percent")
