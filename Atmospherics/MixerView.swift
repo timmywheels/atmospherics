@@ -58,9 +58,9 @@ struct MixerView: View {
 /// drag anywhere else to turn the shape.
 struct ShapeField: View {
     @Environment(Mixer.self) private var mixer
-    // From above, so the spokes fan out like a radar chart, with the shape's depth still there.
-    @State private var yaw = 0.35
-    @State private var pitch = 0.85
+    // It opens turned just as the home screen's form is, so it's the same shape, closer.
+    @State private var yaw = SculptureSpin.home.yaw
+    @State private var pitch = SoundForm.pitch + SculptureSpin.home.tilt
     @State private var turnStart: (yaw: Double, pitch: Double)?
 
     /// How much of the view the shape is fitted to (see `SculptureCamera.extent`).
@@ -104,6 +104,8 @@ struct ShapeField: View {
         // A tick every eighth of a turn.
         .sensoryFeedback(.selection, trigger: Int((yaw / (.pi / 8)).rounded(.down)))
         .sensoryFeedback(.impact(weight: .light), trigger: mixer.orbs.count)
+        // And the home screen's form carries on from however you've turned it here.
+        .onDisappear { SculptureSpin.home.hold(yaw: yaw, tilt: pitch - SoundForm.pitch) }
     }
 }
 
