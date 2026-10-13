@@ -29,7 +29,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
              .rain, .lightRain, .heavyRain, .thunder, .lightning, .fire, .crickets, .ocean, .birds, .stream, .train, .wind, .cicadas, .frogs,
              .winterBirds, .gulls, .foghorn, .peepers, .geese, .traffic, .highway, .planes,
              .lapping, .palms, .rocks, .buoy, .halyards, .tram, .motorbikes, .fountain, .templeBell, .bazaar,
-             .breeze, .treeWind, .gusts, .howl, .cityNight: true
+             .breeze, .treeWind, .gusts, .howl, .cityNight, .chimes, .fan: true
         default: false
         }
     }

@@ -90,8 +90,6 @@ extension SoundKind {
         case .grey: measured = -10.6
         case .blue: measured = -7.2
         case .violet: measured = -11.4
-        case .fan: measured = -12.4
-        case .chimes: measured = -22.7
         case .drone: measured = -22.4
         case .betaBeats: measured = -12.7
         case .gammaBeats: measured = -12.6

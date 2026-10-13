@@ -72,3 +72,5 @@ Freesound files were taken from their public HQ previews (about 128 kbps MP3).
 | fountain | https://freesound.org/s/572465/ | frnk_cnt | CC0 | 3 s (118 s loop) |
 | templeBell | https://freesound.org/s/397352/ | Vurca | CC0 | 0 s (29 s, one strike, plays once) |
 | bazaar | https://freesound.org/s/511005/ | 3bagbrew | CC0 | 14 s (52 s loop, before the singing starts) |
+| chimes | https://freesound.org/s/695627/ | SugarANDRocks | CC0 | 5 s (120 s loop; chimes in the night wind) |
+| fan | https://freesound.org/s/870765/ | CHallSmith | CC0 | 3 s (55 s loop; a house fan in a window) |
