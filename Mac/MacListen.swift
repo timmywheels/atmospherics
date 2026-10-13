@@ -45,7 +45,7 @@ struct MacListen: View {
                 .frame(minHeight: 340, maxHeight: .infinity)
                 .overlay { TravelArrows() }
 
-            Waveform()
+            VolumeLine()
                 .frame(height: 40)
                 .padding(.top, 6)
 

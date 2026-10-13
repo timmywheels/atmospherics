@@ -152,7 +152,7 @@ struct NowPlayingView: View {
             .animation(.smooth, value: mixer.timer)
             .animation(.smooth, value: mixer.currentPlaceIsTweaked)
 
-            Waveform()
+            VolumeLine()
                 .frame(height: 40)
                 .padding(.top, 2)
 
@@ -793,6 +793,84 @@ private struct PlayButton: View {
 
 /// A slim, calm wave under the readout. Its height follows how loud the mix is (smoothed over
 /// about half a second) and it drifts slowly sideways, so it feels alive without twitching.
+/// How loud Atmospherics plays, apart from the system volume, so a soundscape can sit low while
+/// notifications stay loud: the sound's line runs as far across as the volume, with a dot where it
+/// ends and a faint line after. Tap or drag along it to set the volume, or tap the speaker to mute
+/// it and back.
+struct VolumeLine: View {
+    @Environment(Mixer.self) private var mixer
+    @State private var sliding = false
+    /// Where to come back to after muting.
+    @State private var unmuted = 0.7
+
+    private var symbol: String {
+        switch mixer.volume {
+        case ..<0.01: "speaker.slash"
+        case ..<0.34: "speaker.wave.1"
+        case ..<0.67: "speaker.wave.2"
+        default: "speaker.wave.3"
+        }
+    }
+
+    private func toggleMute() {
+        withAnimation(.snappy(duration: 0.25)) {
+            if mixer.volume > 0.01 {
+                unmuted = mixer.volume
+                mixer.volume = 0
+            } else {
+                mixer.volume = max(0.1, unmuted)
+            }
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button(action: toggleMute) {
+                Image(systemName: symbol)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Theme.muted)
+                    .frame(width: 26, alignment: .leading)
+                    .frame(maxHeight: .infinity)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            GeometryReader { proxy in
+                let width = proxy.size.width
+                let x = width * CGFloat(mixer.volume)
+                ZStack(alignment: .leading) {
+                    Rectangle().fill(Theme.text.opacity(0.12)).frame(height: 1)
+                    Waveform().frame(width: max(1, x))
+                    Circle()
+                        .fill(Theme.text)
+                        .frame(width: sliding ? 12 : 9, height: sliding ? 12 : 9)
+                        .shadow(color: .black.opacity(0.35), radius: 3)
+                        .offset(x: x - (sliding ? 6 : 4.5))
+                }
+                .frame(width: width, height: proxy.size.height, alignment: .leading)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { g in
+                            sliding = true
+                            mixer.volume = min(1, max(0, Double(g.location.x / max(1, width))))
+                        }
+                        .onEnded { _ in sliding = false }
+                )
+            }
+        }
+        .animation(.snappy(duration: 0.15), value: sliding)
+        // A tick per 10% as it slides.
+        .sensoryFeedback(.selection, trigger: Int((mixer.volume * 10).rounded(.down))) { _, _ in sliding }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Volume")
+        .accessibilityValue(mixer.volume < 0.01 ? "Muted" : "\(Int((mixer.volume * 100).rounded())) percent")
+        .accessibilityAdjustableAction { direction in
+            mixer.volume = min(1, max(0, mixer.volume + (direction == .increment ? 0.1 : -0.1)))
+        }
+        .accessibilityAction(named: mixer.volume < 0.01 ? "Unmute" : "Mute", toggleMute)
+    }
+}
+
 struct Waveform: View {
     @Environment(Mixer.self) private var mixer
     @State private var level: Double = 0

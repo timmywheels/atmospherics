@@ -29,6 +29,18 @@ struct Preset: Identifiable {
                mix: [(.rain, 0.7), (.brown, 0.25)], evidence: .strong),
         Preset(name: "Restless Mind", tag: .focus, length: "1 h", description: "White and pink noise, for when your mind wanders",
                mix: [(.pink, 0.55), (.white, 0.3)], evidence: .some),
+        // Each noise on its own, for when that's all you want. Research covers white and pink
+        // (for a wandering mind); brown, green and grey haven't been studied yet.
+        Preset(name: "Pink Noise", tag: .focus, length: "2 h", description: "Just pink noise: soft, even, a little deep",
+               mix: [(.pink, 0.65)], evidence: .some),
+        Preset(name: "White Noise", tag: .focus, length: "2 h", description: "Just white noise: bright and even",
+               mix: [(.white, 0.6)], evidence: .some),
+        Preset(name: "Brown Noise", tag: .focus, length: "2 h", description: "Just brown noise: low and deep, like a far roar",
+               mix: [(.brown, 0.7)]),
+        Preset(name: "Green Noise", tag: .focus, length: "2 h", description: "Just green noise: the middle of the sound, like distant water",
+               mix: [(.green, 0.65)]),
+        Preset(name: "Grey Noise", tag: .focus, length: "2 h", description: "Just grey noise: even to the ear, low to high",
+               mix: [(.grey, 0.65)]),
         Preset(name: "Beta Pulse", tag: .focus, length: "90 min", description: "Pink noise pulsing at 16 Hz, soft rain",
                mix: [(.betaPulse, 0.6), (.lightRain, 0.3)], evidence: .early),
         Preset(name: "Beta Beats", tag: .focus, length: "90 min", description: "16 Hz binaural beats in pink noise · headphones",

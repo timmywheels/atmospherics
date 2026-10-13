@@ -45,6 +45,13 @@ private struct PlaybackCommands: View {
     var body: some View {
         Button(mixer.isPlaying ? "Pause" : "Play") { mixer.togglePlayback() }
             .keyboardShortcut(.space, modifiers: [])
+        // The app's own volume, apart from the Mac's, as in Music.
+        Button("Louder") { mixer.volume = min(1, mixer.volume + 0.1) }
+            .keyboardShortcut(.upArrow, modifiers: .command)
+            .disabled(mixer.volume >= 1)
+        Button("Softer") { mixer.volume = max(0, mixer.volume - 0.1) }
+            .keyboardShortcut(.downArrow, modifiers: .command)
+            .disabled(mixer.volume <= 0)
         Divider()
         Button("Travel Somewhere New") { mixer.requestTravel(forward: true) }
             .keyboardShortcut(.rightArrow, modifiers: .command)

@@ -18,6 +18,11 @@ struct MenuBarPanel: View {
                 .padding(.top, 14)
                 .padding(.horizontal, 18)
 
+            VolumeLine()
+                .frame(height: 32)
+                .padding(.top, 10)
+                .padding(.horizontal, 18)
+
             timer
                 .padding(.top, 16)
                 .padding(.horizontal, 18)

@@ -196,7 +196,20 @@ final class Mixer {
     @ObservationIgnored private var lastWeatherFetch: Date?
     @ObservationIgnored private var transition: Task<Void, Never>?
 
+    /// How loud Atmospherics plays, on its own scale apart from the system volume, so a soundscape
+    /// can sit low while notifications stay loud. As on the slider, 0…1; the gain is its square,
+    /// so even steps sound even.
+    var volume: Double = 1 {
+        didSet {
+            engine.setVolume(Float(volume * volume))
+            defaults.set(volume, forKey: "volume")
+        }
+    }
+
     init() {
+        let savedVolume = defaults.object(forKey: "volume") as? Double ?? 1
+        volume = savedVolume
+        engine.setVolume(Float(savedVolume * savedVolume))
         if let data = defaults.data(forKey: "fields"),
            let saved = try? JSONDecoder().decode([String: [Orb]].self, from: data) {
             fields = Dictionary(uniqueKeysWithValues: Mode.allCases.map { ($0, saved[$0.rawValue] ?? []) })
