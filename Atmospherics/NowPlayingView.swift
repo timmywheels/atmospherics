@@ -9,7 +9,7 @@ struct NowPlayingView: View {
     @State private var dragX: CGFloat = 0
     @State private var showMixer = false
     @State private var showTeleport = false
-    /// Teleport opened from the Take me to… bar starts with the keyboard up.
+    /// Teleport opened from Describe the vibe… starts with the keyboard up.
     @State private var teleportTyping = false
     @State private var saving = false
     @State private var hint: String?
@@ -54,7 +54,7 @@ struct NowPlayingView: View {
         }
     }
 
-    /// Teleport as the sentence to change, or (from the Take me to… bar) ready to type.
+    /// Teleport as the sentence to change, or (from Describe the vibe…) ready to type.
     private func openTeleport(typing: Bool) {
         teleportTyping = typing
         showTeleport = true
@@ -158,7 +158,7 @@ struct NowPlayingView: View {
 
             // Where to go next, and play, in reach of a thumb.
             HStack(spacing: 12) {
-                TakeMeBar { openTeleport(typing: true) }
+                DescribeBar(teleport: { openTeleport(typing: false) }, describe: { openTeleport(typing: true) })
                 PlayButton()
             }
             .padding(.top, 10)
@@ -309,7 +309,7 @@ struct Carousel: View {
                 #endif
             }
             .contextMenu {
-                Button("Teleport…", systemImage: "globe") { teleport() }
+                Button("Teleport…", systemImage: Atmosphere.teleportSymbol) { teleport() }
                 Button("Save this mix", systemImage: "bookmark") { saving = true }
                 Button("Library", systemImage: "books.vertical") { openLibrary() }
             }
@@ -687,28 +687,35 @@ private struct ConfirmReset: ViewModifier {
     }
 }
 
-/// The way to Teleport, as the start of a sentence: "Take me to…".
+/// Teleport's globe, then where to go in your own words: "Describe the vibe…".
 /// At its end, Surprise me: somewhere new, chosen for you.
-private struct TakeMeBar: View {
+private struct DescribeBar: View {
     @Environment(Mixer.self) private var mixer
-    let action: () -> Void
+    let teleport: () -> Void
+    let describe: () -> Void
     @State private var surprises = 0
 
     var body: some View {
         HStack(spacing: 0) {
-            Button(action: action) {
-                HStack(spacing: 10) {
-                    Text("Take me to…")
-                        .font(Theme.label(15))
-                    Spacer(minLength: 0)
-                }
-                .padding(.leading, 20)
-                .frame(maxWidth: .infinity, minHeight: 48)
-                .contentShape(Rectangle())
+            Button(action: teleport) {
+                Image(systemName: Atmosphere.teleportSymbol)
+                    .font(.system(size: 15))
+                    .frame(width: 44, height: 48)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .padding(.leading, 6)
             .accessibilityLabel("Teleport")
-            .accessibilityHint("Build a scene, or say where to go")
+            .accessibilityHint("Build a scene to go to")
+
+            Button(action: describe) {
+                Text("Describe the vibe…")
+                    .font(Theme.label(15))
+                    .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Say where to go in your own words")
 
             Button { surprise() } label: {
                 Image(systemName: Atmosphere.surpriseSymbol)

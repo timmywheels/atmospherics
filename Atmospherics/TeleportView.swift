@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Teleport: an atmosphere as a sentence, "Take me to a log cabin in a snowstorm right now".
-/// Tap a part to change it, say it in your own words, or pick one of ours. The colors follow
-/// what you're building, and it says when it's really like that somewhere right now.
+/// Tap a part to change it, describe the vibe in your own words, or pick one of ours. The colors
+/// follow what you're building, and it says when it's really like that somewhere right now.
 struct TeleportView: View {
     @Environment(Mixer.self) private var mixer
     @Environment(\.dismiss) private var dismiss
@@ -12,10 +12,15 @@ struct TeleportView: View {
     @State private var slot: Slot = .setting
     @State private var words = ""
     @State private var notUnderstood = false
+    /// Reading a description: a moment, or a few the first time the model loads.
+    @State private var reading: Task<Void, Never>?
+    /// What you've described before, and a few to try: shown when the box is empty.
+    @State private var recent = Vibe.recent
+    @State private var suggestions = Vibe.suggestions()
     @State private var goes = 0
-    /// Open with the keyboard up, ready to say where to go.
+    /// Open with the keyboard up, ready to describe where to go.
     private let typing: Bool
-    @FocusState private var saying: Bool
+    @FocusState private var describing: Bool
 
     private enum Slot { case setting, sky, time }
 
@@ -60,7 +65,7 @@ struct TeleportView: View {
                     .animation(.smooth, value: preview.line)
 
                 // Or in your own words, right under the sentence (and above the keyboard).
-                sayIt
+                describeIt
                     .padding(.top, 24)
 
                 choices
@@ -100,11 +105,13 @@ struct TeleportView: View {
             .padding(.bottom, 40)
         }
         .task {
+            Vibe.prepare()
             // Focus once the sheet has finished coming up; sooner, the keyboard doesn't show.
             guard typing else { return }
             try? await Task.sleep(for: .milliseconds(600))
-            saying = true
+            describing = true
         }
+        .onDisappear { reading?.cancel() }
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
         .notices(above: 28)
@@ -199,17 +206,22 @@ struct TeleportView: View {
 
     // MARK: In your own words
 
-    private var sayIt: some View {
+    private var describeIt: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("OR SAY IT")
-                .font(Theme.caps(10))
-                .tracking(1.2)
-                .foregroundStyle(Theme.muted)
+            caps("OR DESCRIBE THE VIBE")
             HStack(spacing: 10) {
-                Image(systemName: "text.bubble").foregroundStyle(Theme.muted)
-                TextField("", text: $words, prompt: Text("a rainy night in the city").foregroundStyle(Theme.muted))
+                ZStack {
+                    if reading != nil {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "text.bubble").foregroundStyle(Theme.muted)
+                    }
+                }
+                .frame(width: 20)
+                TextField("", text: $words, prompt: Text(Vibe.readsMoods ? "a rainy night in Tokyo, no traffic" : "a sunny beach, no birds")
+                    .foregroundStyle(Theme.muted))
                     .textFieldStyle(.plain)
-                    .focused($saying)
+                    .focused($describing)
                     .autocorrectionDisabled()
                     .submitLabel(.go)
                     .onSubmit { understand() }
@@ -221,21 +233,91 @@ struct TeleportView: View {
             .background(Capsule().fill(.white.opacity(0.06)))
             .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
             if notUnderstood {
-                Text("Try a place and some weather, like “a cabin in the snow”.")
+                Text("Try a place and some weather, like “a cabin in the snow, no wind”.")
                     .font(Theme.label(11))
                     .foregroundStyle(Theme.secondary)
                     .transition(.opacity)
             }
+            // With the box empty, what you've described before and a few to try: one tap goes.
+            if describing && words.isEmpty && reading == nil {
+                VStack(alignment: .leading, spacing: 8) {
+                    if !recent.isEmpty {
+                        HStack {
+                            caps("RECENT")
+                            Spacer()
+                            Button {
+                                Vibe.forgetRecent()
+                                withAnimation(.smooth(duration: 0.25)) { recent = [] }
+                            } label: {
+                                caps("CLEAR").contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Clear recent descriptions")
+                        }
+                        phrases(Array(recent.prefix(4)), yours: true)
+                        caps("TRY").padding(.top, 4)
+                    }
+                    phrases(Array(suggestions.prefix(recent.isEmpty ? 4 : 3)), yours: false)
+                }
+                .padding(.top, 2)
+                .transition(.opacity)
+            }
         }
         .animation(.smooth(duration: 0.25), value: notUnderstood)
+        .animation(.smooth(duration: 0.25), value: describing)
     }
 
-    private func understand() {
-        guard let parsed = Atmosphere.parse(words) else {
-            notUnderstood = true
-            return
+    private func caps(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.caps(10))
+            .tracking(1.2)
+            .foregroundStyle(Theme.muted)
+    }
+
+    /// Descriptions to tap, yours brighter than ours.
+    private func phrases(_ list: [String], yours: Bool) -> some View {
+        FlowLayout(spacing: 6) {
+            ForEach(list, id: \.self) { phrase in
+                Button {
+                    words = phrase
+                    understand()
+                } label: {
+                    Text(phrase)
+                        .font(Theme.body(13))
+                        .foregroundStyle(yours ? Theme.text : Theme.secondary)
+                        .lineLimit(1)
+                        .frame(maxWidth: 300, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.vertical, 7)
+                        .padding(.horizontal, 12)
+                        .background(Capsule().fill(.white.opacity(yours ? 0.06 : 0)))
+                        .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
         }
-        go(to: parsed)
+    }
+
+    /// Reads the description, then goes there.
+    private func understand() {
+        let text = words.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, reading == nil else { return }
+        notUnderstood = false
+        reading = Task {
+            let vibe = await Vibe.read(text, draft: draft)
+            reading = nil
+            guard !Task.isCancelled else { return }
+            guard let vibe else {
+                notUnderstood = true
+                return
+            }
+            Vibe.remember(text)
+            goes += 1
+            Haptics.tap()
+            mixer.go(to: vibe)
+            leave()
+        }
     }
 
     // MARK: Ours

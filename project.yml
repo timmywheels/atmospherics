@@ -30,6 +30,8 @@ targets:
         CODE_SIGN_STYLE: Automatic
         CURRENT_PROJECT_VERSION: "14"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Apple's on-device model (Vibe.swift) is iOS 26 and later; weak, so earlier iPhones still open the app.
+        OTHER_LDFLAGS: $(inherited) -weak_framework FoundationModels
     info:
       path: Atmospherics/Info.plist
       properties:
@@ -113,6 +115,8 @@ targets:
         CODE_SIGN_STYLE: Automatic
         ENABLE_HARDENED_RUNTIME: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Apple's on-device model (Vibe.swift) is macOS 26 and later; weak, so earlier Macs still open the app.
+        OTHER_LDFLAGS: $(inherited) -weak_framework FoundationModels
     info:
       path: Mac/Info.plist
       properties:

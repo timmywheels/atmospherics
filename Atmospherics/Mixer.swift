@@ -513,6 +513,22 @@ final class Mixer {
         if shouldPlay && !isPlaying { play() }
     }
 
+    /// Goes to a scene described in words, its sounds changed as asked. The changes are kept as
+    /// the scene's tweaks, as if made in Layers, so Reset puts it back. A scene described anew is
+    /// as described, whatever it was tuned to before; words that only refine it add to that.
+    func go(to vibe: Vibe) {
+        let a = vibe.atmosphere
+        let changes = vibe.tweaks(over: a.mix(in: liveSource(for: a)?.conditions ?? a.imagined()))
+        if vibe.refines {
+            tweaks[a.tweakKey, default: [:]].merge(changes) { $1 }
+        } else {
+            tweaks[a.tweakKey] = changes.isEmpty ? nil : changes
+        }
+        persistTweaks()
+        go(to: a)
+        if let said = vibe.summary { announce(said, for: 3.5) }
+    }
+
     /// The same setting in other weather: swipe down, or the Weather menu.
     func setAtmosphereSky(_ sky: Sky) {
         guard let a = atmosphere, a.sky != sky else { return }
@@ -689,11 +705,11 @@ final class Mixer {
     private(set) var notice: String?
     @ObservationIgnored private var noticeTask: Task<Void, Never>?
 
-    func announce(_ text: String) {
+    func announce(_ text: String, for seconds: Double = 2.5) {
         notice = text
         noticeTask?.cancel()
         noticeTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(2.5))
+            try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled else { return }
             self?.notice = nil
         }
