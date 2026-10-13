@@ -1,10 +1,10 @@
 import SwiftUI
 
 #if os(iOS)
-/// Layers: a landscape of what's playing, washed in the colors of the mix. Each sound raises a
-/// hill where it sits, as high as it is loud, and you're at the center: drag a sound closer to
-/// hear more of it, out past the rim to let it go, and drag the ground to turn the landscape.
-/// The sections below add a sound or take it away. (On the Mac, `MacLayers` shows the same parts.)
+/// Layers: the shape of what's playing, washed in the colors of the mix. Each sound is a bulge in
+/// the glass, as far out as it's loud: pull one out to hear more of it, push it in to let it go,
+/// and drag around it to turn the shape. The sections below add a sound or take it away.
+/// (On the Mac, `MacLayers` shows the same parts.)
 struct MixerView: View {
     @Environment(Mixer.self) private var mixer
     @State private var saving = false
@@ -12,11 +12,11 @@ struct MixerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TerrainField()
+            ShapeField()
 
             Text(mixer.currentPlaceIsTweaked
                  ? "Your changes to \(mixer.currentPlaceName) are kept"
-                 : "Closer is louder · drag the ground to turn it")
+                 : "Pull a sound out to hear more · drag to turn")
                 .font(Theme.label(10.5))
                 .foregroundStyle(Theme.muted)
                 .padding(.bottom, 14)
@@ -53,33 +53,42 @@ struct MixerView: View {
 }
 #endif
 
-/// The landscape: the sculpture of what's playing, standing on the field's ground with contour
-/// footprints, the rim dashed and you marked at the middle. Drag the ground to turn and tilt it;
-/// drag a sound to move it, closer to hear more of it, past the rim to let it go.
-struct TerrainField: View {
+/// The shape of the sound, large: the glass form from the home screen with a handle at the tip of
+/// each sound's bulge. Pull one out to hear more of it, push it all the way in to let it go, and
+/// drag anywhere else to turn the shape.
+struct ShapeField: View {
     @Environment(Mixer.self) private var mixer
-    @State private var yaw = -0.4
-    @State private var pitch = 0.82
+    // From above, so the spokes fan out like a radar chart, with the shape's depth still there.
+    @State private var yaw = 0.35
+    @State private var pitch = 0.85
     @State private var turnStart: (yaw: Double, pitch: Double)?
+
+    /// How much of the view the shape is fitted to (see `SculptureCamera.extent`).
+    static let extent = 0.72
 
     var body: some View {
         GeometryReader { proxy in
-            let camera = SculptureCamera(yaw: yaw, pitch: pitch, size: proxy.size)
-            let you = camera.project(0, 0, 0).point
-            let shifts = Self.labelShifts(mixer.orbs, camera: camera)
+            let camera = SculptureCamera(yaw: yaw, pitch: pitch, size: proxy.size, extent: Self.extent)
+            let bodies = SculptureStyle.shape.bodies(of: mixer.orbs, at: 0)
+            let middle = camera.project(0, 0, 0).point
             ZStack {
-                SculptureView(orbs: mixer.orbs, style: .layers, yaw: yaw, pitch: pitch, ground: true, animated: false)
-                Text("you")
-                    .font(Theme.label(10))
-                    .foregroundStyle(Theme.muted)
-                    .shadow(color: .black.opacity(0.6), radius: 3)
-                    .position(x: you.x, y: you.y + 16)
-                    .allowsHitTesting(false)
-                ForEach(mixer.orbs) { orb in
-                    TerrainOrb(orb: orb, camera: camera, labelShift: shifts[orb.id] ?? 0)
+                SculptureView(orbs: mixer.orbs, style: .shape, yaw: yaw, pitch: pitch, extent: Self.extent, animated: false)
+                // Faint spokes from the middle out to each sound, the lines its handle moves along.
+                Path { path in
+                    for part in bodies {
+                        let reach = SculptureStyle.tipDistance(volume: 1)
+                        let far = camera.project(part.direction.x * reach, part.direction.y * reach, part.direction.z * reach).point
+                        path.move(to: middle)
+                        path.addLine(to: far)
+                    }
+                }
+                .stroke(Theme.text.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [3, 4]))
+                .allowsHitTesting(false)
+                ForEach(bodies) { part in
+                    SoundHandle(part: part, camera: camera)
                 }
             }
-            .coordinateSpace(name: "terrain")
+            .coordinateSpace(name: "shape")
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 3)
@@ -87,7 +96,7 @@ struct TerrainField: View {
                         if turnStart == nil { turnStart = (yaw, pitch) }
                         guard let start = turnStart else { return }
                         yaw = start.yaw + g.translation.width * 0.008
-                        pitch = min(1.35, max(0.5, start.pitch + g.translation.height * 0.004))
+                        pitch = min(1.4, max(-0.2, start.pitch + g.translation.height * 0.005))
                     }
                     .onEnded { _ in turnStart = nil }
             )
@@ -96,119 +105,79 @@ struct TerrainField: View {
         .sensoryFeedback(.selection, trigger: Int((yaw / (.pi / 8)).rounded(.down)))
         .sensoryFeedback(.impact(weight: .light), trigger: mixer.orbs.count)
     }
-
-    /// Where each name goes: under its sound, nudged down past any louder sound's name it would cover.
-    static func labelShifts(_ orbs: [Orb], camera: SculptureCamera) -> [Orb.ID: CGFloat] {
-        var placed: [CGRect] = []
-        var shifts: [Orb.ID: CGFloat] = [:]
-        for orb in orbs.sorted(by: { $0.volume > $1.volume }) {
-            let body = SculptureStyle.layers.body(of: orb, at: 0)
-            let spot = camera.project(body.center.x, body.center.y, body.center.z)
-            let below = body.radius * camera.scale(atDepth: spot.depth) + 12
-            let width = CGFloat(orb.kind.short.count) * 7 + 12
-            var rect = CGRect(x: spot.point.x - width / 2, y: spot.point.y + below - 7, width: width, height: 14)
-            var shift: CGFloat = 0
-            while placed.contains(where: { $0.intersects(rect) }), shift < 60 {
-                shift += 14
-                rect.origin.y += 14
-            }
-            placed.append(rect)
-            shifts[orb.id] = shift
-        }
-        return shifts
-    }
 }
 
-/// A sound on the landscape: something to take hold of over its body, named underneath.
-private struct TerrainOrb: View {
+/// A sound in the shape: a handle at the tip of its bulge, named just beyond it. Drag it out along
+/// its spoke to make the sound louder, in to make it quieter, and right into the middle to let it go.
+private struct SoundHandle: View {
     @Environment(Mixer.self) private var mixer
-    let orb: Orb
+    let part: SculptureBody
     let camera: SculptureCamera
-    var labelShift: CGFloat = 0
     @State private var dragging = false
-    /// The level the finger moves the sound across, fixed when the drag begins.
-    @State private var dragHeight: Double?
-    /// Where the finger is on the ground while it's past the rim.
-    @State private var outside: (x: Double, z: Double)?
-
-    /// Past this distance from center (the rim is 1), letting go removes the sound.
-    private static let removeDistance = 1.36
-
-    private var removing: Bool {
-        guard let p = outside else { return false }
-        return hypot(p.x, p.z) > Self.removeDistance
-    }
+    @State private var removing = false
 
     var body: some View {
-        let body = SculptureStyle.layers.body(of: orb, at: 0)
-        let projected = camera.project(body.center.x, body.center.y, body.center.z)
-        let spot = outside.map { camera.project($0.x, 0, $0.z) } ?? projected
-        let radius = body.radius * camera.scale(atDepth: projected.depth)
-        let size = max(44, radius * 2)
-        let pct = Int((orb.volume * 100).rounded())
+        let tip = part.tip
+        let spot = camera.project(tip.x, tip.y, tip.z)
+        let middle = camera.project(0, 0, 0).point
+        // The spoke on screen: which way is out, and how many points a unit along it takes.
+        let reach = camera.project(part.direction.x, part.direction.y, part.direction.z).point
+        let along = CGVector(dx: reach.x - middle.x, dy: reach.y - middle.y)
+        let unit = max(1, hypot(along.dx, along.dy))
+        let out = CGVector(dx: along.dx / unit, dy: along.dy / unit)
+        let pct = Int((part.orb.volume * 100).rounded())
 
-        ZStack {
-            // Out past the rim, the sound's body stays at the edge; a ghost follows the finger.
-            if outside != nil {
-                Circle()
-                    .strokeBorder(removing ? Theme.text : Theme.muted, lineWidth: 1.2)
-                    .background(Circle().fill(.black.opacity(0.25)))
-                    .frame(width: 22, height: 22)
-                if removing {
-                    Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.text)
-                }
+        Circle()
+            .fill(part.orb.kind.orb)
+            .overlay(Circle().strokeBorder(Theme.text, lineWidth: 2))
+            .frame(width: 15, height: 15)
+            .shadow(color: part.orb.kind.glow.opacity(0.9), radius: dragging ? 9 : 5)
+            .scaleEffect(dragging ? 1.3 : 1)
+            .opacity(removing ? 0.4 : 1)
+            .frame(width: 44, height: 44)
+            .overlay {
+                Text(removing ? "Release to remove" : dragging ? "\(part.orb.kind.short) \(pct)" : part.orb.kind.short)
+                    .font(Theme.label(10.5, .medium))
+                    .foregroundStyle(removing ? Theme.text : Theme.orbLabel)
+                    .shadow(color: .black.opacity(0.75), radius: 3)
+                    .fixedSize()
+                    .offset(x: out.dx * 34, y: out.dy * 26 + (out.dy > -0.3 ? 4 : -4))
+                    .allowsHitTesting(false)
             }
-        }
-        .frame(width: size, height: size)
-        .overlay {
-            Text(removing ? "Release to remove"
-                 : outside != nil ? "Drag further to remove"
-                 : dragging ? "\(orb.kind.short) \(pct)" : orb.kind.short)
-                .font(Theme.label(10, .medium))
-                .foregroundStyle(removing ? Theme.text : Theme.orbLabel)
-                .shadow(color: .black.opacity(0.7), radius: 3)
-                .fixedSize()
-                .offset(y: (outside != nil ? 22 : radius + 12) + (outside != nil ? 0 : labelShift))
-                .allowsHitTesting(false)
-        }
-        .contentShape(Circle())
-        .position(spot.point)
-        .zIndex(dragging ? 1000 : -spot.depth)
-        .gesture(
-            DragGesture(minimumDistance: 2, coordinateSpace: .named("terrain"))
-                .onChanged { g in
-                    if dragHeight == nil { dragHeight = body.center.y }
-                    guard let h = dragHeight, let p = camera.ground(under: g.location, height: h) else { return }
-                    dragging = true
-                    outside = hypot(p.x, p.z) > 1 ? p : nil
-                    mixer.move(orb.id, toX: p.x / 2 + 0.5, y: p.z / 2 + 0.5)
-                }
-                .onEnded { _ in
-                    if removing {
-                        withAnimation(.snappy) { mixer.remove(orb.id) }
-                    } else {
-                        withAnimation(.spring(duration: 0.35, bounce: 0.35)) { outside = nil }
+            .contentShape(Circle())
+            .position(spot.point)
+            .zIndex(dragging ? 1000 : -spot.depth)
+            .gesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .named("shape"))
+                    .onChanged { g in
+                        dragging = true
+                        // How far out along the spoke the finger is, in the shape's own units.
+                        let t = ((g.location.x - middle.x) * out.dx + (g.location.y - middle.y) * out.dy) / unit
+                        removing = t < 0.17
+                        mixer.setVolume(part.orb.id, to: max(0.03, SculptureStyle.volume(atTip: t)))
                     }
-                    dragging = false
-                    dragHeight = nil
-                }
-        )
-        .onTapGesture(count: 2) {
-            withAnimation(.snappy) { mixer.remove(orb.id) }
-        }
-        .animation(.snappy(duration: 0.2), value: dragging)
-        .animation(.snappy(duration: 0.18), value: removing)
-        // A soft tap on pickup, a tick per 10% of volume, and a firm snap when it's ready to remove.
-        .sensoryFeedback(.impact(flexibility: .soft), trigger: dragging) { _, isDragging in isDragging }
-        .sensoryFeedback(.selection, trigger: pct / 10) { _, _ in dragging && outside == nil }
-        .sensoryFeedback(.impact(weight: .heavy), trigger: removing) { _, now in now }
-        .accessibilityElement()
-        .accessibilityLabel(orb.kind.name)
-        .accessibilityValue("\(pct) percent")
-        .accessibilityAdjustableAction { direction in
-            mixer.adjustVolume(orb.id, by: direction == .increment ? 0.1 : -0.1)
-        }
-        .accessibilityAction(named: "Remove") { mixer.remove(orb.id) }
+                    .onEnded { _ in
+                        if removing { withAnimation(.snappy) { mixer.remove(part.orb.id) } }
+                        dragging = false
+                        removing = false
+                    }
+            )
+            .onTapGesture(count: 2) {
+                withAnimation(.snappy) { mixer.remove(part.orb.id) }
+            }
+            .animation(.snappy(duration: 0.2), value: dragging)
+            .animation(.snappy(duration: 0.18), value: removing)
+            // A soft tap on pickup, a tick per 10% of volume, and a firm snap when it's ready to remove.
+            .sensoryFeedback(.impact(flexibility: .soft), trigger: dragging) { _, isDragging in isDragging }
+            .sensoryFeedback(.selection, trigger: pct / 10) { _, _ in dragging }
+            .sensoryFeedback(.impact(weight: .heavy), trigger: removing) { _, now in now }
+            .accessibilityElement()
+            .accessibilityLabel(part.orb.kind.name)
+            .accessibilityValue("\(pct) percent")
+            .accessibilityAdjustableAction { direction in
+                mixer.adjustVolume(part.orb.id, by: direction == .increment ? 0.1 : -0.1)
+            }
+            .accessibilityAction(named: "Remove") { mixer.remove(part.orb.id) }
     }
 }
 

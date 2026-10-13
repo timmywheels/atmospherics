@@ -1,10 +1,10 @@
 import MetalKit
 import SwiftUI
 
-// The soundscape as a glass ghost: a soft body for each sound, bigger and higher the louder it
-// is, seen through like colored glass with a glowing edge. On the home screen they merge into
-// one blob that turns and drifts, swelling toward its louder sounds; in Layers they're the same
-// sounds standing apart on the field, to be moved about. Drawn by `SculptureShader` on the GPU.
+// The soundscape as a glass ghost: one soft form, a bulge for each sound pushed out as far as it's
+// loud, seen through like colored glass with a glowing edge. On the home screen it's a small blob
+// that turns and drifts; in Layers it's the same shape drawn large, its sounds to pull in and out.
+// Drawn by `SculptureShader` on the GPU.
 
 /// The camera the sculpture is seen through, by the shader and by the labels drawn over it:
 /// turned (yaw), tilted (pitch, 0 is side on), in perspective, looking at the middle of the view.
@@ -48,43 +48,67 @@ struct SculptureCamera {
     }
 }
 
-/// How sounds become bodies.
+/// One sound's body in the sculpture: where, how big, and the spoke it lies along.
+struct SculptureBody: Identifiable {
+    let orb: Orb
+    let center: SIMD3<Double>
+    let radius: Double
+    /// Out from the middle, the way this sound's bulge points.
+    let direction: SIMD3<Double>
+    var id: Orb.ID { orb.id }
+    /// Where the shape reaches furthest along the spoke.
+    var tip: SIMD3<Double> { center + direction * radius }
+}
+
+/// How sounds become bodies: the shape of the sound. Each sound is a spoke, evenly round in the
+/// order the sounds sit around you and tilted a little up or down for depth, and its body is
+/// pushed out along it the louder it is. Home and Layers draw the same shape; Layers larger.
 enum SculptureStyle {
     /// A compact form that drifts and breathes, for the home screen.
     case home
-    /// Each sound standing where it is on the field, for Layers.
-    case layers
+    /// The same shape drawn large, to pull its sounds in and out, for Layers.
+    case shape
 
-    /// Where a sound's body is and how big, at a moment.
-    func body(of orb: Orb, at time: Double) -> (center: SIMD3<Double>, radius: Double) {
-        let v = orb.volume
-        let x = (orb.x - 0.5) * 2, z = (orb.y - 0.5) * 2
-        switch self {
-        case .layers:
-            // Quiet sounds sit low on the ground; loud ones are bigger and rise.
-            let r = 0.06 + 0.17 * v
-            return (SIMD3(x, r * 0.45 + 0.26 * pow(v, 1.1), z), r)
-        case .home:
-            let seed = Double(SoundKind.allCases.firstIndex(of: orb.kind) ?? 0)
-            let drift = SIMD3(sin(time * 0.23 + seed * 1.7), sin(time * 0.19 + seed * 2.3) * 0.6,
-                              cos(time * 0.21 + seed * 1.1)) * 0.04
-            let breathe = 1 + 0.035 * sin(time * 0.5 + seed)
-            // One blob: each sound swells it toward where the sound is, but never so far that
-            // it parts from the rest.
-            var toward = SIMD2(x, z) * 0.5
-            let length = (toward * toward).sum().squareRoot()
-            if length > 1e-6 { toward *= 0.26 * tanh(length / 0.26) / length }
-            let r = (0.17 + 0.22 * v) * breathe
-            return (SIMD3(toward.x, 0.2 * v - 0.1, toward.y) + drift, r)
+    /// Each sound's spoke, a direction out from the middle.
+    static func spokes(of orbs: [Orb]) -> [(Orb, SIMD3<Double>)] {
+        let live = orbs.filter { $0.volume > 0.02 }
+            .sorted { atan2($0.y - 0.5, $0.x - 0.5) < atan2($1.y - 0.5, $1.x - 0.5) }
+        let tilts = [0.32, -0.24, 0.12, -0.32, 0.24, -0.1, 0.04, -0.2]
+        return live.enumerated().map { i, orb in
+            let a = Double(i) / Double(live.count) * 2 * .pi + 0.5
+            let e = live.count == 1 ? 0 : tilts[i % tilts.count]
+            return (orb, SIMD3(cos(e) * cos(a), sin(e), cos(e) * sin(a)))
         }
     }
+
+    /// Where each sound's body is and how big, at a moment.
+    func bodies(of orbs: [Orb], at time: Double) -> [SculptureBody] {
+        Self.spokes(of: orbs).map { orb, d in
+            let v = orb.volume
+            switch self {
+            case .shape:
+                // Quiet sounds stay close in, where they meet; loud ones reach out.
+                return SculptureBody(orb: orb, center: d * (0.1 + 0.4 * v), radius: 0.13 + 0.17 * v, direction: d)
+            case .home:
+                let seed = Double(SoundKind.allCases.firstIndex(of: orb.kind) ?? 0)
+                let drift = SIMD3(sin(time * 0.23 + seed * 1.7), sin(time * 0.19 + seed * 2.3) * 0.6,
+                                  cos(time * 0.21 + seed * 1.1)) * 0.04
+                let breathe = 1 + 0.035 * sin(time * 0.5 + seed)
+                // One blob, swelling each sound's way as far as it's loud, never so far it parts.
+                return SculptureBody(orb: orb, center: d * (0.05 + 0.21 * v) + drift, radius: (0.17 + 0.22 * v) * breathe,
+                                     direction: d)
+            }
+        }
+    }
+
+    /// How far out a sound's tip reaches at a volume (the inverse of `volume(atTip:)`).
+    static func tipDistance(volume v: Double) -> Double { 0.23 + 0.57 * v }
+    static func volume(atTip t: Double) -> Double { max(0, min(1, (t - 0.23) / 0.57)) }
 
     /// Whether a point on screen is on one of the sounds' bodies, or within `slop` points of one
     /// (enough to cover where they merge, and a fingertip).
     func touches(_ point: CGPoint, orbs: [Orb], camera: SculptureCamera, slop: CGFloat = 18) -> Bool {
-        orbs.contains { orb in
-            guard orb.volume > 0.02 else { return false }
-            let body = body(of: orb, at: 0)
+        bodies(of: orbs, at: 0).contains { body in
             let spot = camera.project(body.center.x, body.center.y, body.center.z)
             let radius = body.radius * camera.scale(atDepth: spot.depth)
             return hypot(point.x - spot.point.x, point.y - spot.point.y) <= radius + slop
@@ -375,7 +399,7 @@ final class SculptureRenderer: NSObject, MTKViewDelegate {
             center: SIMD2(Float(camera.center.x * scale), Float(camera.center.y * scale)),
             focal: Float(camera.focal * scale), distance: Float(camera.distance),
             yaw: Float(camera.yaw), pitch: Float(camera.pitch),
-            smoothness: settings.style == .home ? 0.4 : 0.16, glow: settings.style == .home ? 0.7 : 0.45,
+            smoothness: settings.style == .home ? 0.4 : 0.42, glow: settings.style == .home ? 0.7 : 0.55,
             ground: settings.ground ? 1 : 0, time: Float(time.truncatingRemainder(dividingBy: 10_000)),
             count: Int32(blobs.count), exposure: Float(settings.exposure),
             wobble: settings.style == .home && !settings.still ? 1 : 0)
@@ -397,10 +421,9 @@ final class SculptureRenderer: NSObject, MTKViewDelegate {
     /// Moves each body toward where its sound puts it; new sounds grow in, gone ones shrink away.
     private func step(to orbs: [Orb], at time: Double, now: CFTimeInterval) {
         var targets: [SoundKind: (center: SIMD3<Double>, radius: Double)] = [:]
-        for orb in orbs where orb.volume > 0.02 {
-            let body = settings.style.body(of: orb, at: time)
-            if let existing = targets[orb.kind], existing.radius >= body.radius { continue }
-            targets[orb.kind] = body
+        for body in settings.style.bodies(of: orbs, at: time) {
+            if let existing = targets[body.orb.kind], existing.radius >= body.radius { continue }
+            targets[body.orb.kind] = (body.center, body.radius)
         }
         let dt = min(0.1, now - (lastFrame ?? now))
         lastFrame = now

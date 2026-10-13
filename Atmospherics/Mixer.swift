@@ -559,14 +559,22 @@ final class Mixer {
         update(id) { $0.x = x; $0.y = y }
     }
 
-    /// Nudges an orb toward (positive) or away from (negative) the center. Used by VoiceOver.
+    /// Nudges a sound louder (positive) or quieter (negative). Used by VoiceOver.
     func adjustVolume(_ id: Orb.ID, by delta: Double) {
         guard let orb = orbs.first(where: { $0.id == id }) else { return }
-        let target = max(0, min(1, orb.volume + delta))
+        setVolume(id, to: orb.volume + delta)
+    }
+
+    /// Sets how loud a sound is, keeping which way it is from you (and so its spoke in the shape).
+    func setVolume(_ id: Orb.ID, to volume: Double) {
+        guard let orb = orbs.first(where: { $0.id == id }) else { return }
+        transition?.cancel()
+        visualTarget = nil
+        let target = max(0, min(0.995, volume))
         let dx = orb.x - 0.5, dy = orb.y - 0.5
-        let d = max(hypot(dx, dy), 0.0001)
-        let r = (1 - target) * 0.5
+        let d = hypot(dx, dy)
         let (ux, uy) = d < 0.001 ? (0.0, 1.0) : (dx / d, dy / d)
+        let r = (1 - target) * 0.5
         update(id) { $0.x = 0.5 + ux * r; $0.y = 0.5 + uy * r }
     }
 
