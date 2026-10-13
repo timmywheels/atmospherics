@@ -10,9 +10,9 @@ let W: CGFloat = 1320, H: CGFloat = 2868
 let shots: [(file: String, title: String, sub: String, glow: NSColor)] = [
     ("1-cabin", "Teleport\nby sound", "A log cabin in a snowstorm, the fire going.", NSColor(srgbRed: 0.85, green: 0.45, blue: 0.3, alpha: 1)),
     ("2-teleport", "Take me\nanywhere", "Build a scene in a sentence, or say it.", NSColor(srgbRed: 0.75, green: 0.38, blue: 0.3, alpha: 1)),
-    ("3-live", "Real weather,\nsomewhere real", "Raining in Seoul right now? You'll hear it.", NSColor(srgbRed: 0.25, green: 0.55, blue: 0.85, alpha: 1)),
+    ("3-live", "Real weather,\nsomewhere real", "Raining in Sydney right now? You'll hear it.", NSColor(srgbRed: 0.25, green: 0.55, blue: 0.85, alpha: 1)),
     ("4-storm", "Any weather,\nany hour", "A tent in a thunderstorm, the woods close by.", NSColor(srgbRed: 0.25, green: 0.6, blue: 0.75, alpha: 1)),
-    ("5-layers", "A landscape of\nwhat you hear", "Drag a sound closer to hear more.", NSColor(srgbRed: 0.3, green: 0.65, blue: 0.55, alpha: 1)),
+    ("5-layers", "Every sound,\nyour level", "Tap or drag across a layer to set it.", NSColor(srgbRed: 0.3, green: 0.65, blue: 0.55, alpha: 1)),
     ("6-library", "Mixes for sleep,\nfocus and calm", "With a sleep timer up to 8 hours.", NSColor(srgbRed: 0.5, green: 0.45, blue: 0.85, alpha: 1)),
 ]
 
