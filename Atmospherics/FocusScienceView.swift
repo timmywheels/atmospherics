@@ -50,8 +50,7 @@ struct FocusScienceView: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Sounds for focus")
-                        .font(Theme.display(30))
-                        .tracking(-0.6)
+                        .font(Theme.display(36))
                     Spacer()
                     Button { dismiss() } label: {
                         Image(systemName: "xmark").font(.system(size: 15, weight: .medium)).padding(8)

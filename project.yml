@@ -36,6 +36,7 @@ targets:
           UIColorName: LaunchBackground
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIUserInterfaceStyle: Dark
+        UIAppFonts: [InstrumentSerif-Regular.ttf]
         NSLocationWhenInUseUsageDescription: Atmospherics uses your approximate location to match its sounds to the weather outside.
         ITSAppUsesNonExemptEncryption: false
         NSSupportsLiveActivities: true
@@ -108,6 +109,7 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.healthcare-fitness
+        ATSApplicationFontsPath: .
         NSLocationUsageDescription: Atmospherics uses your approximate location to match its sounds to the weather outside.
         NSLocationWhenInUseUsageDescription: Atmospherics uses your approximate location to match its sounds to the weather outside.
         ITSAppUsesNonExemptEncryption: false

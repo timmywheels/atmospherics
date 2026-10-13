@@ -145,7 +145,7 @@ private struct LevelRow: View {
                 .frame(width: filled)
             HStack(alignment: .firstTextBaseline) {
                 Text(orb.kind.short)
-                    .font(Theme.mono(height > 64 ? 25 : 18, .light))
+                    .font(Theme.display(height > 64 ? 32 : 24))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Spacer(minLength: 12)
@@ -173,7 +173,7 @@ private struct RandomLayer: View {
             withAnimation(.snappy) { mixer.add(kind) }
         } label: {
             Text("+ Random")
-                .font(Theme.mono(height > 64 ? 25 : 18, .light))
+                .font(Theme.display(height > 64 ? 32 : 24))
                 .foregroundStyle(Theme.muted)
                 .padding(.horizontal, 24)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)

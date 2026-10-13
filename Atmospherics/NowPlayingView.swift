@@ -427,8 +427,8 @@ private struct PageTitle: View {
             ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text(line)
-                        .font(Theme.display(lines.count > 1 ? 40 : 44))
-                        .tracking(lines.count > 1 ? -1.1 : -1.3)
+                        .font(Theme.display(lines.count > 1 ? 46 : 52))
+                        .tracking(-0.3)
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
                     if i == lines.count - 1 {

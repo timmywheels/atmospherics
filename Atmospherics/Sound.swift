@@ -278,8 +278,9 @@ enum Theme {
     static let orbLabel = Color(hex: 0xc9ced8)
     static let hairline = Color.white.opacity(0.14)
 
-    /// Stands in for Geist Light.
-    static func display(_ size: CGFloat) -> Font { .system(size: size, weight: .light) }
+    /// Titles and names (a scene, a mix, a layer) in Instrument Serif: calm, and set apart from
+    /// the data around them, which stays in the monospace.
+    static func display(_ size: CGFloat) -> Font { .custom("InstrumentSerif-Regular", fixedSize: size) }
     static func body(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font { .system(size: size, weight: weight) }
     /// Small labels and captions, in the same clean sans as everything else (a point larger than
     /// the monospace they replaced, which ran wider). Tracked out when in capitals.
@@ -289,7 +290,7 @@ enum Theme {
     /// Words in capitals (the wordmark, tabs, section names) keep the monospace: the brand's
     /// voice, here and there. Sentences and names are in the sans.
     static func caps(_ size: CGFloat) -> Font { .system(size: size, weight: .medium, design: .monospaced) }
-    /// The monospace in sentence case, for a screen that speaks in it throughout (Layers).
+    /// The monospace in sentence case, for a line of instructions among the data (Layers' hint).
     static func mono(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
         .system(size: size, weight: weight, design: .monospaced)
     }
