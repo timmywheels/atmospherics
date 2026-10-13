@@ -41,8 +41,9 @@ struct Preset: Identifiable {
                mix: [(.green, 0.65)]),
         Preset(name: "Grey Noise", tag: .focus, length: "2 h", description: "Just grey noise: even to the ear, low to high",
                mix: [(.grey, 0.65)]),
-        Preset(name: "Beta Pulse", tag: .focus, length: "90 min", description: "Pink noise pulsing at 16 Hz, soft rain",
-               mix: [(.betaPulse, 0.6), (.lightRain, 0.3)], evidence: .early),
+        // The pulse works under the rain, not over it: louder than this, it takes over.
+        Preset(name: "Beta Pulse", tag: .focus, length: "90 min", description: "Soft rain over pink noise pulsing at 16 Hz",
+               mix: [(.betaPulse, 0.45), (.lightRain, 0.85)], evidence: .early),
         Preset(name: "Beta Beats", tag: .focus, length: "90 min", description: "16 Hz binaural beats in pink noise · headphones",
                mix: [(.pink, 0.6), (.betaBeats, 0.7)], evidence: .mixed),
         Preset(name: "Gamma Beats", tag: .focus, length: "1 h", description: "40 Hz binaural beats in brown noise · headphones",
