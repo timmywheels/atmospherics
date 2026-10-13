@@ -43,8 +43,11 @@ None of this is medical advice, and the app makes no medical claims.
     stimulus–brain coupling (EEG).
   - One paper; the authors work with Brain.fm, whose music was used. Pink noise was a control
     condition, unmodulated; the modulation was only ever applied to music.
-- **In the app:** Beta Pulse (pink noise modulated at 16 Hz, depth 0.5, both ears in phase so it
-  works on a speaker), with soft rain. That's an extrapolation (the study's modulated stimulus was
+- **In the app:** Beta Pulse (pink noise modulated at 16 Hz, depth 0.3, both ears in phase so it
+  works on a speaker), set well back (−7 dB) under soft rain. The paper tested 8, 16 and 32 Hz,
+  all at "medium" depth (given only as a step on its own spectral metric, not a number); 16 Hz
+  did best for listeners with more ADHD traits, and depth made no significant difference, so the
+  app keeps 16 Hz and a gentle depth. That's an extrapolation (the study's modulated stimulus was
   music), and the science page says so.
 
 ## 4. Binaural beats (mixed)
