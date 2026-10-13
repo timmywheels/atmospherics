@@ -8,6 +8,7 @@ struct AtmosphericsMacApp: App {
     @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
     @State private var mixer: Mixer
     @State private var navigation = MacNavigation()
+    @StateObject private var updates = Updates()
     @AppStorage("showInMenuBar") private var showInMenuBar = true
 
     init() {
@@ -33,7 +34,7 @@ struct AtmosphericsMacApp: App {
         .windowToolbarStyle(.unified(showsTitle: false))
         .defaultSize(width: 480, height: 760)
         .windowResizability(.contentMinSize)
-        .commands { MacCommands(mixer: mixer, navigation: navigation) }
+        .commands { MacCommands(mixer: mixer, navigation: navigation, updates: updates) }
 
         MenuBarExtra(isInserted: $showInMenuBar) {
             MenuBarPanel()
@@ -47,6 +48,7 @@ struct AtmosphericsMacApp: App {
 
         Settings {
             MacSettings()
+                .environmentObject(updates)
         }
 
         #if DEBUG

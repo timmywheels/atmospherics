@@ -32,5 +32,13 @@
 	<string>Atmospherics uses your approximate location to match its sounds to the weather outside.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Atmospherics uses your approximate location to match its sounds to the weather outside.</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUEnableInstallerLauncherService</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/timmywheels/atmospherics/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>iWHqyDVEyfgxdKxhKJQ6OmS+S7TlpIeNigVouyb81mM=</string>
 </dict>
 </plist>
