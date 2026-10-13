@@ -273,8 +273,10 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
 enum Theme {
     static let background = Color(hex: 0x0c0e13)
     static let text = Color(hex: 0xeceef2)
-    static let secondary = Color(hex: 0xb9bec8)
-    static let muted = Color(hex: 0x9aa0ab)
+    /// Quieter text is white let through rather than a fixed grey, so it takes on the color of the
+    /// scene behind it: as dim as a grey, without sitting cold on a warm sky.
+    static let secondary = Color.white.opacity(0.72)
+    static let muted = Color.white.opacity(0.55)
     static let orbLabel = Color(hex: 0xc9ced8)
     static let hairline = Color.white.opacity(0.14)
 
