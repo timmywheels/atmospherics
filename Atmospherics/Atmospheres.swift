@@ -97,6 +97,14 @@ enum Sky: String, CaseIterable, Codable {
         }
     }
 
+    /// Weather named together, as one: snow and wind is a snowstorm. Otherwise the stormiest of
+    /// them, so "foggy and rainy" is rain and "a clear, windy night" is windy.
+    static func together(_ skies: [Sky]) -> Sky? {
+        let named = Set(skies)
+        if named.contains(.snow) && named.contains(.wind) { return .snowstorm }
+        return [Sky.snowstorm, .thunderstorm, .downpour, .rain, .drizzle, .snow, .wind, .fog, .clear].first(where: named.contains)
+    }
+
     /// Snow belongs to winter and thunderstorms to summer, whatever the month.
     fileprivate var month: Int? {
         switch self {
@@ -532,14 +540,18 @@ struct Atmosphere: Hashable, Codable, Identifiable {
     /// The setting, weather and time of day a text names outright, each nil if it doesn't.
     /// Settings are found first, so "rainforest" isn't read as rain; the longest name wins, so
     /// "sleeper train" is a train and "light rain" is drizzle.
-    static func named(in text: String) -> (setting: Setting?, sky: Sky?, time: TimeOfDay?) {
+    static func named(in text: String) -> (setting: Setting?, sky: Sky?, time: TimeOfDay?, skies: [Sky]) {
         var words = Words(text)
         return named(in: &words)
     }
 
-    /// The same, taking what it finds out of `words`.
-    static func named(in words: inout Words) -> (setting: Setting?, sky: Sky?, time: TimeOfDay?) {
-        (words.take(settingWords), words.take(skyWords), words.take(timeWords))
+    /// The same, taking what it finds out of `words`. Weather named more than once comes
+    /// together ("snowy and windy" is a snowstorm); `skies` is each as it was named.
+    static func named(in words: inout Words) -> (setting: Setting?, sky: Sky?, time: TimeOfDay?, skies: [Sky]) {
+        let setting = words.take(settingWords)
+        var skies: [Sky] = []
+        while let sky = words.take(skyWords) { skies.append(sky) }
+        return (setting, Sky.together(skies), words.take(timeWords), skies)
     }
 
     /// A setting in the weather asked for, or the nearest it can have (its own first if none was);
@@ -623,6 +635,8 @@ struct Words {
         if !word.isEmpty { tokens.append(word) }
         self.tokens = tokens
     }
+
+    init(tokens: [String]) { self.tokens = tokens }
 
     /// Where `phrase` ends if it starts at word `i`. Its last word may be plural: "owl" finds "owls".
     func match(_ phrase: [String], at i: Int) -> Int? {

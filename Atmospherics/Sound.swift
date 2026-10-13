@@ -153,6 +153,79 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// What it's one of, for asking for sounds in words: "no birds" means the gulls and owls too.
+    var family: SoundFamily? {
+        switch self {
+        case .birds, .winterBirds, .jungleBirds, .parrots, .gulls, .owls, .loons, .geese: .birds
+        case .wind, .breeze, .treeWind, .gusts, .howl: .wind
+        case .rain, .lightRain, .heavyRain, .tentRain, .tinRoof, .rainyStreet: .rain
+        case .thunder, .lightning: .thunder
+        case .ocean, .lapping, .rocks: .waves
+        case .stream, .waterfall, .fountain, .lake, .caveDrips: .water
+        case .fire: .fire
+        case .leaves, .palms: .leaves
+        case .crickets, .cicadas, .canopy: .insects
+        case .frogs, .treeFrogs, .peepers: .frogs
+        case .cafe, .bazaar: .chatter
+        case .traffic, .highway, .motorbikes: .traffic
+        case .cityHum, .cityNight: .city
+        case .train, .tram: .trains
+        case .bells, .templeBell, .buoy: .bells
+        case .halyards, .foghorn: .boats
+        case .brown, .pink, .white, .green, .grey, .blue, .violet: .noise
+        case .howlers, .wolves, .whales, .planes, .chimes, .clock, .typing, .fan, .cabin, .library, .drone,
+             .betaBeats, .gammaBeats, .betaPulse: nil
+        }
+    }
+
+    /// Words for this sound in particular ("seagull", "creek"), besides its family's. Singular:
+    /// plurals are found too.
+    var aliases: [String] {
+        switch self {
+        case .gulls: ["gull", "seagull", "seabird"]
+        case .owls: ["owl", "hooting"]
+        case .loons: ["loon"]
+        case .geese: ["goose", "geese"]
+        case .parrots: ["parrot", "macaw"]
+        case .jungleBirds: ["jungle bird", "tropical bird"]
+        case .winterBirds: ["winter bird"]
+        case .howl: ["howling wind"]
+        case .lightning: ["lightning"]
+        case .stream: ["stream", "creek", "brook", "river"]
+        case .waterfall: ["waterfall"]
+        case .fountain: ["fountain"]
+        case .palms: ["palm", "palm frond", "palm tree"]
+        case .crickets: ["cricket"]
+        case .cicadas: ["cicada"]
+        case .treeFrogs: ["tree frog"]
+        case .peepers: ["peeper", "spring peeper"]
+        case .wolves: ["wolf", "wolves"]
+        case .howlers: ["monkey", "howler", "howler monkey"]
+        case .whales: ["whale", "whale song", "whalesong"]
+        case .motorbikes: ["scooter", "motorbike", "motorcycle"]
+        case .highway: ["highway", "freeway"]
+        case .tram: ["tram", "streetcar", "trolley"]
+        case .planes: ["plane", "airplane", "aircraft", "jet"]
+        case .bells: ["church bell"]
+        case .templeBell: ["temple bell", "gong"]
+        case .buoy: ["buoy", "bell buoy"]
+        case .halyards: ["rigging", "halyard"]
+        case .foghorn: ["foghorn", "fog horn"]
+        case .chimes: ["chime", "wind chime"]
+        case .clock: ["clock", "ticking"]
+        case .typing: ["typing", "keyboard", "typewriter"]
+        case .fan: ["fan"]
+        case .brown: ["brown noise"]
+        case .pink: ["pink noise"]
+        case .white: ["white noise"]
+        case .green: ["green noise"]
+        case .rain, .ocean, .wind, .thunder, .fire, .birds, .grey, .blue, .violet, .frogs, .cityHum, .train, .drone,
+             .canopy, .leaves, .caveDrips, .tentRain, .tinRoof, .lake, .cafe, .library, .cabin, .rainyStreet, .lightRain,
+             .heavyRain, .lapping, .rocks, .bazaar, .breeze, .treeWind, .gusts, .cityNight, .traffic, .betaBeats, .gammaBeats,
+             .betaPulse: []
+        }
+    }
+
     /// How high up the sound comes from, 0 (the ground, the water) to 1 (the sky): owls up in the
     /// trees, frogs in the grass, thunder overhead. The home screen's form leans each sound's
     /// swell up or down by it.
@@ -267,6 +340,37 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
     var glow: Color { .oklch(0.7, 0.16 * chroma, hue) }
     /// The soft halo on Now Playing.
     var halo: Color { .oklch(0.6, 0.14 * chroma, hue) }
+}
+
+/// Sounds that go together when asked for in words: "no birds", "less traffic", "just the waves".
+enum SoundFamily: String, CaseIterable {
+    case birds, wind, rain, thunder, waves, water, fire, leaves, insects, frogs, chatter, traffic, city, trains, bells, boats, noise
+
+    /// The family as a whole in a sentence: "No birds", "Less city noise".
+    var name: String { self == .city ? "city noise" : rawValue }
+
+    /// Words for the whole family. Singular: plurals are found too.
+    var words: [String] {
+        switch self {
+        case .birds: ["bird", "birdsong", "songbird", "birdcall"]
+        case .wind: ["wind", "breeze", "gust", "gale"]
+        case .rain: ["rain", "raindrop", "rainfall", "drizzle"]
+        case .thunder: ["thunder", "thunderclap", "thunderstorm"]
+        case .waves: ["wave", "surf", "ocean", "sea", "breakers"]
+        case .water: ["water", "running water"]
+        case .fire: ["fire", "fireplace", "campfire", "bonfire", "fireside"]
+        case .leaves: ["leaves", "rustling leaves"]
+        case .insects: ["insect", "bug"]
+        case .frogs: ["frog", "toad", "croaking"]
+        case .chatter: ["chatter", "people", "voice", "talking", "crowd", "conversation"]
+        case .traffic: ["traffic", "car", "vehicle", "honking"]
+        case .city: ["city noise", "street noise", "city sound"]
+        case .trains: ["train", "railway"]
+        case .bells: ["bell"]
+        case .boats: ["boat", "sailboat"]
+        case .noise: ["noise"]
+        }
+    }
 }
 
 /// Colors and type from the Field design.

@@ -18,10 +18,9 @@ struct Vibe {
     /// changes. Otherwise the scene is as described, starting from how it sounds by default.
     var refines = false
 
-    /// A change to the scene's sounds, as asked: "no wind", "more fire", "just the waves",
-    /// "palms rustling" (there, as they are).
+    /// A change to the scene's sounds, as asked: "no wind", "more fire", "less chatter", "just the waves".
     struct Ask: Equatable {
-        enum Change { case leaveOut, more, softer, only, present }
+        enum Change { case leaveOut, more, softer, only }
         let change: Change
         let sound: SoundWord
     }
@@ -38,7 +37,13 @@ struct Vibe {
         let found = Ask.find(in: text)
         let named = Atmosphere.named(in: found.rest)
         var setting = named.setting, sky = named.sky, time = named.time
-        let wanted = found.asks.filter { $0.change == .more || $0.change == .only }.map(\.sound)
+        var asks = found.asks
+        // "Rainy and windy": the rain, with more wind than rain brings.
+        if named.skies.contains(.wind), let sky, ![.wind, .snowstorm, .thunderstorm].contains(sky),
+           !asks.contains(where: { $0.sound.kinds.contains(.wind) }), let wind = SoundWord.all.first(where: { $0.name == "wind" }) {
+            asks.append(Ask(change: .more, sound: wind))
+        }
+        let wanted = asks.filter { $0.change == .more || $0.change == .only }.map(\.sound)
         sky = sky ?? Self.sky(bringing: wanted)
         // Words besides the names and the sounds, for the model: "a rainy night in Tokyo".
         var other = Words(found.unasked)
@@ -54,8 +59,8 @@ struct Vibe {
         }
         if setting == nil {
             if sky == nil {
-                guard !found.asks.isEmpty || time != nil else { return nil }
-                return Vibe(atmosphere: Atmosphere(draft.setting, draft.sky, time ?? draft.time), asks: found.asks, refines: true)
+                guard !asks.isEmpty || time != nil else { return nil }
+                return Vibe(atmosphere: Atmosphere(draft.setting, draft.sky, time ?? draft.time), asks: asks, refines: true)
             }
             // "Make it snow": here, if it can.
             if let sky, draft.setting.info.skies.contains(sky) { setting = draft.setting }
@@ -67,8 +72,8 @@ struct Vibe {
         }
         var atmosphere = Atmosphere.suited(setting, sky, time ?? .now)
         // Weather that brings what was left out ("no rain") gives way, unless it was asked for by name.
-        if named.sky == nil { atmosphere.sky = Self.sky(for: atmosphere, without: found.asks) }
-        return Vibe(atmosphere: atmosphere, asks: found.asks)
+        if named.sky == nil { atmosphere.sky = Self.sky(for: atmosphere, without: asks) }
+        return Vibe(atmosphere: atmosphere, asks: asks)
     }
 
     /// Where sounds are most at home: the setting where they're loudest, counting each one's own
@@ -167,7 +172,7 @@ struct Vibe {
 
     /// The changes to the scene's sounds as tweaks over what it would play (`base`): left out is
     /// off whatever the weather brings, more is louder (or brought in if it isn't there), softer
-    /// is half as loud, there is brought in if it isn't, and just these is everything else off.
+    /// is half as loud, and just these is everything else off.
     func tweaks(over base: [(SoundKind, Double)]) -> [String: Double] {
         var level: [SoundKind: Double] = [:]
         for (k, v) in base { level[k] = max(level[k] ?? 0, v) }
@@ -192,8 +197,6 @@ struct Vibe {
             case .softer:
                 if playing.isEmpty { bringIn(ask.sound, at: 0.15) }
                 for k in playing { out[k.rawValue] = -(level[k] ?? 0) / 2 }
-            case .present:
-                if playing.isEmpty { bringIn(ask.sound, at: 0.3) }
             case .only:
                 break
             }
@@ -201,14 +204,13 @@ struct Vibe {
         return out
     }
 
-    /// What it changed, to say after going: "No wind or birds", "Just waves · More wind",
-    /// "With palms · Softer birds".
+    /// What it changed, to say after going: "No wind or birds", "Just waves · More wind".
     var summary: String? {
         func list(_ names: [String], _ last: String) -> String {
             names.count < 2 ? names.joined() : names.dropLast().joined(separator: ", ") + " \(last) " + names.last!
         }
         let parts: [(Ask.Change, String, String)] = [(.leaveOut, "No", "or"), (.only, "Just", "and"), (.more, "More", "and"),
-                                                       (.present, "With", "and"), (.softer, "Softer", "and")]
+                                                       (.softer, "Less", "and")]
         let said = parts.compactMap { change, lead, last -> String? in
             var seen = Set<String>()
             let names = asks.filter { $0.change == change }.map(\.sound.name).filter { seen.insert($0).inserted }
@@ -236,67 +238,30 @@ struct SoundWord: Equatable {
 
     static func == (a: SoundWord, b: SoundWord) -> Bool { a.name == b.name }
 
-    private static let birds: [SoundKind] = [.birds, .winterBirds, .jungleBirds, .parrots, .gulls, .owls, .loons, .geese]
-    private static let water: [SoundKind] = [.stream, .waterfall, .fountain, .lake, .lapping, .caveDrips, .ocean, .rocks]
-
-    /// Longer names before the ones inside them: "wind chimes" before "wind".
-    static let all: [SoundWord] = [
-        SoundWord(name: "birds", words: ["bird", "birdsong", "songbird", "birdcall"], kinds: birds),
-        SoundWord(name: "gulls", words: ["gull", "seagull", "seabird"], kinds: [.gulls]),
-        SoundWord(name: "owls", words: ["owl", "hooting"], kinds: [.owls]),
-        SoundWord(name: "loons", words: ["loon"], kinds: [.loons]),
-        SoundWord(name: "geese", words: ["geese", "goose"], kinds: [.geese]),
-        SoundWord(name: "parrots", words: ["parrot", "macaw"], kinds: [.parrots, .jungleBirds]),
-        SoundWord(name: "chimes", words: ["wind chime", "chime"], kinds: [.chimes]),
-        SoundWord(name: "wind", words: ["wind", "breeze", "gust", "gale"], kinds: [.wind, .breeze, .treeWind, .gusts, .howl]),
-        SoundWord(name: "leaves", words: ["rustling leaves", "leaves"], kinds: [.leaves, .palms]),
-        SoundWord(name: "palms", words: ["palm frond", "palm tree", "palm"], kinds: [.palms]),
-        SoundWord(name: "rain", words: ["rain", "raindrop", "rainfall", "drizzle"],
-                  kinds: [.rain, .lightRain, .heavyRain, .tentRain, .tinRoof, .rainyStreet]),
-        SoundWord(name: "thunder", words: ["thunder", "thunderclap", "thunderstorm", "lightning"], kinds: [.thunder, .lightning]),
-        SoundWord(name: "waves", words: ["ocean waves", "wave", "surf", "ocean", "sea", "breakers"], kinds: [.ocean, .lapping, .rocks]),
-        SoundWord(name: "water", words: ["water", "running water"], kinds: water),
-        SoundWord(name: "stream", words: ["babbling brook", "stream", "creek", "brook", "river"], kinds: [.stream]),
-        SoundWord(name: "waterfall", words: ["waterfall"], kinds: [.waterfall]),
-        SoundWord(name: "fountain", words: ["fountain"], kinds: [.fountain]),
-        SoundWord(name: "crickets", words: ["cricket"], kinds: [.crickets]),
-        SoundWord(name: "cicadas", words: ["cicada"], kinds: [.cicadas]),
-        SoundWord(name: "insects", words: ["insect", "bug"], kinds: [.crickets, .cicadas, .canopy]),
-        SoundWord(name: "frogs", words: ["frog", "toad", "peeper", "croaking"], kinds: [.frogs, .treeFrogs, .peepers]),
-        SoundWord(name: "fire", words: ["fire", "fireplace", "campfire", "bonfire", "fireside"], kinds: [.fire]),
-        SoundWord(name: "wolves", words: ["wolves", "wolf"], kinds: [.wolves]),
-        SoundWord(name: "monkeys", words: ["howler monkey", "monkey", "howler"], kinds: [.howlers]),
-        SoundWord(name: "whales", words: ["whale song", "whalesong", "whale"], kinds: [.whales]),
-        SoundWord(name: "chatter", words: ["people", "voice", "chatter", "talking", "crowd", "conversation", "chatting"],
-                  kinds: [.cafe, .bazaar]),
-        SoundWord(name: "traffic", words: ["traffic", "car", "vehicle", "scooter", "motorbike", "motorcycle", "honking", "highway"],
-                  kinds: [.traffic, .highway, .motorbikes]),
-        SoundWord(name: "city noise", words: ["city noise", "street noise", "city sound"], kinds: [.cityHum, .cityNight]),
-        SoundWord(name: "trains", words: ["train", "tram", "streetcar", "railway"], kinds: [.train, .tram]),
-        SoundWord(name: "planes", words: ["plane", "airplane", "aircraft", "jet"], kinds: [.planes]),
-        SoundWord(name: "bells", words: ["church bell", "temple bell", "bell"], kinds: [.bells, .templeBell, .buoy]),
-        SoundWord(name: "foghorn", words: ["foghorn", "fog horn"], kinds: [.foghorn]),
-        SoundWord(name: "boats", words: ["boat", "sailboat", "rigging", "buoy", "halyard"], kinds: [.halyards, .buoy, .foghorn]),
-        SoundWord(name: "clock", words: ["clock", "ticking"], kinds: [.clock]),
-        SoundWord(name: "typing", words: ["typing", "keyboard", "typewriter"], kinds: [.typing]),
-        SoundWord(name: "fan", words: ["fan"], kinds: [.fan]),
-        SoundWord(name: "brown noise", words: ["brown noise"], kinds: [.brown]),
-        SoundWord(name: "pink noise", words: ["pink noise"], kinds: [.pink]),
-        SoundWord(name: "white noise", words: ["white noise"], kinds: [.white]),
-        SoundWord(name: "animals", words: ["animal", "wildlife", "critter", "creature"],
-                  kinds: birds + [.wolves, .howlers, .whales, .frogs, .treeFrogs, .peepers, .crickets, .cicadas]),
-    ]
+    /// Every sound by the names people give it, from the catalog (`SoundFamily`, `SoundKind.aliases`):
+    /// each family as a whole ("birds"), then each sound by its own ("seagulls"). In a sentence,
+    /// the longest name wins, so "wind chimes" are chimes rather than wind.
+    static let all: [SoundWord] = SoundFamily.allCases.map { family in
+        SoundWord(name: family.name, words: family.words, kinds: SoundKind.allCases.filter { $0.family == family })
+    } + SoundKind.allCases.filter { !$0.aliases.isEmpty }.map { kind in
+        SoundWord(name: kind.name.lowercased(), words: kind.aliases, kinds: [kind])
+    }
 }
 
 extension Vibe.Ask {
     /// The asks in a description, the rest of it without what it leaves out (so "no wind"
-    /// doesn't make it windy), and what's left without any of them. An ask is a cue ("no",
-    /// "with", "less", "just"), a word or two, then a sound or a list of them: "without any wind,
-    /// birds or people". Words after a sound say how too: "waves only", "palms rustling", "birds in
-    /// the distance"; and before one, what it's doing: "crashing waves".
+    /// doesn't make it windy), and what's left without any of them. There are four ways to ask
+    /// (no, more, less, just), each a cue, a word or two, then a sound or a list of them: "without
+    /// any wind, birds or people". A few words after a sound say it too: "waves only", "and nothing
+    /// else", "birds in the distance".
     static func find(in text: String) -> (asks: [Vibe.Ask], rest: String, unasked: String) {
-        let words = Words(text)
+        // Read without the small words ("I don't want to hear any birds" is "don't want hear
+        // birds"), then map what's asked back onto the whole text.
+        let all = Words(text).tokens
+        let kept = all.indices.filter { !Words.stopWords.contains(all[$0]) }
+        let words = Words(tokens: kept.map { all[$0] })
         let t = words.tokens
+        func whole(_ r: Range<Int>) -> ClosedRange<Int> { kept[r.lowerBound]...kept[r.upperBound - 1] }
         var asks: [Vibe.Ask] = []
         var leftOut = IndexSet(), asked = IndexSet()
         var i = 0
@@ -312,41 +277,32 @@ extension Vibe.Ask {
                     case .softer where change == .more:
                         changes = changes.map { _ in .softer }   // "with birds in the distance"
                         stop = next
-                    case .present:
-                        stop = next
                     default:
                         break
                     }
                 }
                 asks += zip(changes, sounds).map { Vibe.Ask(change: $0, sound: $1) }
-                if change == .leaveOut { leftOut.insert(integersIn: i..<end) }
-                asked.insert(integersIn: i..<stop)
+                if change == .leaveOut { leftOut.insert(integersIn: whole(i..<end)) }
+                asked.insert(integersIn: whole(i..<stop))
                 i = stop
             } else if let (sounds, end) = list(in: words, from: i, filling: false), let (change, next) = after(in: words, at: end) {
                 asks += sounds.map { Vibe.Ask(change: change, sound: $0) }
-                asked.insert(integersIn: i..<next)
+                asked.insert(integersIn: whole(i..<next))
                 i = next
-            } else if doing.contains(t[i]), let (sounds, end) = list(in: words, from: i + 1, filling: false) {
-                asks += sounds.map { Vibe.Ask(change: .present, sound: $0) }
-                asked.insert(integersIn: i..<end)
-                i = end
             } else {
                 i += 1
             }
         }
-        func without(_ set: IndexSet) -> String { t.indices.filter { !set.contains($0) }.map { t[$0] }.joined(separator: " ") }
+        func without(_ set: IndexSet) -> String { all.indices.filter { !set.contains($0) }.map { all[$0] }.joined(separator: " ") }
         return (asks, without(leftOut), without(asked))
     }
 
+    /// The four ways to ask, and a few words for each.
     private static let cues: [(Change, [String])] = [
-        (.leaveOut, ["don't want to hear", "dont want to hear", "do not want to hear", "don't want", "dont want", "do not want",
-                     "don't need", "get rid of", "free of", "no more", "nothing like", "no", "without", "minus", "skip", "drop",
-                     "mute", "lose", "zero", "not", "never", "remove"]),
-        (.only, ["nothing but", "only", "just", "purely", "solely"]),
-        (.softer, ["not too much", "barely any", "hardly any", "a little bit of", "a little", "a bit of", "a touch of", "a hint of",
-                   "turn down", "less", "quieter", "softer", "fainter", "gentle", "gentler", "faint", "distant", "far off", "subtle"]),
-        (.more, ["lots and lots of", "lots of", "lot of", "plenty of", "loads of", "tons of", "full of", "turn up", "bring in",
-                 "want to hear", "more", "extra", "louder", "with", "plus", "add", "hear"]),
+        (.leaveOut, ["don't want", "dont want", "do not want", "no more", "no", "without", "minus", "skip"]),
+        (.more, ["lots", "lot", "more", "louder", "extra", "with", "plus", "add"]),
+        (.softer, ["little", "bit", "less", "quieter", "softer", "faint", "distant"]),
+        (.only, ["nothing but", "only", "just"]),
     ]
 
     /// Cues, longest first, so "no more" is read before "no".
@@ -358,33 +314,26 @@ extension Vibe.Ask {
     /// Words a cue can't reach a sound across, besides another cue.
     private static let stops: Set<String> = ["and", "or", "but", "nor", "then", "so", "only", "alone"]
 
-    /// Words after a sound that say how it's wanted, and where they end: "only", "and nothing
-    /// else", "rustling", "in the distance" (or "crashing in the distance").
+    /// Words after a sound that ask for it too, and where they end: "waves only", "and nothing
+    /// else" (just these); "in the distance", "far away" (less). A word may come between, as in
+    /// "wolves howling far away".
     private static func after(in words: Words, at i: Int) -> (Change, Int)? {
         let t = words.tokens
-        guard i < t.count else { return nil }
-        let doingEnd = doing.contains(t[i]) ? i + 1 : i
-        if doingEnd < t.count, ["only", "alone"].contains(t[doingEnd]) { return (.only, doingEnd + 1) }
-        for phrase in [["and", "nothing", "else"], ["nothing", "else"]] {
-            if let end = words.match(phrase, at: doingEnd) { return (.only, end) }
+        let starts = i + 1 < t.count && !punctuation(t[i]) && !stops.contains(t[i]) && cue(in: words, at: i) == nil ? [i, i + 1] : [i]
+        for start in starts {
+            for (change, phrases) in afters {
+                for phrase in phrases {
+                    if let end = words.match(phrase, at: start) { return (change, end) }
+                }
+            }
         }
-        for phrase in distances {
-            if let end = words.match(phrase, at: doingEnd) { return (.softer, end) }
-        }
-        return doingEnd > i ? (.present, doingEnd) : nil
+        return nil
     }
 
-    /// What sounds do, for "palms rustling" and "crashing waves".
-    private static let doing: Set<String> = [
-        "rustling", "singing", "chirping", "crashing", "crackling", "howling", "hooting", "croaking", "chattering", "babbling",
-        "rolling", "rumbling", "lapping", "pattering", "drumming", "tolling", "ringing", "buzzing", "calling", "humming",
-        "ticking", "whistling", "roaring", "tapping", "trickling", "splashing", "flowing", "falling", "blowing", "swaying",
-        "passing", "overhead", "chiming", "purring", "murmuring", "trilling", "cooing",
-    ]
-
-    /// Where a sound is when it's far: "birds in the distance", "traffic in the background".
-    private static let distances: [[String]] = ["in the distance", "in the background", "far away", "far off", "faraway",
-                                                "faintly", "softly", "quietly", "gently"].map { $0.split(separator: " ").map(String.init) }
+    private static let afters: [(Change, [[String]])] = [
+        (.only, ["only", "alone", "and nothing else", "nothing else"]),
+        (.softer, ["distance", "background", "far away", "far off"]),
+    ].map { change, phrases in (change, phrases.map { $0.split(separator: " ").map(String.init) }) }
 
     private static func cue(in words: Words, at i: Int) -> (Change, Int)? {
         for (change, phrase) in cuePhrases {
@@ -406,7 +355,7 @@ extension Vibe.Ask {
         return best
     }
 
-    /// One sound, after up to three words in between if `filling` ("a crackling fire", "any of the
+    /// One sound, after up to two words in between if `filling` ("crackling fire", "annoying loud
     /// birds", but not across another cue: "with a little wind" is a little), then any more after
     /// commas, "and" or "or": "wind, birds or people".
     private static func list(in words: Words, from start: Int, filling: Bool) -> ([SoundWord], Int)? {
@@ -415,7 +364,7 @@ extension Vibe.Ask {
         var first: (SoundWord, Int)?
         while i < t.count {
             if let found = sound(in: words, at: i) { first = found; break }
-            guard filling, i - start < 3, !punctuation(t[i]), !stops.contains(t[i]), cue(in: words, at: i) == nil else { break }
+            guard filling, i - start < 2, !punctuation(t[i]), !stops.contains(t[i]), cue(in: words, at: i) == nil else { break }
             i += 1
         }
         guard let (sound, end) = first else { return nil }
@@ -425,7 +374,6 @@ extension Vibe.Ask {
             var k = j
             while k < t.count, punctuation(t[k]) && t[k] != "." || ["and", "or", "nor"].contains(t[k]) { k += 1 }
             guard k > j else { break }
-            if k < t.count, ["the", "any"].contains(t[k]) { k += 1 }
             guard let (next, e) = Self.sound(in: words, at: k) else { break }
             sounds.append(next)
             j = e
@@ -439,10 +387,17 @@ extension Vibe.Ask {
 extension Words {
     /// Whether there's anything to read a scene from, beyond small words.
     var saysSomething: Bool {
-        let small: Set<String> = ["a", "an", "the", "and", "or", "but", "please", "i", "i'd", "want", "me", "take", "to", "it",
-                                  "make", "of", "in", "on", "at", "with", "some", "like", "go", "somewhere", "something", "just"]
+        let small = Words.stopWords.union(["and", "or", "but", "want", "take", "make", "go", "somewhere", "something", "with", "just"])
         return tokens.contains { $0.count > 1 && $0.first!.isLetter && !small.contains($0) }
     }
+
+    /// Small words that carry nothing here, left out when reading what's asked. The ones that do
+    /// (no, not, more, less, just, only, and, or) stay.
+    static let stopWords: Set<String> = [
+        "a", "an", "the", "of", "to", "any", "some", "my", "our", "your", "this", "that", "these", "those", "there", "here",
+        "is", "are", "be", "it", "its", "it's", "in", "on", "at", "by", "for", "from", "into", "i", "i'd", "i'm", "me", "we",
+        "us", "you", "please", "like", "so", "very", "really",
+    ]
 }
 
 // MARK: - The on-device model
