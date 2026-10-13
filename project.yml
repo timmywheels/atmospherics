@@ -107,8 +107,8 @@ targets:
         PRODUCT_NAME: Atmospherics
         PRODUCT_BUNDLE_IDENTIFIER: com.timwheeler.atmospherics
         SWIFT_VERSION: "5.0"
-        MARKETING_VERSION: "1.1.1"
-        CURRENT_PROJECT_VERSION: "3"
+        MARKETING_VERSION: "1.1.2"
+        CURRENT_PROJECT_VERSION: "4"
         DEVELOPMENT_TEAM: S3RY6Q3EW2
         CODE_SIGN_STYLE: Automatic
         ENABLE_HARDENED_RUNTIME: YES
