@@ -675,8 +675,28 @@ final class Mixer {
     func isFavorite(_ key: String) -> Bool { favorites.contains(key) }
 
     func toggleFavorite(_ key: String) {
-        if let i = favorites.firstIndex(of: key) { favorites.remove(at: i) } else { favorites.insert(key, at: 0) }
+        if let i = favorites.firstIndex(of: key) {
+            favorites.remove(at: i)
+            announce("Removed from Favorites")
+        } else {
+            favorites.insert(key, at: 0)
+            announce("Added to Favorites in your Library")
+        }
         defaults.set(favorites, forKey: "favorites")
+    }
+
+    /// A word on what you just did ("Added to Favorites…"), shown for a moment where the hints appear.
+    private(set) var notice: String?
+    @ObservationIgnored private var noticeTask: Task<Void, Never>?
+
+    func announce(_ text: String) {
+        notice = text
+        noticeTask?.cancel()
+        noticeTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled else { return }
+            self?.notice = nil
+        }
     }
 
     nonisolated static func favoriteKey(_ preset: Preset) -> String { "mix:\(preset.id)" }

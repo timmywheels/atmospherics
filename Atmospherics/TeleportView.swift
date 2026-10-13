@@ -107,6 +107,7 @@ struct TeleportView: View {
         }
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
+        .notices(above: 28)
         .foregroundStyle(Theme.text)
         .background { SceneWash(orbs: preview.orbs) }
         .presentationBackground(Theme.background)

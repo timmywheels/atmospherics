@@ -120,6 +120,7 @@ struct LibraryView: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 28)
+        .notices(above: 28)
         .foregroundStyle(Theme.text)
         .presentationBackground(Theme.background)
         .presentationDragIndicator(.visible)

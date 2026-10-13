@@ -189,18 +189,11 @@ struct NowPlayingView: View {
         .accessibilityAction(named: "Layers") { showMixer = true }
         .navigationDestination(isPresented: $showMixer) { MixerView() }
         .overlay(alignment: .bottom) {
-            if let hint {
-                Text(hint)
-                    .font(Theme.label(11))
-                    .foregroundStyle(Theme.text)
-                    .padding(.vertical, 10)
-                    .padding(.horizontal, 16)
-                    .background(Capsule().fill(.ultraThinMaterial))
-                    .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
-                    .padding(.bottom, 130)
-                    .transition(.opacity.combined(with: .offset(y: 8)))
-                    .allowsHitTesting(false)
+            ZStack {
+                if let text = mixer.notice ?? hint { HintBubble(text: text) }
             }
+            .padding(.bottom, 130)
+            .animation(.smooth(duration: 0.3), value: mixer.notice)
         }
         .saveMixPrompt(isPresented: $saving)
         .task { await runHints() }
