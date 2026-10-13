@@ -300,12 +300,20 @@ struct Carousel: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint("Teleport somewhere")
+                // At the edge on a phone; beside the name in a wide Mac window.
+                #if os(iOS)
                 Spacer(minLength: 0)
+                #endif
                 if let key = mixer.favoriteKey {
                     FavoriteToggle(key: key, size: 19)
                         .alignmentGuide(.lastTextBaseline) { $0[VerticalAlignment.center] + 7 }
+                        #if os(iOS)
                         .offset(x: 10)
+                        #endif
                 }
+                #if os(macOS)
+                Spacer(minLength: 0)
+                #endif
             }
             .contextMenu {
                 Button("Teleport…", systemImage: "sparkles") { teleport() }
