@@ -54,34 +54,48 @@ struct MacWindow: View {
     }
 }
 
-/// The four parts as quiet words in the title bar, level with the window buttons, the one
-/// you're in lit.
+/// The four parts as pills in the title bar, level with the window buttons, the one you're in
+/// lit; and beside the window buttons, a way back.
 private struct TabBar: View {
+    @Environment(Mixer.self) private var mixer
     @Binding var selection: MacNavigation.Tab
     @State private var hovered: MacNavigation.Tab?
+    @State private var hoveringBack = false
+    @Namespace private var pill
 
     var body: some View {
-        // Centered when there's room; in a narrow window, pushed right to clear the window buttons.
+        // Centered when there's room; in a narrow window, pushed right to clear the window
+        // buttons and the way back.
         HStack(spacing: 0) {
-            Spacer(minLength: 84)
+            Spacer(minLength: 120)
             tabs
             Spacer(minLength: 12)
         }
+        .overlay(alignment: .leading) { back.padding(.leading, 78) }
         // The title bar is 32 points tall, with the window buttons centered in it.
         .frame(height: 32)
         .padding(.bottom, 14)
+        .animation(.smooth(duration: 0.25), value: mixer.backStack.isEmpty)
     }
 
     private var tabs: some View {
-        HStack(spacing: 20) {
+        HStack(spacing: 2) {
             ForEach(MacNavigation.Tab.allCases) { tab in
                 Button { selection = tab } label: {
                     Text(tab.rawValue.uppercased())
-                        .font(Theme.caps(11))
-                        .tracking(1.3)
+                        .font(Theme.caps(10.5))
+                        .tracking(1.1)
                         .foregroundStyle(selection == tab ? Theme.text : hovered == tab ? Theme.secondary : Theme.muted)
-                        .padding(.vertical, 8)
-                        .contentShape(Rectangle())
+                        .padding(.horizontal, 12)
+                        .frame(height: 24)
+                        .background {
+                            if selection == tab {
+                                Capsule().fill(.white.opacity(0.14)).matchedGeometryEffect(id: "lit", in: pill)
+                            } else if hovered == tab {
+                                Capsule().fill(.white.opacity(0.05))
+                            }
+                        }
+                        .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
                 .onHover { hovered = $0 ? tab : (hovered == tab ? nil : hovered) }
@@ -89,6 +103,36 @@ private struct TabBar: View {
                 .accessibilityAddTraits(selection == tab ? .isSelected : [])
             }
         }
+        .padding(3)
+        .background(Capsule().fill(.white.opacity(0.05)))
+        .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
         .fixedSize()
+    }
+
+    /// From Teleport, Layers or the Library, back to listening; while listening, back to the
+    /// place before this one (as swiping right does), once there's been one.
+    @ViewBuilder private var back: some View {
+        if selection != .listen {
+            backButton("Back to Listen") { selection = .listen }
+        } else if let last = mixer.backStack.last {
+            backButton("Back to \(mixer.page(for: last).title)  ←") { mixer.requestTravel(forward: false) }
+        }
+    }
+
+    private func backButton(_ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "chevron.left")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(hoveringBack ? Theme.text : Theme.secondary)
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(.white.opacity(hoveringBack ? 0.12 : 0.05)))
+                .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hoveringBack = $0 }
+        .help(label)
+        .accessibilityLabel(label)
+        .transition(.opacity)
     }
 }
