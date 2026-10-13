@@ -18,20 +18,21 @@ struct Vibe {
     /// changes. Otherwise the scene is as described, starting from how it sounds by default.
     var refines = false
 
-    /// A change to the scene's sounds, as asked: "no wind", "more fire", "less chatter", "just the waves".
+    /// A change to the scene's sounds, as asked: "no wind", "more fire", "less chatter", "just the
+    /// waves", or just "palm trees" (there).
     struct Ask: Equatable {
-        enum Change { case leaveOut, more, softer, only }
+        enum Change { case leaveOut, more, softer, only, present }
         let change: Change
         let sound: SoundWord
     }
 
     // MARK: Reading a description
 
-    /// Reads a description into a scene. Where it is, the weather and the time are what the words
-    /// name, then what the sounds asked for suggest ("just the waves" is the beach), and the
-    /// on-device model, where there is one, reads the rest ("Christmas Eve"). Words that only
-    /// change sounds or the hour ("no birds at night") change `draft`, the scene being built.
-    /// Nil if there's no scene in it.
+    /// Reads a description into a scene. The weather and the time are what the words name; where
+    /// it is, the on-device model reads from the whole description where there is one ("palm trees
+    /// at night" is the beach, though "trees" names the forest), and otherwise the words and the
+    /// sounds asked for ("just the waves" is the beach). Words that only change sounds or the hour
+    /// ("no birds at night") change `draft`, the scene being built. Nil if there's no scene in it.
     @MainActor
     static func read(_ text: String, draft: Atmosphere) async -> Vibe? {
         let found = Ask.find(in: text)
@@ -48,12 +49,10 @@ struct Vibe {
         // Words besides the names and the sounds, for the model: "a rainy night in Tokyo".
         var other = Words(found.unasked)
         _ = Atmosphere.named(in: &other)
-        if other.saysSomething {
-            if setting == nil || sky == nil || time == nil, let guess = await guess(found.rest) {
-                setting = setting ?? guess.setting
-                sky = sky ?? guess.sky
-                time = time ?? guess.time
-            }
+        if other.saysSomething, let guess = await guess(found.rest) {
+            setting = guess.setting
+            sky = sky ?? guess.sky
+            time = time ?? guess.time
         } else {
             setting = setting ?? Self.setting(for: wanted)
         }
@@ -172,7 +171,7 @@ struct Vibe {
 
     /// The changes to the scene's sounds as tweaks over what it would play (`base`): left out is
     /// off whatever the weather brings, more is louder (or brought in if it isn't there), softer
-    /// is half as loud, and just these is everything else off.
+    /// is half as loud, there is brought in if it isn't, and just these is everything else off.
     func tweaks(over base: [(SoundKind, Double)]) -> [String: Double] {
         var level: [SoundKind: Double] = [:]
         for (k, v) in base { level[k] = max(level[k] ?? 0, v) }
@@ -197,6 +196,8 @@ struct Vibe {
             case .softer:
                 if playing.isEmpty { bringIn(ask.sound, at: 0.15) }
                 for k in playing { out[k.rawValue] = -(level[k] ?? 0) / 2 }
+            case .present:
+                if playing.isEmpty { bringIn(ask.sound, at: 0.3) }
             case .only:
                 break
             }
@@ -210,7 +211,7 @@ struct Vibe {
             names.count < 2 ? names.joined() : names.dropLast().joined(separator: ", ") + " \(last) " + names.last!
         }
         let parts: [(Ask.Change, String, String)] = [(.leaveOut, "No", "or"), (.only, "Just", "and"), (.more, "More", "and"),
-                                                       (.softer, "Less", "and")]
+                                                       (.present, "With", "and"), (.softer, "Less", "and")]
         let said = parts.compactMap { change, lead, last -> String? in
             var seen = Set<String>()
             let names = asks.filter { $0.change == change }.map(\.sound.name).filter { seen.insert($0).inserted }
@@ -262,6 +263,11 @@ extension Vibe.Ask {
         let words = Words(tokens: kept.map { all[$0] })
         let t = words.tokens
         func whole(_ r: Range<Int>) -> ClosedRange<Int> { kept[r.lowerBound]...kept[r.upperBound - 1] }
+        // Words that name the scene (its place, weather, hour) aren't asks of their own: "rain on a
+        // tin roof" is a rainy scene, "a light rain" drizzle, "on a plane" a flight without flyovers.
+        var probe = words
+        _ = Atmosphere.named(in: &probe)
+        func names(_ r: Range<Int>) -> Bool { r.allSatisfy { probe.tokens[$0].isEmpty } }
         var asks: [Vibe.Ask] = []
         var leftOut = IndexSet(), asked = IndexSet()
         var i = 0
@@ -281,13 +287,19 @@ extension Vibe.Ask {
                         break
                     }
                 }
-                asks += zip(changes, sounds).map { Vibe.Ask(change: $0, sound: $1) }
-                if change == .leaveOut { leftOut.insert(integersIn: whole(i..<end)) }
-                asked.insert(integersIn: whole(i..<stop))
+                if change == .leaveOut || !names(i..<end) {
+                    asks += zip(changes, sounds).map { Vibe.Ask(change: $0, sound: $1) }
+                    if change == .leaveOut { leftOut.insert(integersIn: whole(i..<end)) }
+                    asked.insert(integersIn: whole(i..<stop))
+                }
                 i = stop
-            } else if let (sounds, end) = list(in: words, from: i, filling: false), let (change, next) = after(in: words, at: end) {
-                asks += sounds.map { Vibe.Ask(change: change, sound: $0) }
-                asked.insert(integersIn: whole(i..<next))
+            } else if let (sounds, end) = list(in: words, from: i, filling: false) {
+                // Named with no cue, a sound is wanted: "palm trees rustling", "waves only".
+                let (change, next) = after(in: words, at: end) ?? (.present, end)
+                if change != .present || !names(i..<end) {
+                    asks += sounds.map { Vibe.Ask(change: change, sound: $0) }
+                    asked.insert(integersIn: whole(i..<next))
+                }
                 i = next
             } else {
                 i += 1
@@ -301,7 +313,7 @@ extension Vibe.Ask {
     private static let cues: [(Change, [String])] = [
         (.leaveOut, ["don't want", "dont want", "do not want", "no more", "no", "without", "minus", "skip"]),
         (.more, ["lots", "lot", "more", "louder", "extra", "with", "plus", "add"]),
-        (.softer, ["little", "bit", "less", "quieter", "softer", "faint", "distant"]),
+        (.softer, ["little", "bit", "less", "quieter", "softer", "faint", "distant", "light", "gentle", "soft", "slight"]),
         (.only, ["nothing but", "only", "just"]),
     ]
 

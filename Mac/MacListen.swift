@@ -2,8 +2,8 @@ import SwiftUI
 
 /// Listening: the halo and the scene's name, with the ones before and after beside it. Swipe
 /// with two fingers or press ← → to travel, click the light for its layers or drag it to turn it,
-/// click the name to teleport. Along the bottom, what's playing, Teleport and Surprise me, the
-/// sleep timer and play.
+/// click the name to teleport. Along the bottom, what's playing (click it for its layers),
+/// Teleport and Surprise me, the sleep timer and play.
 struct MacListen: View {
     @Environment(Mixer.self) private var mixer
     @Environment(MacNavigation.self) private var navigation
@@ -51,7 +51,7 @@ struct MacListen: View {
                 .padding(.top, 6)
 
             HStack(spacing: 14) {
-                LayerStrip(orbs: mixer.byVolume)
+                LayersLink(orbs: mixer.byVolume) { navigation.tab = .layers }
                 ResetTuning()
                 BarButton(symbol: Atmosphere.teleportSymbol, label: "Teleport", help: "Teleport  ⌘K") {
                     navigation.tab = .teleport
@@ -133,6 +133,25 @@ private struct TravelArrows: View {
         .disabled(!enabled)
         .help(label)
         .accessibilityLabel(label)
+    }
+}
+
+/// What's playing, by its sounds' names: click for its layers.
+private struct LayersLink: View {
+    let orbs: [Orb]
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            LayerStrip(orbs: orbs, color: hovering ? Theme.secondary : Theme.muted)
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Layers  ⌘3")
+        .accessibilityHint("Opens Layers")
     }
 }
 
