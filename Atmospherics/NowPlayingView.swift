@@ -134,9 +134,16 @@ struct NowPlayingView: View {
 
             .sensoryFeedback(.impact(weight: .medium), trigger: mixer.mode)
 
-            // What's playing, a way back if you've tuned it, and the sleep timer if there is one.
+            // What's playing (tap it for its layers), a way back if you've tuned it, and the sleep
+            // timer if there is one.
             HStack(spacing: 14) {
-                LayerStrip(orbs: mixer.byVolume)
+                Button { showMixer = true } label: {
+                    LayerStrip(orbs: mixer.byVolume)
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens Layers")
                 if mixer.timer != .off {
                     Text(mixer.timer.label)
                         .font(Theme.label(11))
