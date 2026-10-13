@@ -55,7 +55,7 @@ struct SoundList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(mixer.currentPlaceIsTweaked ? "Your changes to \(mixer.currentPlaceName) are kept"
-                 : "Tap or drag across a layer to set its level.")
+                 : "Drag a layer to set it, or to the far left to remove it.")
                 .font(Theme.mono(11))
                 .foregroundStyle(Theme.muted)
                 .padding(.horizontal, 24)
@@ -89,6 +89,8 @@ private struct LevelRow: View {
     let height: CGFloat
     @State private var sliding = false
     @State private var taps = 0
+    /// Dragged all the way to the left edge: let go there and the layer goes.
+    @State private var removing = false
 
     private var percent: Int { Int((orb.volume * 100).rounded()) }
 
@@ -101,9 +103,16 @@ private struct LevelRow: View {
                     DragGesture(minimumDistance: 4)
                         .onChanged { g in
                             sliding = true
+                            removing = g.location.x <= proxy.size.width * 0.04
                             set(g.location.x, of: proxy.size.width, gliding: false)
                         }
-                        .onEnded { _ in sliding = false }
+                        .onEnded { _ in
+                            sliding = false
+                            if removing {
+                                removing = false
+                                withAnimation(.snappy) { mixer.remove(orb.id) }
+                            }
+                        }
                 )
         }
         .frame(height: height)
@@ -112,9 +121,11 @@ private struct LevelRow: View {
                 withAnimation(.snappy) { mixer.remove(orb.id) }
             } label: { Label("Remove \(orb.kind.name)", systemImage: "xmark") }
         }
-        // A tap where you set it, and a tick per 10% as it slides.
-        .sensoryFeedback(.impact(weight: .light), trigger: taps)
-        .sensoryFeedback(.selection, trigger: percent / 10) { _, _ in sliding }
+        // A tap where you set it, a tick per 10% as it slides, and a firm one at the edge where
+        // letting go removes it.
+        .sensoryFeedback(.impact(weight: .medium), trigger: taps)
+        .sensoryFeedback(.impact(weight: .heavy), trigger: removing) { _, now in now }
+        .sensoryFeedback(.impact(flexibility: .rigid, intensity: 0.8), trigger: percent / 10) { _, _ in sliding }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(orb.kind.name)
         .accessibilityValue("\(percent) percent")
@@ -149,10 +160,11 @@ private struct LevelRow: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Spacer(minLength: 12)
-                Text("\(percent)%")
+                Text(removing ? "LET GO TO REMOVE" : "\(percent)%")
                     .font(Theme.caps(11))
                     .foregroundStyle(Theme.text.opacity(0.85))
             }
+            .opacity(removing ? 0.6 : 1)
             .padding(.horizontal, 24)
             .shadow(color: .black.opacity(0.25), radius: 6)
         }
