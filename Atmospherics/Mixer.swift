@@ -1110,6 +1110,12 @@ final class Mixer {
         case home
         case place(Place)
         case atmosphere(Atmosphere)
+
+        /// What marks it as a favorite, if it can be one: a scene can.
+        var favoriteKey: String? {
+            if case .atmosphere(let a) = self { return Mixer.favoriteKey(a) }
+            return nil
+        }
     }
 
     /// Where the field is now.

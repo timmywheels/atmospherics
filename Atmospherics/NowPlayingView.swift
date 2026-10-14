@@ -317,38 +317,49 @@ struct Carousel: View {
                 .onTapGesture { if here { openMixer() } }
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel("Open layers")
-            HStack(alignment: .lastTextBaseline, spacing: 8) {
-                Button { teleport() } label: {
-                    PageTitle(lines: page.lines ?? [page.title], chevron: here)
+            #if os(iOS)
+            // The name and its weather, with what you can do with the place down the right.
+            HStack(alignment: .bottom, spacing: 12) {
+                VStack(alignment: .leading, spacing: 0) {
+                    title(page, here: here)
+                    PageLines(line: page.line)
                 }
-                .buttonStyle(.plain)
-                .accessibilityHint("Teleport somewhere")
-                // At the edge on a phone; beside the name in a wide Mac window.
-                #if os(iOS)
                 Spacer(minLength: 0)
-                #endif
+                PageActions(favorite: here ? mixer.favoriteKey : slot.destination?.favoriteKey,
+                            save: { saving = true }, library: openLibrary,
+                            surprise: { mixer.requestTravel(forward: true) })
+                    .padding(.bottom, 4)
+            }
+            #else
+            HStack(alignment: .lastTextBaseline, spacing: 8) {
+                title(page, here: here)
                 if here, let key = mixer.favoriteKey {
                     FavoriteToggle(key: key, size: 19)
                         .alignmentGuide(.lastTextBaseline) { $0[VerticalAlignment.center] + 7 }
-                        #if os(iOS)
-                        .offset(x: 10)
-                        #endif
                 }
-                #if os(macOS)
                 Spacer(minLength: 0)
-                #endif
-            }
-            .contextMenu {
-                if here {
-                    Button("Teleport…", systemImage: Atmosphere.teleportSymbol) { teleport() }
-                    Button("Save this mix", systemImage: "bookmark") { saving = true }
-                    Button("Library", systemImage: "books.vertical") { openLibrary() }
-                }
             }
             PageLines(line: page.line)
+            #endif
         }
         .allowsHitTesting(here)
         .accessibilityHidden(!here)
+    }
+
+    /// The name: Teleport on a tap, more on a long press.
+    private func title(_ page: Mixer.Page, here: Bool) -> some View {
+        Button { teleport() } label: {
+            PageTitle(lines: page.lines ?? [page.title], chevron: here)
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Teleport somewhere")
+        .contextMenu {
+            if here {
+                Button("Teleport…", systemImage: Atmosphere.teleportSymbol) { teleport() }
+                Button("Save this mix", systemImage: "bookmark") { saving = true }
+                Button("Library", systemImage: "books.vertical") { openLibrary() }
+            }
+        }
     }
 
     private func drag(width: CGFloat, step: CGFloat) -> some Gesture {
@@ -712,12 +723,9 @@ private struct ConfirmReset: ViewModifier {
 }
 
 /// Teleport's globe, then where to go in your own words: "Describe the vibe…".
-/// At its end, Surprise me: somewhere new, chosen for you.
 private struct DescribeBar: View {
-    @Environment(Mixer.self) private var mixer
     let teleport: () -> Void
     let describe: () -> Void
-    @State private var surprises = 0
 
     var body: some View {
         HStack(spacing: 0) {
@@ -740,28 +748,43 @@ private struct DescribeBar: View {
             }
             .buttonStyle(.plain)
             .accessibilityHint("Say where to go in your own words")
-
-            Button { surprise() } label: {
-                Image(systemName: Atmosphere.surpriseSymbol)
-                    .font(.system(size: 15))
-                    .frame(width: 52, height: 48)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Surprise me")
-            .accessibilityHint("Teleports somewhere new")
         }
+        .padding(.trailing, 20)
         .foregroundStyle(Theme.secondary)
         .background(Capsule().fill(Color.white.opacity(0.06)))
         .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
-        .haptic(.thud, trigger: surprises)
+    }
+}
+
+/// What you can do with a place, down the right of its name, in glass: save it as a mix, the
+/// Library, make it a favorite, and Surprise me, which slides on to somewhere new as a swipe does.
+private struct PageActions: View {
+    let favorite: String?
+    let save: () -> Void
+    let library: () -> Void
+    let surprise: () -> Void
+
+    var body: some View {
+        VStack(spacing: 10) {
+            button("bookmark", "Save this mix", action: save)
+            button("books.vertical", "Library", action: library)
+            if let favorite { FavoriteToggle(key: favorite, size: 17, glass: true) }
+            button(Atmosphere.surpriseSymbol, "Surprise me", action: surprise)
+        }
     }
 
-    private func surprise() {
-        var next = Atmosphere.random()
-        while next == mixer.atmosphere { next = Atmosphere.random() }
-        surprises += 1
-        withAnimation(.smooth(duration: 0.5)) { mixer.go(to: next) }
+    private func button(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.play(.tap)
+            action()
+        } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(Theme.text)
+                .glassCircle()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }
 
