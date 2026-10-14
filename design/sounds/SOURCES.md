@@ -1,7 +1,7 @@
 # Recorded sound sources
 
 Every recording is public domain or CC0 (no attribution required). Credited here anyway.
-Sounds that come and go (`SoundKind.rhythm`, in Atmospherics/Rhythm.swift) play one take at a time with quiet between, instead of looping. Thunder and lightning clips are made with `prepare.py --once`. The calls of wolves, owls, loons, howlers and whales, the foghorn's blasts and the church bells' tolling are cut from their loops (kept in design/sounds/loops/, out of the app) by `calls.swift`. Planes, the tram, geese and the temple bell play their one recording. Loops are made with `prepare.py` (60 s from the given start unless noted): each is mastered to -20 LUFS with its natural dynamics (a gentle compressor only tames events well above the recording's norm), then seam crossfaded.
+Sounds that come and go (`SoundKind.rhythm`, in Atmospherics/Rhythm.swift) play one take at a time with quiet between, instead of looping. Thunder and lightning clips are made with `prepare.py --once`. The calls of wolves, owls, loons, howlers and whales, the foghorn's blasts and the church bells' tolling are cut from their loops (kept in design/sounds/loops/, out of the app) by `calls.swift`, each take brought to -20 LUFS like every other recording. Planes, the tram, geese and the temple bell play their one recording. Loops are made with `prepare.py` (60 s from the given start unless noted): each is mastered to -20 LUFS with its natural dynamics (a gentle compressor only tames events well above the recording's norm), then seam crossfaded.
 
 | Sound | Source | Author | License | Start |
 |---|---|---|---|---|
