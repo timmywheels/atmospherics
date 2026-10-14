@@ -224,13 +224,16 @@ struct NowPlayingView: View {
 enum Route: Hashable { case mixer }
 #endif
 
-/// The halo, title, weather and layers as a page, with the previous and next places beside it.
-/// Drag follows the finger 1:1; let go past a quarter of the width (or flick) to land on the neighbour.
-/// On a Mac, two fingers on the trackpad do the same, and the keyboard and menus slide it too.
-/// A drag that starts on the glass turns the form instead.
+/// The halo, title, weather and layers of where you are. Swipe across to go on or back: the form
+/// stays where it is and turns into the next place under the finger (sounds the two share grow or
+/// shrink, the rest fade out or in), while the names cross-fade, drifting the way you swipe. Let go
+/// past a third of the way, or flick, and it goes there; otherwise it eases back. On a Mac, two
+/// fingers on the trackpad do the same, and the keyboard and menus morph it too. A drag that starts
+/// on the glass turns the form instead.
 struct Carousel: View {
     @Environment(Mixer.self) private var mixer
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// How far the finger has gone: only a nudge of the names where there's nowhere to go.
     @Binding var dragX: CGFloat
     let openMixer: () -> Void
     /// Tapping the name: Teleport.
@@ -239,47 +242,48 @@ struct Carousel: View {
     @State private var pastThreshold = false
     /// How far the form has turned under the finger, in notches of about 15°: a soft tick each.
     @State private var turnNotch = 0
-    @State private var settling = false
     @State private var saving = false
-    /// The three pages' identities: where you've been, here, and where you'd go next. A swipe
-    /// hands them round, so the page that slides in is the same view as it becomes the live one,
-    /// and nothing is drawn afresh as it lands. (Going somewhere another way keeps the live page,
-    /// so its form morphs into the new place.)
-    @State private var keys = (previous: 0, here: 1, next: 2)
-    /// The live page's form, whose glass a drag can take hold of.
+    /// Two places being blended, while a swipe or a trip is under way, and how far (`blend`, 0 to 1).
+    @State private var pair: Pair?
+    @State private var blend: Double = 0
+    /// Finishing a trip, or easing back from one called off.
+    @State private var landing = false
+    /// The form, whose glass a drag can take hold of.
     @State private var formSize: CGSize = .zero
     /// Where the current drag started, and whether that was on the glass.
     @State private var grab: (at: CGPoint, onForm: Bool)?
 
-    private let gap: CGFloat = 56
-    /// Neighbouring pages only draw their sculptures while they're sliding into view.
-    private var sliding: Bool { dragX != 0 || settling }
+    private struct Pair {
+        let from: Mixer.Page
+        let to: Mixer.Page
+        let forward: Bool
+    }
+
+    private var livePage: Mixer.Page {
+        Mixer.Page(title: mixer.title, line: mixer.weather.line, orbs: mixer.byVolume, lines: mixer.titleLines)
+    }
 
     var body: some View {
         GeometryReader { proxy in
             let w = proxy.size.width
-            let step = w + gap
-            ZStack(alignment: .topLeading) {
-                ForEach(slots, id: \.key) { slot in
-                    page(slot)
-                        .frame(width: w)
-                        .offset(x: CGFloat(slot.place) * step + dragX)
+            let live = livePage
+            MorphView(from: pair?.from ?? live, to: pair?.to ?? live, forward: pair?.forward ?? true, t: pair == nil ? 0 : blend,
+                      still: pair == nil, nudge: pair == nil ? dragX * 0.4 : 0, favorite: mixer.favoriteKey, formSize: $formSize,
+                      openMixer: openMixer, teleport: teleport, save: { saving = true }, library: openLibrary)
+                .frame(width: w, height: proxy.size.height, alignment: .topLeading)
+                .contentShape(Rectangle())
+                .gesture(drag(width: w))
+                #if os(macOS)
+                .background(TrackpadSwipe(changed: { follow($0, width: w) },
+                                          ended: { release(projected: $0, width: w) }))
+                #endif
+                .onChange(of: mixer.travelRequest) { _, request in
+                    guard let request, !landing else { return }
+                    arrive(forward: request.forward, duration: 0.55)
                 }
-            }
-            .frame(width: w, height: proxy.size.height, alignment: .topLeading)
-            .contentShape(Rectangle())
-            .gesture(drag(width: w, step: step))
-            #if os(macOS)
-            .background(TrackpadSwipe(changed: { follow($0, width: w) },
-                                      ended: { release(projected: $0, width: w, step: step) }))
-            #endif
-            .onChange(of: mixer.travelRequest) { _, request in
-                guard let request, !settling else { return }
-                land(forward: request.forward, step: step, duration: 0.55)
-            }
         }
         #if os(iOS)
-        // Down the right of the name, staying put as the places slide past beneath.
+        // Down the right of the name, staying put as one place turns into the next.
         .overlay(alignment: .bottomTrailing) {
             PageActions(favorite: mixer.favoriteKey, save: { saving = true }, edit: openMixer, library: openLibrary,
                         teleport: teleport, surprise: { mixer.requestTravel(forward: true) })
@@ -294,78 +298,7 @@ struct Carousel: View {
         .accessibilityAction(named: "Go back") { mixer.travel(forward: false) }
     }
 
-    private struct Slot {
-        let key: Int
-        /// -1 where you've been, 0 here, 1 where you'd go next.
-        let place: Int
-        let destination: Mixer.Destination?
-    }
-
-    private var slots: [Slot] {
-        var slots = [Slot(key: keys.here, place: 0, destination: nil)]
-        if let previous = mixer.previous { slots.insert(Slot(key: keys.previous, place: -1, destination: previous), at: 0) }
-        if let next = mixer.next { slots.append(Slot(key: keys.next, place: 1, destination: next)) }
-        return slots
-    }
-
-    /// A page: the live one, or a neighbour previewed with its live weather and sounds. Both are
-    /// the same view, laid out the same way, so a neighbour can become the live page in place.
-    private func page(_ slot: Slot) -> some View {
-        let here = slot.destination == nil
-        let page = slot.destination.map { mixer.page(for: $0) }
-            ?? Mixer.Page(title: mixer.title, line: mixer.weather.line, orbs: mixer.byVolume, lines: mixer.titleLines)
-        return VStack(alignment: .leading, spacing: 0) {
-            SoundForm(orbs: here ? page.orbs : page.orbs.sorted { $0.volume > $1.volume }, live: here || sliding)
-                .frame(maxHeight: .infinity)
-                .onGeometryChange(for: CGSize.self) { $0.size } action: { if here { formSize = $0 } }
-                .contentShape(Rectangle())
-                .onTapGesture { if here { openMixer() } }
-                .accessibilityAddTraits(.isButton)
-                .accessibilityLabel("Open layers")
-            #if os(iOS)
-            // The name and its weather, leaving room down the right for what you can do with the
-            // place (`PageActions`, which stays put above the pages as they slide).
-            HStack(alignment: .bottom, spacing: 12) {
-                VStack(alignment: .leading, spacing: 0) {
-                    title(page, here: here)
-                    PageLines(line: page.line)
-                }
-                Spacer(minLength: 0)
-                Color.clear.frame(width: PageActions.width, height: 1)
-            }
-            #else
-            HStack(alignment: .lastTextBaseline, spacing: 8) {
-                title(page, here: here)
-                if here, let key = mixer.favoriteKey {
-                    FavoriteToggle(key: key, size: 19)
-                        .alignmentGuide(.lastTextBaseline) { $0[VerticalAlignment.center] + 7 }
-                }
-                Spacer(minLength: 0)
-            }
-            PageLines(line: page.line)
-            #endif
-        }
-        .allowsHitTesting(here)
-        .accessibilityHidden(!here)
-    }
-
-    /// The name: Teleport on a tap, more on a long press.
-    private func title(_ page: Mixer.Page, here: Bool) -> some View {
-        Button { teleport() } label: {
-            PageTitle(lines: page.lines ?? [page.title], chevron: here)
-        }
-        .buttonStyle(.plain)
-        .accessibilityHint("Teleport somewhere")
-        .contextMenu {
-            if here {
-                Button("Teleport…", systemImage: Theme.Symbol.teleport) { teleport() }
-                Button("Save this mix", systemImage: Theme.Symbol.save) { saving = true }
-                Button("Library", systemImage: Theme.Symbol.library) { openLibrary() }
-            }
-        }
-    }
-
-    private func drag(width: CGFloat, step: CGFloat) -> some Gesture {
+    private func drag(width: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 10)
             .onChanged { g in
                 if turnsForm(g) {
@@ -385,64 +318,190 @@ struct Carousel: View {
                     turnNotch = 0
                     return SculptureSpin.home.release(g.velocity, coast: !reduceMotion)
                 }
-                release(projected: g.predictedEndTranslation.width, width: width, step: step)
+                release(projected: g.predictedEndTranslation.width, width: width)
             }
     }
 
     /// Whether this drag took hold of the glass: decided where it starts, and kept for the drag.
-    /// (The live page sits at the top left, so the drag's start is a point in its form.)
     private func turnsForm(_ g: DragGesture.Value) -> Bool {
         if let grab, grab.at == g.startLocation { return grab.onForm }
-        let onForm = !settling && dragX == 0 && SoundForm.touches(g.startLocation, orbs: mixer.byVolume, size: formSize)
+        let onForm = !landing && pair == nil && SoundForm.touches(g.startLocation, orbs: mixer.byVolume, size: formSize)
         grab = (g.startLocation, onForm)
         return onForm
     }
 
-    /// The pages follow the finger.
+    /// The form turns toward where the finger is heading, all the way at most of the width across.
+    /// The place it's turning into is worked out once, as the swipe sets off that way.
     private func follow(_ translation: CGFloat, width: CGFloat) {
-        guard !settling else { return }
-        var x = translation
-        // Resist past an edge with nothing beyond it.
-        if (x < 0 && mixer.next == nil) || (x > 0 && mixer.previous == nil) { x = 40 * tanh(x / 120) }
-        dragX = x
-        pastThreshold = abs(x) > width * 0.25
-    }
-
-    /// Let go: `projected` is where a flick would carry the pages.
-    private func release(projected: CGFloat, width: CGFloat, step: CGFloat) {
-        guard !settling else { return }
-        let forward = dragX < 0
-        // Travel only if the finger ends up past a quarter of the way, or flicks onward;
-        // pulling back toward the start cancels, it never sends you the other way.
-        let sameWay = dragX != 0 && (projected < 0) == forward
-        let commit = sameWay && (abs(dragX) > width * 0.25 || abs(projected) > width * 0.6)
-            && (forward ? mixer.next != nil : mixer.previous != nil)
-        pastThreshold = false
-        guard commit else {
-            withAnimation(.spring(duration: 0.4, bounce: 0.2)) { dragX = 0 }
+        guard !landing else { return }
+        let forward = translation < 0
+        guard let destination = forward ? mixer.next : mixer.previous else {
+            // Nowhere that way: the names give a little, and come back.
+            pair = nil
+            dragX = 40 * tanh(translation / 120)
             return
         }
-        land(forward: forward, step: step)
+        dragX = translation
+        if pair?.forward != forward {
+            pair = Pair(from: livePage, to: mixer.page(for: destination), forward: forward)
+        }
+        blend = min(1, Double(abs(translation) / (width * 0.7)))
+        pastThreshold = blend > 0.33
     }
 
-    /// Slides the rest of the way to the neighbour, switching the sound as it goes. The sound
-    /// switches at once and the pages hand their places round where they stand (the neighbour is
-    /// now here, offset by however far it still has to come), then that offset settles to nothing.
-    private func land(forward: Bool, step: CGFloat, duration: Double = 0.3) {
-        guard forward ? mixer.next != nil : mixer.previous != nil else { return }
-        settling = true
-        var t = Transaction()
-        t.disablesAnimations = true
-        withTransaction(t) {
-            mixer.travel(forward: forward)
-            keys = forward ? (keys.here, keys.next, keys.previous) : (keys.next, keys.previous, keys.here)
-            dragX += forward ? step : -step
+    /// Let go: `projected` is where a flick would carry the finger.
+    private func release(projected: CGFloat, width: CGFloat) {
+        guard !landing else { return }
+        pastThreshold = false
+        guard let pair else {
+            withAnimation(.spring(duration: 0.35, bounce: 0.25)) { dragX = 0 }
+            return
         }
-        withAnimation(.spring(duration: duration, bounce: 0)) {
-            dragX = 0
-        } completion: {
-            settling = false
+        dragX = 0
+        // Go only if it's past a third of the way, or flicked onward; pulling back calls it off.
+        let commit = (projected < 0) == pair.forward && (blend > 0.33 || abs(projected) > width * 0.5)
+        if commit {
+            arrive(forward: pair.forward, duration: 0.35)
+        } else {
+            landing = true
+            withAnimation(.spring(duration: 0.35, bounce: 0)) { blend = 0 } completion: {
+                self.pair = nil
+                landing = false
+            }
         }
+    }
+
+    /// Goes on or back: the sound switches at once (it glides over by itself) while the form and
+    /// the names finish turning into the place arrived at.
+    private func arrive(forward: Bool, duration: Double) {
+        guard let destination = forward ? mixer.next : mixer.previous else { return }
+        if pair?.forward != forward {
+            pair = Pair(from: livePage, to: mixer.page(for: destination), forward: forward)
+            blend = 0
+        }
+        landing = true
+        var quiet = Transaction()
+        quiet.disablesAnimations = true
+        withTransaction(quiet) { mixer.travel(forward: forward) }
+        withAnimation(.easeOut(duration: duration)) { blend = 1 } completion: {
+            // Arrived: the place turned into is the live one now, drawn the same.
+            withTransaction(quiet) {
+                pair = nil
+                blend = 0
+            }
+            landing = false
+        }
+    }
+}
+
+/// One place turning into another, `t` of the way from `from` to `to`: the form with each sound
+/// at its level that far between them (sounds only one of them has fade out or in), and the names
+/// cross-fading, drifting the way it goes. Still (`from` and `to` both where you are), the name
+/// opens Teleport, and more on a long press.
+private struct MorphView: View, Animatable {
+    let from: Mixer.Page
+    let to: Mixer.Page
+    let forward: Bool
+    var t: Double
+    let still: Bool
+    let nudge: CGFloat
+    let favorite: String?
+    @Binding var formSize: CGSize
+    let openMixer: () -> Void
+    let teleport: () -> Void
+    let save: () -> Void
+    let library: () -> Void
+
+    var animatableData: Double {
+        get { t }
+        set { t = newValue }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SoundForm(orbs: Self.blend(from.orbs, to.orbs, t))
+                .frame(maxHeight: .infinity)
+                .onGeometryChange(for: CGSize.self) { $0.size } action: { formSize = $0 }
+                .contentShape(Rectangle())
+                .onTapGesture { openMixer() }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel("Open layers")
+            #if os(iOS)
+            // The names, leaving room down the right for what you can do with the place
+            // (`PageActions`, which stays put above).
+            HStack(alignment: .bottom, spacing: 12) {
+                crossfade
+                Spacer(minLength: 0)
+                Color.clear.frame(width: PageActions.width, height: 1)
+            }
+            #else
+            HStack(alignment: .lastTextBaseline, spacing: 8) {
+                crossfade
+                if still, let favorite {
+                    FavoriteToggle(key: favorite, size: 19)
+                        .alignmentGuide(.lastTextBaseline) { $0[VerticalAlignment.center] + 7 }
+                }
+                Spacer(minLength: 0)
+            }
+            #endif
+        }
+    }
+
+    /// The names going and coming, each drifting a little the way it goes.
+    private var crossfade: some View {
+        let drift: CGFloat = 36 * (forward ? -1 : 1)
+        return ZStack(alignment: .bottomLeading) {
+            names(from, live: still)
+                .opacity(1 - t)
+                .offset(x: drift * t + nudge)
+            names(to, live: false)
+                .opacity(t)
+                .offset(x: -drift * (1 - t))
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func names(_ page: Mixer.Page, live: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button { teleport() } label: {
+                PageTitle(lines: page.lines ?? [page.title], chevron: true)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Teleport somewhere")
+            .contextMenu {
+                Button("Teleport…", systemImage: Theme.Symbol.teleport) { teleport() }
+                Button("Save this mix", systemImage: Theme.Symbol.save) { save() }
+                Button("Library", systemImage: Theme.Symbol.library) { library() }
+            }
+            PageLines(line: page.line)
+        }
+        .allowsHitTesting(live)
+    }
+
+    /// The sounds `t` of the way from one mix to another: each at its level that far between them,
+    /// turned toward where it sits in the second, loudest first. A sound keeps the same identity
+    /// throughout, so its light grows and shrinks rather than going out and coming back.
+    static func blend(_ a: [Orb], _ b: [Orb], _ t: Double) -> [Orb] {
+        func angle(_ o: Orb) -> Double { atan2(o.y - 0.5, o.x - 0.5) }
+        var first: [SoundKind: Orb] = [:], second: [SoundKind: Orb] = [:]
+        for o in a where first[o.kind] == nil || o.volume > first[o.kind]!.volume { first[o.kind] = o }
+        for o in b where second[o.kind] == nil || o.volume > second[o.kind]!.volume { second[o.kind] = o }
+        var kinds = b.map(\.kind)
+        for o in a where second[o.kind] == nil { kinds.append(o.kind) }
+        var seen = Set<SoundKind>()
+        return kinds.filter { seen.insert($0).inserted }.compactMap { kind -> Orb? in
+            let oa = first[kind], ob = second[kind]
+            let va = oa?.volume ?? 0, vb = ob?.volume ?? 0
+            let v = va + (vb - va) * t
+            guard v > 0.004 else { return nil }
+            let from = (oa ?? ob).map(angle) ?? 0
+            let to = ob.map(angle) ?? from
+            var turn = to - from
+            if turn > .pi { turn -= 2 * .pi } else if turn < -.pi { turn += 2 * .pi }
+            let at = from + turn * t, r = (1 - v) * 0.5
+            return Orb(id: kind.stableID, kind: kind, x: 0.5 + cos(at) * r, y: 0.5 + sin(at) * r)
+        }
+        .sorted { $0.volume > $1.volume }
     }
 }
 
