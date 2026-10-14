@@ -9,11 +9,6 @@ struct ContentView: View {
                 .foregroundStyle(Theme.text)
                 .background(Theme.background.ignoresSafeArea())
                 .toolbar(.hidden, for: .navigationBar)
-                .navigationDestination(for: Route.self) { route in
-                    switch route {
-                    case .mixer: MixerView()
-                    }
-                }
         }
         .tint(Theme.text)
         .preferredColorScheme(.dark)

@@ -386,6 +386,10 @@ enum Theme {
         static let edit = "slider.horizontal.3"
         /// Saving the sound as it is now as a mix of your own.
         static let save = "square.and.arrow.down"
+        /// The sleep timer, while it's off.
+        static let timer = "timer"
+        /// What else you can do with the place, tucked away until asked for.
+        static let more = "ellipsis"
     }
 
     static let background = Color(hex: 0x0c0e13)

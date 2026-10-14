@@ -1,46 +1,118 @@
 import SwiftUI
 
 #if os(iOS)
-/// Layers: every sound that's playing, each with its own level to set (`SoundList`), washed in the
-/// colors of the mix, and below, every sound to add or take away (`SoundSections`). (On the Mac,
-/// `MacLayers` shows the same parts.)
+/// Layers, a drawer over the place: every sound that's playing, each with its own level to set
+/// (`SoundList`). It comes up halfway, in glass, with the form still in view above it, so you can
+/// watch it change as you set the levels (and turn it, or swipe on to the next place). Pulled up,
+/// it fills the screen, washed in the colors of the mix, with every sound to add or take away below
+/// (`SoundSections`). Swipe it down to put it away. (On the Mac, `MacLayers` shows the same parts.)
 struct MixerView: View {
     @Environment(Mixer.self) private var mixer
+    /// How far up it's pulled.
+    @Binding var detent: PresentationDetent
     @State private var saving = false
     @State private var resetting = false
+    /// How tall it is right now, following a finger pulling it up or down.
+    @State private var height: CGFloat = 0
+    /// How tall it is halfway up: the least it's been since it came up.
+    @State private var halfway = CGFloat.infinity
+
+    /// Halfway and all the way. (Before iOS 18 the layers fit rather than scroll, so only the whole
+    /// screen has room for them.)
+    static var detents: Set<PresentationDetent> { SoundList.scrolls ? [.medium, .large] : [.large] }
+    /// Where it opens: halfway, where there's a halfway.
+    static var opening: PresentationDetent { SoundList.scrolls ? .medium : .large }
+
+    private var halves: Bool { Self.detents.contains(.medium) }
+    /// How much more of it is showing than halfway.
+    private var above: CGFloat { halfway.isFinite ? max(0, height - halfway) : 0 }
 
     var body: some View {
+        // Laid out for halfway, with the sounds to pick from below, out of sight until it's pulled
+        // higher, and then coming up into view under the finger rather than squeezing the layers.
         VStack(spacing: 0) {
-            SoundList()
-
-            SoundSections()
+            VStack(spacing: 0) {
+                header
+                SoundList()
+            }
+            .frame(height: halves && halfway.isFinite ? halfway : nil)
+            if !halves || halfway.isFinite {
+                SoundSections(height: max(SoundSections.height, above))
+            }
+        }
+        // As tall as the drawer, not the sounds out of sight below.
+        .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
+        .clipped()
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
+            height = h
+            if h > 100 { halfway = min(halfway, h) }
         }
         .foregroundStyle(Theme.text)
-        .background { SceneWash(orbs: mixer.orbs) }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
+        // Glass while the place shows above it, the mix's colors as it comes up over the place.
+        .background { SceneWash(orbs: mixer.orbs).opacity(halves ? min(1, above / SoundSections.height) : 1) }
+        .presentationDetents(Self.detents, selection: $detent)
+        .presentationDragIndicator(.visible)
+        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+        .modifier(DrawerFace())
+        .saveMixPrompt(isPresented: $saving)
+        .haptic(.tick, trigger: detent)
+    }
+
+    /// What it is and where, and the ways to keep it or put it back.
+    private var header: some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("LAYERS")
                     .font(Theme.caps(11))
                     .tracking(1.3)
                     .foregroundStyle(Theme.muted)
+                Text(mixer.title)
+                    .font(Theme.label(15, .medium))
+                    .lineLimit(1)
+                    .contentTransition(.opacity)
             }
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                if mixer.currentPlaceIsTweaked {
-                    Button { Haptics.play(.tap); resetting = true } label: {
-                        Text("Reset").font(Theme.label(12, .medium))
-                    }
+            Spacer(minLength: 8)
+            if mixer.currentPlaceIsTweaked {
+                pill("Reset") { resetting = true }
                     .accessibilityLabel("Reset \(mixer.currentPlaceName) to default")
-                }
-                Button { Haptics.play(.tap); saving = true } label: {
-                    Text("Save").font(Theme.label(12, .medium))
-                }
-                .disabled(mixer.orbs.isEmpty)
+                    .confirmReset(isPresented: $resetting)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
+            pill("Save") { saving = true }
+                .disabled(mixer.orbs.isEmpty)
+                .opacity(mixer.orbs.isEmpty ? 0.4 : 1)
         }
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .saveMixPrompt(isPresented: $saving)
-        .confirmReset(isPresented: $resetting)
+        .padding(.horizontal, 24)
+        .padding(.top, 28)
+        .padding(.bottom, 4)
+        .animation(.smooth, value: mixer.currentPlaceIsTweaked)
+    }
+
+    private func pill(_ title: String, action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.play(.tap)
+            action()
+        } label: {
+            Text(title)
+                .font(Theme.label(13, .medium))
+                .padding(.vertical, 7)
+                .padding(.horizontal, 14)
+                .background(Capsule().fill(Color.white.opacity(0.06)))
+                .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// The drawer's face: the system's own Liquid Glass where there is it (iOS 26), frosted glass before.
+private struct DrawerFace: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content
+        } else {
+            content.presentationBackground(.ultraThinMaterial)
+        }
     }
 }
 #endif
@@ -90,7 +162,7 @@ struct SoundList: View {
         }
     }
 
-    private static var scrolls: Bool {
+    static var scrolls: Bool {
         #if os(iOS)
         if #available(iOS 18.0, *) { return true }
         return false
@@ -244,6 +316,9 @@ private struct AddLayer: View {
 /// adds it or takes it away. Pills keep their places, so nothing jumps when you tap.
 struct SoundSections: View {
     @Environment(Mixer.self) private var mixer
+    /// How much of them shows at least.
+    static let height: CGFloat = 252
+    var height: CGFloat = Self.height
 
     private static let order: [SoundKind.Category] = [.water, .nature, .night, .jungle, .city, .calm, .tones, .noise]
 
@@ -261,7 +336,7 @@ struct SoundSections: View {
             .padding(.vertical, 12)
         }
         .scrollIndicators(.hidden)
-        .frame(height: 252)
+        .frame(height: height)
         // Fade at the top and bottom edges, so it reads as a list that keeps going.
         .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.06),
                                      .init(color: .black, location: 0.88), .init(color: .clear, location: 1)],
