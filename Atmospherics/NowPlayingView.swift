@@ -278,6 +278,14 @@ struct Carousel: View {
                 land(forward: request.forward, step: step, duration: 0.55)
             }
         }
+        #if os(iOS)
+        // Down the right of the name, staying put as the places slide past beneath.
+        .overlay(alignment: .bottomTrailing) {
+            PageActions(favorite: mixer.favoriteKey, save: { saving = true }, edit: openMixer, library: openLibrary,
+                        teleport: teleport, surprise: { mixer.requestTravel(forward: true) })
+                .padding(.bottom, 4)
+        }
+        #endif
         .saveMixPrompt(isPresented: $saving)
         .onAppear { mixer.carouselShowing = true }
         .onDisappear { mixer.carouselShowing = false }
@@ -315,17 +323,15 @@ struct Carousel: View {
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel("Open layers")
             #if os(iOS)
-            // The name and its weather, with what you can do with the place down the right.
+            // The name and its weather, leaving room down the right for what you can do with the
+            // place (`PageActions`, which stays put above the pages as they slide).
             HStack(alignment: .bottom, spacing: 12) {
                 VStack(alignment: .leading, spacing: 0) {
                     title(page, here: here)
                     PageLines(line: page.line)
                 }
                 Spacer(minLength: 0)
-                PageActions(favorite: here ? mixer.favoriteKey : slot.destination?.favoriteKey,
-                            save: { saving = true }, edit: openMixer, library: openLibrary, teleport: teleport,
-                            surprise: { mixer.requestTravel(forward: true) })
-                    .padding(.bottom, 4)
+                Color.clear.frame(width: PageActions.width, height: 1)
             }
             #else
             HStack(alignment: .lastTextBaseline, spacing: 8) {
@@ -721,10 +727,12 @@ private struct DescribeBar: View {
     }
 }
 
-/// What you can do with a place, down the right of its name, in glass: keep it (the bookmark: a
-/// favorite, or for the weather outside or a real place, a mix of your own), change its sounds,
-/// the Library, Teleport, and Surprise me, which slides on to somewhere new as a swipe does.
+/// What you can do with the place you're in, down the right of its name, in glass: keep it (the
+/// bookmark: a favorite, or for the weather outside or a real place, a mix of your own), change its
+/// sounds, the Library, Teleport, and Surprise me, which slides on to somewhere new as a swipe
+/// does. It stays put while places slide past beneath it.
 private struct PageActions: View {
+    static let width: CGFloat = 42
     let favorite: String?
     let save: () -> Void
     let edit: () -> Void
