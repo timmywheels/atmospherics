@@ -12,7 +12,7 @@ Teleport by sound
 ## Promotional text (170, can change any time without review)
 
 ```
-Take me to a log cabin in a snowstorm. Atmospherics builds the scene in sound, and if it's really snowing somewhere right now, it borrows that weather live.
+Take me to a log cabin in a snowstorm. Atmospherics builds the scene in sound: the fire, the storm against the walls. Or describe the vibe in your own words.
 ```
 
 ## Keywords (100, commas without spaces)
@@ -31,8 +31,8 @@ Ask for a log cabin in a snowstorm, a rainy night in the city or dusk at the lak
 TELEPORT
 Build a scene as a sentence: take me to a tent, in a thunderstorm, at night. Or just type it your own way. Seventeen settings, from a sleeper train to a temple garden, in any weather, at any hour.
 
-REAL WEATHER, SOMEWHERE REAL
-When it's really snowing somewhere that fits, your cabin takes that place's weather, live: "Snowing in Lofoten right now, −3°". The rest of the time the scene is built for the hour you chose, with the birds, insects and weather that belong to it.
+ALIVE AT ANY HOUR
+Every scene is built for the hour you choose, with the birds, insects and weather that belong to it: dawn brings the birds, crickets take over at dusk, and the city quiets after midnight.
 
 INSIDE, OUT OF THE RAIN
 Indoors, the walls soften the rain and the wind, while the fire, the café or the train keep going all night.

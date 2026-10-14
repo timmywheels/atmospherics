@@ -65,7 +65,7 @@ struct LibraryView: View {
                     if shelf == .recent {
                         ForEach(mixer.recentItems, id: \.visit.id) { entry in
                             switch entry.item {
-                            case .scene(let a, let from): scene(a, from: from, when: entry.visit.at)
+                            case .scene(let a): scene(a, when: entry.visit.at)
                             case .mix(let p): item(p, when: entry.visit.at)
                             case .place(let p): place(p, when: entry.visit.at)
                             }
@@ -186,18 +186,17 @@ struct LibraryView: View {
         .id(preset.id)
     }
 
-    /// A scene: tap to go there, in the weather of the place it was described in (`from`, in
-    /// Recent, with `when` you were last there).
-    private func scene(_ a: Atmosphere, from: String? = nil, when: Date? = nil) -> some View {
+    /// A scene: tap to go there (in Recent, with `when` you were last there).
+    private func scene(_ a: Atmosphere, when: Date? = nil) -> some View {
         let page = mixer.page(for: .atmosphere(a))
         let current = mixer.mode == .atmosphere && mixer.activePreset == nil && mixer.atmosphere == a
         return Button {
             Haptics.play(.thud)
-            mixer.revisit(.scene(a, from: from))
+            mixer.revisit(.scene(a))
             close()
         } label: {
             ColorCard(hues: page.orbs.sorted { $0.volume > $1.volume }.prefix(3).map(\.kind.hue),
-                      top: Self.top(a.setting.info.name, from.map { "in \($0)" }, when), title: page.title, sounds: page.orbs,
+                      top: Self.top(a.setting.info.name, when), title: page.title, sounds: page.orbs,
                       badge: current ? (mixer.isPlaying ? "Playing" : "Here") : nil, outlined: current,
                       trailingRoom: 30)
         }
@@ -219,7 +218,7 @@ struct LibraryView: View {
             close()
         } label: {
             ColorCard(hues: page.orbs.sorted { $0.volume > $1.volume }.prefix(3).map(\.kind.hue),
-                      top: Self.top(p.country, nil, when), title: p.title, sounds: page.orbs,
+                      top: Self.top(p.country, when), title: p.title, sounds: page.orbs,
                       badge: current ? (mixer.isPlaying ? "Playing" : "Here") : nil, outlined: current)
         }
         .buttonStyle(.plain)
@@ -229,9 +228,9 @@ struct LibraryView: View {
         .id("place:\(p.name)")
     }
 
-    /// A card's top line: "Temple garden · in Bangkok · 2 hours ago".
-    private static func top(_ what: String, _ more: String?, _ when: Date?) -> String {
-        [what, more, when.map { $0.formatted(.relative(presentation: .named)) }].compactMap { $0 }.joined(separator: " · ")
+    /// A card's top line: "Temple garden · 2 hours ago".
+    private static func top(_ what: String, _ when: Date?) -> String {
+        [what, when.map { $0.formatted(.relative(presentation: .named)) }].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func note(_ text: String) -> some View {

@@ -45,8 +45,15 @@ struct Conditions: Equatable {
         return isDay ? "sun.max" : "moon.stars"
     }
 
-    /// "auto" (the phone's region), "f" or "c"; set from the menu.
-    static var unitPreference: String { UserDefaults.standard.string(forKey: "tempUnit") ?? "auto" }
+    /// "auto" (the system's own setting), "f" or "c". The iPhone follows its Settings; the Mac
+    /// can choose in the menu bar.
+    static var unitPreference: String {
+        #if os(macOS)
+        UserDefaults.standard.string(forKey: "tempUnit") ?? "auto"
+        #else
+        "auto"
+        #endif
+    }
 
     var temperature: String {
         let m = Measurement(value: temperatureC, unit: UnitTemperature.celsius)

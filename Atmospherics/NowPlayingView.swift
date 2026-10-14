@@ -15,12 +15,9 @@ struct NowPlayingView: View {
     @State private var showTeleport = false
     /// Teleport opened from Describe the vibe… starts with the keyboard up.
     @State private var teleportTyping = false
-    @State private var saving = false
     @State private var hint: String?
     /// How many of the one-time hints have been shown.
     @AppStorage("hintStep") private var hintStep = 0
-    @AppStorage("tempUnit") private var tempUnit = "auto"
-    private var tempUnitLabel: String { tempUnit == "f" ? "°F" : tempUnit == "c" ? "°C" : "Auto" }
 
     private static let hints = [
         "Swipe left or right to travel",
@@ -75,16 +72,6 @@ struct NowPlayingView: View {
         if showMixer { showMixer = false } else { openLayers() }
     }
 
-    /// One drawer at a time: anything else asked for with Layers up waits for it to go down.
-    private func afterLayers(_ next: @escaping () -> Void) {
-        guard showMixer else { return next() }
-        showMixer = false
-        Task {
-            try? await Task.sleep(for: .seconds(0.4))
-            next()
-        }
-    }
-
     /// Where the top of Layers is on the screen while it's up (halfway, the system's `.medium`;
     /// it's the same once it's pulled higher, with nothing to see), so the form can rise into the
     /// room above it.
@@ -99,50 +86,9 @@ struct NowPlayingView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Menu {
-                    // Ways back, only when there's something to go back from.
-                    if mixer.activePreset != nil {
-                        Button("Back to \(mixer.presetReturnName)", systemImage: "arrow.uturn.backward") {
-                            withAnimation(.smooth(duration: 0.35)) { mixer.leavePreset() }
-                        }
-                    }
-                    if mixer.isImagining {
-                        Button("Back to live weather", systemImage: "arrow.uturn.backward") {
-                            withAnimation(.smooth) { mixer.clearOverrides() }
-                        }
-                    }
-                    if mixer.activePreset != nil || mixer.isImagining { Divider() }
-                    Button("Library", systemImage: Theme.Symbol.library) { afterLayers { showLibrary = true } }
-                    Menu("Sleep timer · \(mixer.timer == .off ? "off" : mixer.timer.label)", systemImage: "moon") {
-                        ForEach(Mixer.Timer.allCases, id: \.self) { t in
-                            Button(t == .off ? "No timer" : "Stop after \(t.label)") { mixer.setTimer(t) }
-                        }
-                    }
-                    Button("Save this mix", systemImage: Theme.Symbol.save) { afterLayers { saving = true } }
-                    Menu("Temperature · \(tempUnitLabel)", systemImage: "thermometer.medium") {
-                        Picker("Temperature", selection: $tempUnit) {
-                            Text("Auto").tag("auto")
-                            Text("°F").tag("f")
-                            Text("°C").tag("c")
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 10) {
-                        // A quiet vertical ⋮ so it reads as a menu.
-                        // Amber while a weather or time override is on.
-                        VStack(spacing: 2.5) {
-                            ForEach(0..<3, id: \.self) { _ in Circle().frame(width: 2.5, height: 2.5) }
-                        }
-                        .foregroundStyle(mixer.isImagining ? Color.oklch(0.8, 0.13, 70) : Theme.muted)
-                        .shadow(color: mixer.isImagining ? Color.oklch(0.8, 0.13, 70).opacity(0.6) : .clear, radius: 3)
-                        .animation(.smooth, value: mixer.isImagining)
-                        Text("ATMOSPHERICS")
-                    }
+                Text("ATMOSPHERICS")
                     .padding(.vertical, 6)
-                    .contentShape(Rectangle())
-                }
-                .accessibilityLabel(mixer.isImagining ? "Menu. Weather override on." : "Menu")
-                .buttonStyle(.plain)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
                 // Your own weather, one tap back to it.
                 Button {
@@ -249,7 +195,6 @@ struct NowPlayingView: View {
             .padding(.bottom, 130)
             .animation(.smooth(duration: 0.3), value: mixer.notice)
         }
-        .saveMixPrompt(isPresented: $saving)
         .task { await runHints() }
         .sheet(isPresented: $showLibrary) {
             LibraryView(current: mixer.activePreset)
