@@ -51,6 +51,9 @@ enum Sky: String, CaseIterable, Codable {
         }
     }
 
+    /// A place's live weather, as a sky.
+    static func of(_ c: Conditions) -> Sky? { allCases.first { $0.matches(c) } }
+
     /// Whether a place's live weather is this.
     func matches(_ c: Conditions) -> Bool {
         let rain = c.isRaining && !c.isSnow && !c.isThunder
@@ -297,7 +300,8 @@ enum Setting: String, CaseIterable, Codable {
                         indoors: false,
                         signature: [(.templeBell, 0.35), (.fountain, 0.25), (.stream, 0.2), (.birds, 0.25), (.chimes, 0.12), (.leaves, 0.15),
                                     (.breeze, 0.1)],
-                        core: [], climate: .subtropical, latitude: 35, month: 4,
+                        // The bell is the garden's own, there at any hour (a real temple's keeps the clock).
+                        core: [.templeBell], climate: .subtropical, latitude: 35, month: 4,
                         skies: [.drizzle, .rain, .clear, .fog, .snow], times: all,
                         line: "A fountain, a bell, the garden", rainOn: nil,
                         suits: { p, _ in has(p, .templeBell) }, wind: .treeWind)
@@ -420,7 +424,16 @@ struct Atmosphere: Hashable, Codable, Identifiable {
 
     /// A real place where it's like this right now, if there is one: the right weather (and time
     /// of day, if it's set), somewhere that suits the setting. The same pick all hour, so it doesn't flit.
-    func liveSource(among places: [Place], conditions: [String: Conditions], now: Date = Date()) -> (place: Place, conditions: Conditions)? {
+    /// A place the description `named` comes first, suiting the setting or not.
+    func liveSource(among places: [Place], conditions: [String: Conditions], now: Date = Date(),
+                    named: String? = nil) -> (place: Place, conditions: Conditions)? {
+        // A place the scene was described in ("a retreat in Thailand"), while it's like this there,
+        // or as near as the setting comes (a temple garden in a Bangkok thunderstorm has the rain).
+        if let named, let p = places.first(where: { $0.name == named }), let c = conditions[p.name],
+           let live = Sky.of(c), Self.suited(setting, live, time).sky == sky,
+           time.phase.map({ c.phase(at: now) == $0 }) ?? true {
+            return (p, c)
+        }
         guard let suits = setting.info.suits else { return nil }
         let candidates = places.compactMap { p -> (Place, Conditions)? in
             guard let c = conditions[p.name], sky.matches(c), suits(p, c) else { return nil }
@@ -585,7 +598,8 @@ struct Atmosphere: Hashable, Codable, Identifiable {
         (.harbor, ["harbor", "harbour", "marina", "port", "dock", "sailboats", "boats"]),
         (.train, ["sleeper train", "night train", "train", "railway"]),
         (.library, ["library", "reading room", "books", "study", "studying", "reading"]),
-        (.temple, ["temple", "shrine", "zen garden", "monastery", "garden"]),
+        (.temple, ["temple", "shrine", "zen garden", "zen", "monastery", "monk", "buddhist", "buddha", "pagoda", "meditation",
+                   "garden"]),
         (.mountains, ["mountains", "mountain", "peak", "ridge", "alps", "summit"]),
         (.tinRoof, ["tin roof", "roof", "hut", "shack"]),
         (.porch, ["porch", "deck", "backyard", "veranda"]),

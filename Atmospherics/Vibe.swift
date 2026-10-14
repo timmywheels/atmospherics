@@ -17,6 +17,12 @@ struct Vibe {
     /// Only changes the sounds of the scene being built ("no birds"), so it keeps its earlier
     /// changes. Otherwise the scene is as described, starting from how it sounds by default.
     var refines = false
+    /// The real place it's in, if it names one ("a retreat in Thailand" is Bangkok): the scene
+    /// takes its weather from there.
+    var place: Place?
+    /// Whether it says what the weather's like, by name or by the rain, thunder or wind it asks
+    /// for or leaves out. If not, and it names a place, the weather is the place's right now.
+    var saysWeather = false
 
     /// A change to the scene's sounds, as asked: "no wind", "more fire", "less chatter", "just the
     /// waves", or just "palm trees" (there).
@@ -72,7 +78,27 @@ struct Vibe {
         var atmosphere = Atmosphere.suited(setting, sky, time ?? .now)
         // Weather that brings what was left out ("no rain") gives way, unless it was asked for by name.
         if named.sky == nil { atmosphere.sky = Self.sky(for: atmosphere, without: asks) }
-        return Vibe(atmosphere: atmosphere, asks: asks)
+        let weather: Set<SoundKind> = [.rain, .lightRain, .heavyRain, .thunder, .lightning, .wind, .breeze, .gusts, .howl, .treeWind]
+        return Vibe(atmosphere: atmosphere, asks: asks, place: place(in: text, for: atmosphere.setting),
+                    saysWeather: named.sky != nil || asks.contains { !weather.isDisjoint(with: $0.sound.kinds) })
+    }
+
+    /// The real place a description is in, by its name or its country ("a retreat in Thailand" is
+    /// Bangkok); of a country's places, the one most like the setting (Japan's temple is Kyoto's).
+    private static func place(in text: String, for setting: Setting) -> Place? {
+        // Whole words, without accents or case: " reykjavik ", " hawaii ".
+        func plain(_ s: String) -> String {
+            " " + s.replacingOccurrences(of: "[ʻ’']", with: "", options: .regularExpression)
+                .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+                .components(separatedBy: CharacterSet.letters.inverted).filter { !$0.isEmpty }
+                .joined(separator: " ") + " "
+        }
+        let said = plain(text)
+        func says(_ name: String) -> Bool { said.contains(plain(name)) }
+        if let place = Place.all.first(where: { says($0.name) }) { return place }
+        let own = Dictionary(setting.info.signature, uniquingKeysWith: max)
+        func likeness(_ p: Place) -> Double { p.signature.reduce(0) { $0 + min($1.1, own[$1.0] ?? 0) } }
+        return Place.all.filter { says($0.country) }.max { likeness($0) < likeness($1) }
     }
 
     /// Where sounds are most at home: the setting where they're loudest, counting each one's own

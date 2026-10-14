@@ -478,8 +478,13 @@ final class Mixer {
     /// A real place where it's like the atmosphere right now, if there is one.
     var atmosphereSource: (place: Place, conditions: Conditions)? { atmosphere.flatMap(liveSource(for:)) }
 
+    /// A scene described in a real place ("a retreat in Thailand"), and the place: its weather is
+    /// that scene's while it's like that there.
+    private var describedPlace: (atmosphere: Atmosphere, place: String)?
+
     func liveSource(for a: Atmosphere) -> (place: Place, conditions: Conditions)? {
-        a.liveSource(among: allPlaces, conditions: livePlaceConditions)
+        a.liveSource(among: allPlaces, conditions: livePlaceConditions,
+                     named: describedPlace.flatMap { $0.atmosphere == a ? $0.place : nil })
     }
 
     /// The atmosphere's weather: live from somewhere, or imagined.
@@ -524,7 +529,14 @@ final class Mixer {
     /// the scene's tweaks, as if made in Layers, so Reset puts it back. A scene described anew is
     /// as described, whatever it was tuned to before; words that only refine it add to that.
     func go(to vibe: Vibe) {
-        let a = vibe.atmosphere
+        var a = vibe.atmosphere
+        if let place = vibe.place {
+            // In a real place: the weather there right now, unless the description said what weather.
+            if !vibe.saysWeather, let c = livePlaceConditions[place.name], let sky = Sky.of(c) {
+                a = Atmosphere.suited(a.setting, sky, a.time)
+            }
+            describedPlace = (a, place.name)
+        }
         let changes = vibe.tweaks(over: a.mix(in: liveSource(for: a)?.conditions ?? a.imagined()))
         if vibe.refines {
             tweaks[a.tweakKey, default: [:]].merge(changes) { $1 }
