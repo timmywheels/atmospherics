@@ -244,9 +244,11 @@ struct Carousel: View {
     @State private var turnNotch = 0
     @State private var settling = false
     @State private var saving = false
-    /// While a swipe lands, the two pages are drawn from a snapshot so the sound can switch at
-    /// release without the sliding pages changing under the finger.
-    @State private var frozen: (outgoing: Mixer.Page, incoming: Mixer.Page, forward: Bool)?
+    /// The three pages' identities: where you've been, here, and where you'd go next. A swipe
+    /// hands them round, so the page that slides in is the same view as it becomes the live one,
+    /// and nothing is drawn afresh as it lands. (Going somewhere another way keeps the live page,
+    /// so its form morphs into the new place.)
+    @State private var keys = (previous: 0, here: 1, next: 2)
     /// The live page's form, whose glass a drag can take hold of.
     @State private var formSize: CGSize = .zero
     /// Where the current drag started, and whether that was on the glass.
@@ -261,17 +263,10 @@ struct Carousel: View {
             let w = proxy.size.width
             let step = w + gap
             ZStack(alignment: .topLeading) {
-                if let f = frozen {
-                    PageView(page: f.outgoing, live: true).frame(width: w).offset(x: dragX)
-                    PageView(page: f.incoming, live: true).frame(width: w).offset(x: (f.forward ? step : -step) + dragX)
-                } else {
-                    if let prev = mixer.previous {
-                        PageView(page: mixer.page(for: prev), live: sliding).frame(width: w).offset(x: -step + dragX)
-                    }
-                    currentPage.frame(width: w).offset(x: dragX)
-                    if let next = mixer.next {
-                        PageView(page: mixer.page(for: next), live: sliding).frame(width: w).offset(x: step + dragX)
-                    }
+                ForEach(slots, id: \.key) { slot in
+                    page(slot)
+                        .frame(width: w)
+                        .offset(x: CGFloat(slot.place) * step + dragX)
                 }
             }
             .frame(width: w, height: proxy.size.height, alignment: .topLeading)
@@ -286,6 +281,7 @@ struct Carousel: View {
                 land(forward: request.forward, step: step, duration: 0.55)
             }
         }
+        .saveMixPrompt(isPresented: $saving)
         .onAppear { mixer.carouselShowing = true }
         .onDisappear { mixer.carouselShowing = false }
         .haptic(.tick, trigger: pastThreshold) { _, now in now }
@@ -293,19 +289,37 @@ struct Carousel: View {
         .accessibilityAction(named: "Go back") { mixer.travel(forward: false) }
     }
 
-    /// The live page: the real mix, with the name opening Teleport.
-    private var currentPage: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SoundForm(orbs: mixer.byVolume)
+    private struct Slot {
+        let key: Int
+        /// -1 where you've been, 0 here, 1 where you'd go next.
+        let place: Int
+        let destination: Mixer.Destination?
+    }
+
+    private var slots: [Slot] {
+        var slots = [Slot(key: keys.here, place: 0, destination: nil)]
+        if let previous = mixer.previous { slots.insert(Slot(key: keys.previous, place: -1, destination: previous), at: 0) }
+        if let next = mixer.next { slots.append(Slot(key: keys.next, place: 1, destination: next)) }
+        return slots
+    }
+
+    /// A page: the live one, or a neighbour previewed with its live weather and sounds. Both are
+    /// the same view, laid out the same way, so a neighbour can become the live page in place.
+    private func page(_ slot: Slot) -> some View {
+        let here = slot.destination == nil
+        let page = slot.destination.map { mixer.page(for: $0) }
+            ?? Mixer.Page(title: mixer.title, line: mixer.weather.line, orbs: mixer.byVolume, lines: mixer.titleLines)
+        return VStack(alignment: .leading, spacing: 0) {
+            SoundForm(orbs: here ? page.orbs : page.orbs.sorted { $0.volume > $1.volume }, live: here || sliding)
                 .frame(maxHeight: .infinity)
-                .onGeometryChange(for: CGSize.self) { $0.size } action: { formSize = $0 }
+                .onGeometryChange(for: CGSize.self) { $0.size } action: { if here { formSize = $0 } }
                 .contentShape(Rectangle())
-                .onTapGesture { openMixer() }
+                .onTapGesture { if here { openMixer() } }
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel("Open layers")
             HStack(alignment: .lastTextBaseline, spacing: 8) {
                 Button { teleport() } label: {
-                    PageTitle(lines: mixer.titleLines)
+                    PageTitle(lines: page.lines ?? [page.title], chevron: here)
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint("Teleport somewhere")
@@ -313,7 +327,7 @@ struct Carousel: View {
                 #if os(iOS)
                 Spacer(minLength: 0)
                 #endif
-                if let key = mixer.favoriteKey {
+                if here, let key = mixer.favoriteKey {
                     FavoriteToggle(key: key, size: 19)
                         .alignmentGuide(.lastTextBaseline) { $0[VerticalAlignment.center] + 7 }
                         #if os(iOS)
@@ -325,13 +339,16 @@ struct Carousel: View {
                 #endif
             }
             .contextMenu {
-                Button("Teleport…", systemImage: Atmosphere.teleportSymbol) { teleport() }
-                Button("Save this mix", systemImage: "bookmark") { saving = true }
-                Button("Library", systemImage: "books.vertical") { openLibrary() }
+                if here {
+                    Button("Teleport…", systemImage: Atmosphere.teleportSymbol) { teleport() }
+                    Button("Save this mix", systemImage: "bookmark") { saving = true }
+                    Button("Library", systemImage: "books.vertical") { openLibrary() }
+                }
             }
-            .saveMixPrompt(isPresented: $saving)
-            PageLines(line: mixer.weather.line)
+            PageLines(line: page.line)
         }
+        .allowsHitTesting(here)
+        .accessibilityHidden(!here)
     }
 
     private func drag(width: CGFloat, step: CGFloat) -> some Gesture {
@@ -394,44 +411,24 @@ struct Carousel: View {
         land(forward: forward, step: step)
     }
 
-    /// Slides the rest of the way to the neighbour, switching the sound as it goes.
+    /// Slides the rest of the way to the neighbour, switching the sound as it goes. The sound
+    /// switches at once and the pages hand their places round where they stand (the neighbour is
+    /// now here, offset by however far it still has to come), then that offset settles to nothing.
     private func land(forward: Bool, step: CGFloat, duration: Double = 0.3) {
+        guard forward ? mixer.next != nil : mixer.previous != nil else { return }
         settling = true
-        // Snapshot both pages, then switch the sound right away.
-        let outgoing = Mixer.Page(title: mixer.title, line: mixer.weather.line, orbs: mixer.byVolume, lines: mixer.titleLines)
-        if let dest = forward ? mixer.next : mixer.previous {
-            frozen = (outgoing, mixer.page(for: dest), forward)
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) {
+            mixer.travel(forward: forward)
+            keys = forward ? (keys.here, keys.next, keys.previous) : (keys.next, keys.previous, keys.here)
+            dragX += forward ? step : -step
         }
-        mixer.travel(forward: forward)
         withAnimation(.spring(duration: duration, bounce: 0)) {
-            dragX = forward ? -step : step
+            dragX = 0
         } completion: {
-            // The destination is centred and is already the live page: swap without a jump.
-            var t = Transaction()
-            t.disablesAnimations = true
-            withTransaction(t) {
-                frozen = nil
-                dragX = 0
-            }
             settling = false
         }
-    }
-}
-
-/// A neighbouring place, previewed with its live weather and sounds.
-private struct PageView: View {
-    let page: Mixer.Page
-    var live = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SoundForm(orbs: page.orbs.sorted { $0.volume > $1.volume }, live: live)
-                .frame(maxHeight: .infinity)
-            PageTitle(lines: page.lines ?? [page.title], chevron: false)
-            PageLines(line: page.line)
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 }
 

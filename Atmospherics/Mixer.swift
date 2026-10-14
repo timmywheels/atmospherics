@@ -366,6 +366,7 @@ final class Mixer {
     /// whatever app had them: just opening this one shouldn't take them.
     @ObservationIgnored private var hasPlayed = false
     @ObservationIgnored private var artwork: (hues: [Double], image: MPMediaItemArtwork)?
+    @ObservationIgnored private var artworkTask: Task<Void, Never>?
 
     /// The Mac has no Live Activity: the system's Now Playing (Control Center, the media keys,
     /// AirPods) shows and controls what's playing, and the forward and back keys travel.
@@ -382,11 +383,17 @@ final class Mixer {
         guard hasPlayed else { return }
         let hues = snapshot.lights.map(\.hue)
         if artwork?.hues != hues {
-            let halo = HaloArt(lights: snapshot.lights).frame(width: 320, height: 320).background(Theme.background)
-            let renderer = ImageRenderer(content: halo)
-            renderer.scale = 2
-            if let image = renderer.nsImage {
-                artwork = (hues, MPMediaItemArtwork(boundsSize: image.size) { _ in image })
+            // Drawing the halo is slow, so it waits until a slide to the new place has settled.
+            artworkTask?.cancel()
+            artworkTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(0.8))
+                guard let self, !Task.isCancelled else { return }
+                let halo = HaloArt(lights: snapshot.lights).frame(width: 320, height: 320).background(Theme.background)
+                let renderer = ImageRenderer(content: halo)
+                renderer.scale = 2
+                guard let image = renderer.nsImage else { return }
+                self.artwork = (hues, MPMediaItemArtwork(boundsSize: image.size) { _ in image })
+                MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPMediaItemPropertyArtwork] = self.artwork?.image
             }
         }
         var info: [String: Any] = [
@@ -1274,7 +1281,9 @@ final class Mixer {
                     o.y = 0.5 + sin(p.angle) * r
                     return o
                 }
-                self.apply()
+                // Each step only moves the sound; it's saved once, as the glide ends, so a swipe
+                // that lands as the glide begins isn't kept waiting on the disk 30 times a second.
+                if step == steps { self.apply() } else { self.sendLevels() }
                 try? await Task.sleep(for: .milliseconds(33))
             }
         }
@@ -1282,14 +1291,18 @@ final class Mixer {
 
     /// Sends the current field's volumes to the engine and saves.
     private func apply() {
+        sendLevels()
+        let encodable = Dictionary(uniqueKeysWithValues: fields.map { ($0.key.rawValue, $0.value) })
+        if let data = try? JSONEncoder().encode(encodable) { defaults.set(data, forKey: "fields") }
+        publishToWidgets()
+    }
+
+    /// Sends the current field's volumes to the engine.
+    private func sendLevels() {
         var levels = Dictionary(uniqueKeysWithValues: SoundKind.allCases.map { ($0, 0.0) })
         for orb in orbs { levels[orb.kind] = max(levels[orb.kind]!, orb.volume) }
         // Each sound at its natural presence, and many layers at once kept under a ceiling.
         for (kind, gain) in Mix.gains(levels) { engine.setLevel(Float(gain), for: kind) }
-
-        let encodable = Dictionary(uniqueKeysWithValues: fields.map { ($0.key.rawValue, $0.value) })
-        if let data = try? JSONEncoder().encode(encodable) { defaults.set(data, forKey: "fields") }
-        publishToWidgets()
     }
 
     // MARK: Playback
