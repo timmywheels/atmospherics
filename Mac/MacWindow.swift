@@ -43,7 +43,7 @@ struct MacWindow: View {
         } message: {
             Text(mixer.errorMessage ?? "")
         }
-        .sensoryFeedback(.selection, trigger: navigation.tab)
+        .haptic(.tick, trigger: navigation.tab)
         #if DEBUG
         .onAppear {
             if ProcessInfo.processInfo.arguments.contains("-previewPanel") { openWindow(id: "panelPreview") }

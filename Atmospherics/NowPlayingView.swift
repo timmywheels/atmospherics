@@ -112,7 +112,10 @@ struct NowPlayingView: View {
                 .buttonStyle(.plain)
                 Spacer()
                 // Your own weather, one tap back to it.
-                Button { withAnimation(.smooth(duration: 0.35)) { mixer.goHome() } } label: {
+                Button {
+                    Haptics.play(.tap)
+                    withAnimation(.smooth(duration: 0.35)) { mixer.goHome() }
+                } label: {
                     HStack(spacing: 6) {
                         Image(systemName: mixer.outsideSymbol)
                         Text(mixer.outsideLabel)
@@ -132,7 +135,7 @@ struct NowPlayingView: View {
                      openLibrary: { showLibrary = true })
                 .frame(minHeight: 400, maxHeight: .infinity)
 
-            .sensoryFeedback(.impact(weight: .medium), trigger: mixer.mode)
+            .haptic(.tap, trigger: mixer.mode)
 
             // What's playing (tap it for its layers), a way back if you've tuned it, and the sleep
             // timer if there is one.
@@ -210,9 +213,13 @@ struct NowPlayingView: View {
         .sheet(isPresented: $showTeleport) {
             TeleportView(start: mixer.mode == .atmosphere ? mixer.atmosphere : nil, typing: teleportTyping)
         }
-        .sensoryFeedback(.impact(weight: .heavy), trigger: mixer.shuffleCount)
-        .sensoryFeedback(.impact(flexibility: .solid, intensity: 1), trigger: mixer.skyOverride)
-        .sensoryFeedback(.impact(flexibility: .solid, intensity: 1), trigger: mixer.atmosphere?.sky)
+        .haptic(.thud, trigger: mixer.shuffleCount)
+        .haptic(.tap, trigger: mixer.skyOverride)
+        .haptic(.tap, trigger: mixer.atmosphere?.sky)
+        // A tap as Layers, Teleport or the Library opens, however it was asked for.
+        .haptic(.tap, trigger: showMixer) { _, now in now }
+        .haptic(.tap, trigger: showTeleport) { _, now in now }
+        .haptic(.tap, trigger: showLibrary) { _, now in now }
     }
 
 }
@@ -233,6 +240,8 @@ struct Carousel: View {
     let teleport: () -> Void
     let openLibrary: () -> Void
     @State private var pastThreshold = false
+    /// How far the form has turned under the finger, in notches of about 15°: a soft tick each.
+    @State private var turnNotch = 0
     @State private var settling = false
     @State private var saving = false
     /// While a swipe lands, the two pages are drawn from a snapshot so the sound can switch at
@@ -279,7 +288,7 @@ struct Carousel: View {
         }
         .onAppear { mixer.carouselShowing = true }
         .onDisappear { mixer.carouselShowing = false }
-        .sensoryFeedback(.impact(flexibility: .solid, intensity: 1), trigger: pastThreshold) { _, now in now }
+        .haptic(.tick, trigger: pastThreshold) { _, now in now }
         .accessibilityAction(named: "Travel somewhere new") { mixer.travel(forward: true) }
         .accessibilityAction(named: "Go back") { mixer.travel(forward: false) }
     }
@@ -328,12 +337,23 @@ struct Carousel: View {
     private func drag(width: CGFloat, step: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 10)
             .onChanged { g in
-                if turnsForm(g) { return SculptureSpin.home.drag(g.translation) }
+                if turnsForm(g) {
+                    SculptureSpin.home.drag(g.translation)
+                    let notch = Int((abs(g.translation.width) + abs(g.translation.height)) / 26)
+                    if notch != turnNotch {
+                        turnNotch = notch
+                        Haptics.play(.soft)
+                    }
+                    return
+                }
                 guard abs(g.translation.width) > abs(g.translation.height) else { return }
                 follow(g.translation.width, width: width)
             }
             .onEnded { g in
-                if turnsForm(g) { return SculptureSpin.home.release(g.velocity, coast: !reduceMotion) }
+                if turnsForm(g) {
+                    turnNotch = 0
+                    return SculptureSpin.home.release(g.velocity, coast: !reduceMotion)
+                }
                 release(projected: g.predictedEndTranslation.width, width: width, step: step)
             }
     }
@@ -684,7 +704,7 @@ private struct ConfirmReset: ViewModifier {
     func body(content: Content) -> some View {
         content.confirmationDialog("Reset this scene?", isPresented: $isPresented, titleVisibility: .visible) {
             Button("Reset", role: .destructive) {
-                Haptics.tap(.light)
+                Haptics.play(.tap)
                 withAnimation(.smooth) { mixer.resetCurrentPlace() }
             }
             Button("Cancel", role: .cancel) {}
@@ -737,7 +757,7 @@ private struct DescribeBar: View {
         .foregroundStyle(Theme.secondary)
         .background(Capsule().fill(Color.white.opacity(0.06)))
         .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
-        .sensoryFeedback(.impact(weight: .heavy), trigger: surprises)
+        .haptic(.thud, trigger: surprises)
     }
 
     private func surprise() {
@@ -784,9 +804,9 @@ private struct PlayButton: View {
                 }
             }
         }
-        .sensoryFeedback(.impact(weight: .heavy), trigger: mixer.isPlaying)
-        .sensoryFeedback(.impact(weight: .heavy), trigger: held)
-        .sensoryFeedback(.impact(weight: .medium), trigger: mixer.timer)
+        .haptic(.thud, trigger: mixer.isPlaying)
+        .haptic(.thud, trigger: held)
+        .haptic(.tick, trigger: mixer.timer)
         .accessibilityElement()
         .accessibilityAddTraits(.isButton)
         .accessibilityLabel(mixer.isPlaying ? "Pause" : "Play")
@@ -865,7 +885,7 @@ struct VolumeLine: View {
         }
         .animation(.snappy(duration: 0.15), value: sliding)
         // A tick per 10% as it slides.
-        .sensoryFeedback(.impact(flexibility: .rigid, intensity: 0.8), trigger: Int((mixer.volume * 10).rounded(.down))) { _, _ in sliding }
+        .haptic(.tick, trigger: Int((mixer.volume * 10).rounded(.down))) { _, _ in sliding }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Volume")
         .accessibilityValue(mixer.volume < 0.01 ? "Muted" : "\(Int((mixer.volume * 100).rounded())) percent")

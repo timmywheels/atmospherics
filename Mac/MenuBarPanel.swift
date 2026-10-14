@@ -34,8 +34,8 @@ struct MenuBarPanel: View {
         .foregroundStyle(Theme.text)
         .background { SceneWash(orbs: mixer.byVolume) }
         .preferredColorScheme(.dark)
-        .sensoryFeedback(.impact(weight: .medium), trigger: mixer.isPlaying)
-        .sensoryFeedback(.impact(weight: .medium), trigger: mixer.shuffleCount)
+        .haptic(.thud, trigger: mixer.isPlaying)
+        .haptic(.thud, trigger: mixer.shuffleCount)
     }
 
     // MARK: What's playing

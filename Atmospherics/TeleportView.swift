@@ -17,7 +17,6 @@ struct TeleportView: View {
     /// What you've described before, and a few to try: shown when the box is empty.
     @State private var recent = Vibe.recent
     @State private var suggestions = Vibe.suggestions()
-    @State private var goes = 0
     /// Open with the keyboard up, ready to describe where to go.
     private let typing: Bool
     @FocusState private var describing: Bool
@@ -42,7 +41,7 @@ struct TeleportView: View {
                             .tracking(1.3)
                             .foregroundStyle(Theme.muted)
                         Spacer()
-                        Button { leave() } label: {
+                        Button { Haptics.play(.tap); leave() } label: {
                             Image(systemName: "xmark")
                                 .font(.system(size: 14, weight: .semibold))
                                 .frame(width: 32, height: 32)
@@ -118,9 +117,8 @@ struct TeleportView: View {
         .foregroundStyle(Theme.text)
         .background { SceneWash(orbs: preview.orbs) }
         .presentationBackground(Theme.background)
-        .sensoryFeedback(.impact(weight: .medium), trigger: draft)
-        .sensoryFeedback(.impact(weight: .medium), trigger: slot)
-        .sensoryFeedback(.impact(weight: .heavy), trigger: goes)
+        .haptic(.tick, trigger: draft)
+        .haptic(.tick, trigger: slot)
         #if os(macOS)
         .onExitCommand { leave() }
         #endif
@@ -246,6 +244,7 @@ struct TeleportView: View {
                             caps("RECENT")
                             Spacer()
                             Button {
+                                Haptics.play(.tap)
                                 Vibe.forgetRecent()
                                 withAnimation(.smooth(duration: 0.25)) { recent = [] }
                             } label: {
@@ -279,6 +278,7 @@ struct TeleportView: View {
         FlowLayout(spacing: 6) {
             ForEach(list, id: \.self) { phrase in
                 Button {
+                    Haptics.play(.tick)
                     words = phrase
                     understand()
                 } label: {
@@ -313,8 +313,7 @@ struct TeleportView: View {
                 return
             }
             Vibe.remember(text)
-            goes += 1
-            Haptics.tap()
+            Haptics.play(.thud)
             mixer.go(to: vibe)
             leave()
         }
@@ -350,8 +349,7 @@ struct TeleportView: View {
     }
 
     private func go(to atmosphere: Atmosphere) {
-        goes += 1
-        Haptics.tap()
+        Haptics.play(.thud)
         mixer.go(to: atmosphere)
         leave()
     }
