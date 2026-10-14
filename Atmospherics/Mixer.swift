@@ -523,6 +523,7 @@ final class Mixer {
         applyWeather(to: .atmosphere, animated: true)
         updateNowPlaying()
         if shouldPlay && !isPlaying { play() }
+        arrived()
     }
 
     /// Goes to a scene described in words, its sounds changed as asked. The changes are kept as
@@ -764,6 +765,95 @@ final class Mixer {
         }
     }
 
+    // MARK: Recent
+
+    /// Somewhere you've been, and when you were last there.
+    struct Visit: Codable, Equatable, Identifiable {
+        /// As a favorite is kept (`scene:` and the atmosphere's ID, `mix:` and the mix's ID), or
+        /// `place:` and the name of a real place.
+        let key: String
+        /// The real place a scene was described in ("a retreat in Thailand"), for its weather.
+        var from: String?
+        var at: Date
+        var id: String { key }
+    }
+
+    /// Where you've been, newest first, each once: the last 20 scenes, places and Library mixes you
+    /// stayed in for a few seconds, so ones swiped straight past aren't kept. Kept on this device.
+    private(set) var recent: [Visit] = UserDefaults.standard.data(forKey: "recent")
+        .flatMap { try? JSONDecoder().decode([Visit].self, from: $0) } ?? []
+    @ObservationIgnored private var visiting: Task<Void, Never>?
+
+    /// Arrived somewhere: kept as a visit if you're still there in a few seconds.
+    private func arrived() {
+        visiting?.cancel()
+        visiting = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            guard !Task.isCancelled else { return }
+            self?.noteVisit()
+        }
+    }
+
+    private func noteVisit() {
+        let key: String
+        if let p = activePreset {
+            key = Self.favoriteKey(p)
+        } else if mode == .atmosphere, let a = atmosphere {
+            key = Self.favoriteKey(a)
+        } else if mode == .escape, let p = escape?.place {
+            key = "place:\(p.name)"
+        } else {
+            return   // your own weather is always a tap away
+        }
+        let from = activePreset == nil ? describedPlace.flatMap { $0.atmosphere == atmosphere ? $0.place : nil } : nil
+        // The same scene in other weather carries on the visit rather than adding another.
+        if let last = recent.first, last.key != key, Self.setting(of: last.key) != nil,
+           Self.setting(of: last.key) == Self.setting(of: key) {
+            recent.removeFirst()
+        }
+        recent.removeAll { $0.key == key }
+        recent.insert(Visit(key: key, from: from, at: Date()), at: 0)
+        recent = Array(recent.prefix(20))
+        if let data = try? JSONEncoder().encode(recent) { defaults.set(data, forKey: "recent") }
+    }
+
+    /// The setting of a scene's key: `cabin` in `scene:cabin.snow.night`.
+    private static func setting(of key: String) -> Substring? {
+        key.hasPrefix("scene:") ? key.dropFirst(6).split(separator: ".").first : nil
+    }
+
+    func clearRecent() {
+        recent = []
+        defaults.removeObject(forKey: "recent")
+    }
+
+    /// Somewhere to go back to.
+    enum Revisit {
+        case scene(Atmosphere, from: String?), mix(Preset), place(Place)
+    }
+
+    /// Where you've been, newest first, as places to go back to.
+    var recentItems: [(visit: Visit, item: Revisit)] {
+        let mixes = savedMixes.map(\.preset) + Preset.all
+        return recent.compactMap { v in
+            if v.key.hasPrefix("scene:"), let a = Atmosphere(id: String(v.key.dropFirst(6))) { return (v, .scene(a, from: v.from)) }
+            if v.key.hasPrefix("mix:"), let p = mixes.first(where: { Self.favoriteKey($0) == v.key }) { return (v, .mix(p)) }
+            if v.key.hasPrefix("place:"), let p = allPlaces.first(where: { "place:\($0.name)" == v.key }) { return (v, .place(p)) }
+            return nil
+        }
+    }
+
+    /// Goes back to somewhere you've been: a scene in the weather of the place it was described in.
+    func revisit(_ item: Revisit) {
+        switch item {
+        case .scene(let a, let from):
+            if let from { describedPlace = (a, from) }
+            go(to: a)
+        case .mix(let p): load(p)
+        case .place(let p): select(p)
+        }
+    }
+
     func moveSavedMixes(from source: IndexSet, to destination: Int) {
         savedMixes.move(fromOffsets: source, toOffset: destination)
         persistSaved()
@@ -814,6 +904,7 @@ final class Mixer {
         defaults.set(preset.name, forKey: "title.\(mode.rawValue)")
         apply()
         if !isPlaying { play() }
+        arrived()
     }
 
     private func update(_ id: Orb.ID, _ change: (inout Orb) -> Void) {
@@ -1074,6 +1165,7 @@ final class Mixer {
         applyWeather(to: .escape, animated: true)
         updateNowPlaying()
         if !isPlaying { play() }
+        arrived()
     }
 
     /// Comes back from a place to the local weather.

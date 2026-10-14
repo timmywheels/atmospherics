@@ -2,32 +2,41 @@ import SwiftUI
 
 /// Saved mixes, filterable by Sleep / Focus / Relax. Tapping one loads it onto the field.
 /// Your own mixes come first: swipe left to delete, right to rename, hold and drag to reorder.
-/// It opens on the mix that's playing, under its own filter.
+/// Recent is where you've been, newest first, to go back to. It opens on the mix that's
+/// playing, under its own filter.
 struct LibraryView: View {
     /// Where to go once a mix is chosen, when the Library is part of a window (on the Mac)
     /// rather than a sheet.
     var done: (() -> Void)? = nil
     @Environment(Mixer.self) private var mixer
     @Environment(\.dismiss) private var dismiss
-    @State private var filter: Preset.Tag?
-    @State private var showingYours: Bool
-    @State private var showingFavorites = false
+    @State private var shelf: Shelf
     @State private var renaming: SavedMix?
     @State private var newName = ""
     @State private var deletes = 0
     @State private var showingScience = false
     private let current: Preset?
 
+    /// What the list shows: everything, where you've been, your favorites, your own mixes, or
+    /// the Library's mixes for sleep, focus or relaxing.
+    private enum Shelf: Hashable {
+        case all, recent, favorites, yours
+        case tagged(Preset.Tag)
+    }
+
     init(current: Preset? = nil, done: (() -> Void)? = nil) {
         self.current = current
         self.done = done
-        _filter = State(initialValue: current?.tag)
-        _showingYours = State(initialValue: current?.isSaved == true)
+        _shelf = State(initialValue: current?.isSaved == true ? .yours : current?.tag.map(Shelf.tagged) ?? .all)
     }
 
-    private var yours: [SavedMix] { filter == nil && !showingFavorites ? mixer.savedMixes : [] }
+    private var yours: [SavedMix] { shelf == .all || shelf == .yours ? mixer.savedMixes : [] }
     private var builtIn: [Preset] {
-        showingYours || showingFavorites ? [] : Preset.all.filter { filter == nil || $0.tag == filter }
+        switch shelf {
+        case .all: Preset.all
+        case .tagged(let tag): Preset.all.filter { $0.tag == tag }
+        case .recent, .favorites, .yours: []
+        }
     }
 
     var body: some View {
@@ -36,28 +45,45 @@ struct LibraryView: View {
                 .font(Theme.display(36))
                 .padding(.horizontal, 4)
 
-            HStack(spacing: 8) {
-                chip("All", selected: filter == nil && !showingYours && !showingFavorites) {
-                    filter = nil; showingYours = false; showingFavorites = false
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    chip("All", .all)
+                    if !mixer.recent.isEmpty || shelf == .recent { chip("Recent", .recent) }
+                    if !mixer.favorites.isEmpty || shelf == .favorites { chip("Favorites", .favorites) }
+                    if !mixer.savedMixes.isEmpty { chip("Yours", .yours) }
+                    ForEach(Preset.Tag.allCases, id: \.self) { tag in chip(tag.rawValue, .tagged(tag)) }
                 }
-                if !mixer.favorites.isEmpty || showingFavorites {
-                    chip("Favorites", selected: showingFavorites) { filter = nil; showingYours = false; showingFavorites = true }
-                }
-                if !mixer.savedMixes.isEmpty {
-                    chip("Yours", selected: showingYours) { filter = nil; showingYours = true; showingFavorites = false }
-                }
-                ForEach(Preset.Tag.allCases, id: \.self) { tag in
-                    chip(tag.rawValue, selected: filter == tag && !showingYours && !showingFavorites) {
-                        filter = tag; showingYours = false; showingFavorites = false
-                    }
-                }
+                .padding(.horizontal, 24)
             }
+            .scrollIndicators(.hidden)
+            .padding(.horizontal, -24)
             .padding(.top, 18)
             .padding(.bottom, 12)
 
             ScrollViewReader { proxy in
                 List {
-                    if filter == .focus {
+                    if shelf == .recent {
+                        ForEach(mixer.recentItems, id: \.visit.id) { entry in
+                            switch entry.item {
+                            case .scene(let a, let from): scene(a, from: from, when: entry.visit.at)
+                            case .mix(let p): item(p, when: entry.visit.at)
+                            case .place(let p): place(p, when: entry.visit.at)
+                            }
+                        }
+                        if mixer.recent.isEmpty {
+                            note("Where you go shows up here, newest first.")
+                        } else {
+                            Button("Clear Recent") { mixer.clearRecent() }
+                                .font(Theme.label(12, .medium))
+                                .foregroundStyle(Theme.secondary)
+                                .buttonStyle(.plain)
+                                .padding(.vertical, 12)
+                                .padding(.horizontal, 4)
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                        }
+                    }
+                    if shelf == .tagged(.focus) {
                         Button { showingScience = true } label: {
                             HStack(spacing: 6) {
                                 Text("How we chose these")
@@ -73,7 +99,7 @@ struct LibraryView: View {
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                     }
-                    if showingFavorites {
+                    if shelf == .favorites {
                         ForEach(mixer.favoriteItems) { favorite in
                             switch favorite {
                             case .scene(let a): scene(a)
@@ -81,12 +107,7 @@ struct LibraryView: View {
                             }
                         }
                         if mixer.favorites.isEmpty {
-                            Text("Tap the ring on a scene or a mix to keep it here.")
-                                .font(Theme.label(12))
-                                .foregroundStyle(Theme.secondary)
-                                .padding(.vertical, 12)
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
+                            note("Tap the bookmark on a scene or a mix to keep it here.")
                         }
                     }
                     ForEach(yours) { mix in
@@ -124,10 +145,9 @@ struct LibraryView: View {
         .foregroundStyle(Theme.text)
         .presentationBackground(Theme.background)
         .presentationDragIndicator(.visible)
-        .animation(.smooth(duration: 0.25), value: filter)
-        .animation(.smooth(duration: 0.25), value: showingYours)
-        .animation(.smooth(duration: 0.25), value: showingFavorites)
+        .animation(.smooth(duration: 0.25), value: shelf)
         .animation(.smooth(duration: 0.25), value: mixer.favorites)
+        .animation(.smooth(duration: 0.25), value: mixer.recent)
         .alert("Rename mix", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Name", text: $newName)
             Button("Cancel", role: .cancel) {}
@@ -139,19 +159,24 @@ struct LibraryView: View {
                 .frame(width: 540, height: 680)
                 #endif
         }
-        .haptic(.tick, trigger: filter)
+        .haptic(.tick, trigger: shelf)
         .haptic(.thud, trigger: deletes)
         .haptic(.tap, trigger: mixer.savedMixes.map(\.id))
     }
 
-    /// One row of the list: tap to play it.
-    private func item(_ preset: Preset) -> some View {
+    /// Played, and the Library closed (or, on the Mac, back to listening).
+    private func close() {
+        if let done { done() } else { dismiss() }
+    }
+
+    /// One row of the list: tap to play it. In Recent, `when` you last played it.
+    private func item(_ preset: Preset, when: Date? = nil) -> some View {
         Button {
             Haptics.play(.thud)
             mixer.load(preset)
-            if let done { done() } else { dismiss() }
+            close()
         } label: {
-            row(preset)
+            row(preset, when: when)
         }
         .buttonStyle(.plain)
         .overlay(alignment: .bottomTrailing) { FavoriteToggle(key: Mixer.favoriteKey(preset)).padding(6) }
@@ -161,17 +186,18 @@ struct LibraryView: View {
         .id(preset.id)
     }
 
-    /// A favorite scene: tap to go there.
-    private func scene(_ a: Atmosphere) -> some View {
+    /// A scene: tap to go there, in the weather of the place it was described in (`from`, in
+    /// Recent, with `when` you were last there).
+    private func scene(_ a: Atmosphere, from: String? = nil, when: Date? = nil) -> some View {
         let page = mixer.page(for: .atmosphere(a))
         let current = mixer.mode == .atmosphere && mixer.activePreset == nil && mixer.atmosphere == a
         return Button {
             Haptics.play(.thud)
-            mixer.go(to: a)
-            if let done { done() } else { dismiss() }
+            mixer.revisit(.scene(a, from: from))
+            close()
         } label: {
             ColorCard(hues: page.orbs.sorted { $0.volume > $1.volume }.prefix(3).map(\.kind.hue),
-                      top: a.setting.info.name, title: page.title, sounds: page.orbs,
+                      top: Self.top(a.setting.info.name, from.map { "in \($0)" }, when), title: page.title, sounds: page.orbs,
                       badge: current ? (mixer.isPlaying ? "Playing" : "Here") : nil, outlined: current,
                       trailingRoom: 30)
         }
@@ -183,14 +209,49 @@ struct LibraryView: View {
         .id(Mixer.favoriteKey(a))
     }
 
+    /// A real place you've been: tap to go back, to its weather now.
+    private func place(_ p: Place, when: Date) -> some View {
+        let page = mixer.page(for: .place(p))
+        let current = mixer.mode == .escape && mixer.activePreset == nil && mixer.escape?.place.name == p.name
+        return Button {
+            Haptics.play(.thud)
+            mixer.revisit(.place(p))
+            close()
+        } label: {
+            ColorCard(hues: page.orbs.sorted { $0.volume > $1.volume }.prefix(3).map(\.kind.hue),
+                      top: Self.top(p.country, nil, when), title: p.title, sounds: page.orbs,
+                      badge: current ? (mixer.isPlaying ? "Playing" : "Here") : nil, outlined: current)
+        }
+        .buttonStyle(.plain)
+        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .id("place:\(p.name)")
+    }
+
+    /// A card's top line: "Temple garden · in Bangkok · 2 hours ago".
+    private static func top(_ what: String, _ more: String?, _ when: Date?) -> String {
+        [what, more, when.map { $0.formatted(.relative(presentation: .named)) }].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    private func note(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.label(12))
+            .foregroundStyle(Theme.secondary)
+            .padding(.vertical, 12)
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+    }
+
     private func delete(_ mix: SavedMix) {
         deletes += 1
         withAnimation { mixer.delete(mix) }
-        if mixer.savedMixes.isEmpty { showingYours = false }
+        if mixer.savedMixes.isEmpty && shelf == .yours { shelf = .all }
     }
 
-    private func chip(_ label: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    private func chip(_ label: String, _ choice: Shelf) -> some View {
+        let selected = shelf == choice
+        return Button { shelf = choice } label: {
             Text(label)
                 .font(Theme.body(13, .medium))
                 .foregroundStyle(selected ? Theme.background : Theme.text)
@@ -203,12 +264,14 @@ struct LibraryView: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    /// A card in the colors of its mix: what it's for and how long at the top, its name at the bottom.
-    private func row(_ preset: Preset) -> some View {
+    /// A card in the colors of its mix: what it's for and how long at the top (and in Recent, `when`
+    /// you last played it), its name at the bottom.
+    private func row(_ preset: Preset, when: Date? = nil) -> some View {
         let current = preset.id == mixer.activePreset?.id
         return ColorCard(hues: preset.mix.prefix(3).map(\.0.hue),
                          top: (preset.tag.map { "\($0.rawValue) · \(preset.length)" } ?? "Yours")
-                             + (preset.evidence.map { " · \($0.rawValue)" } ?? ""),
+                             + (preset.evidence.map { " · \($0.rawValue)" } ?? "")
+                             + (when.map { " · " + $0.formatted(.relative(presentation: .named)) } ?? ""),
                          title: preset.name, subtitle: preset.description,
                          badge: current ? (mixer.isPlaying ? "Playing" : "Current") : nil, outlined: current,
                          trailingRoom: 30)
