@@ -72,7 +72,7 @@ struct TeleportView: View {
 
                 HStack(spacing: 10) {
                     Button { surprise() } label: {
-                        Label("Surprise me", systemImage: Atmosphere.surpriseSymbol)
+                        Label("Surprise me", systemImage: Theme.Symbol.surprise)
                             .font(Theme.body(15, .medium))
                             .padding(.vertical, 12)
                             .padding(.horizontal, 18)

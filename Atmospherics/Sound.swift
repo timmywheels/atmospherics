@@ -375,6 +375,19 @@ enum SoundFamily: String, CaseIterable {
 
 /// Colors and type from the Field design.
 enum Theme {
+    /// The symbols for what you can do, wherever it's offered.
+    enum Symbol {
+        static let teleport = "globe"
+        static let surprise = "shuffle"
+        /// Keeping something in your Library: a bookmark, filled when it's kept.
+        static let keep = "bookmark"
+        static let library = "rectangle.stack"
+        /// Layers: the sounds, to set or change.
+        static let edit = "slider.horizontal.3"
+        /// Saving the sound as it is now as a mix of your own.
+        static let save = "square.and.arrow.down"
+    }
+
     static let background = Color(hex: 0x0c0e13)
     static let text = Color(hex: 0xeceef2)
     /// Quieter text is white let through rather than a fixed grey, so it takes on the color of the

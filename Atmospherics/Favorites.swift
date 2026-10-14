@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Marks a scene or a mix as a favorite: a ring, filled in at the middle when it is one. In
+/// Keeps a scene or a mix in your Library's Favorites: a bookmark, filled when it's kept. In
 /// `glass`, a round glass button like the others beside it.
 struct FavoriteToggle: View {
     @Environment(Mixer.self) private var mixer
@@ -15,14 +15,14 @@ struct FavoriteToggle: View {
             taps += 1
             withAnimation(.smooth(duration: 0.2)) { mixer.toggleFavorite(key) }
         } label: {
-            let ring = Image(systemName: on ? "circle.inset.filled" : "circle")
-                .font(.system(size: size, weight: .regular))
-                .foregroundStyle(on ? Theme.text : Theme.text.opacity(glass ? 0.8 : 0.55))
+            let mark = Image(systemName: on ? "\(Theme.Symbol.keep).fill" : Theme.Symbol.keep)
+                .font(.system(size: size, weight: glass ? .medium : .regular))
+                .foregroundStyle(on || glass ? Theme.text : Theme.text.opacity(0.55))
                 .contentTransition(.symbolEffect(.replace))
             if glass {
-                ring.glassCircle()
+                mark.glassCircle()
             } else {
-                ring.frame(width: 40, height: 40).contentShape(Rectangle())
+                mark.frame(width: 40, height: 40).contentShape(Rectangle())
             }
         }
         .buttonStyle(.plain)
@@ -36,14 +36,22 @@ struct FavoriteToggle: View {
 
 extension View {
     /// A round glass button's face: Liquid Glass where there is it (iOS and macOS 26), frosted
-    /// glass before.
-    @ViewBuilder func glassCircle(_ size: CGFloat = 44) -> some View {
+    /// glass before, either way frosted a little white, with a rim that catches the light at the
+    /// top left and a soft shadow under it, so it reads as glass on a dark scene.
+    @ViewBuilder func glassCircle(_ size: CGFloat = 42) -> some View {
         let face = frame(width: size, height: size).contentShape(Circle())
+        let rim = Circle().strokeBorder(
+            LinearGradient(colors: [.white.opacity(0.55), .white.opacity(0.08), .white.opacity(0.22)],
+                           startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
         if #available(iOS 26.0, macOS 26.0, *) {
-            face.glassEffect(.regular.interactive(), in: Circle())
+            face.glassEffect(.regular.tint(.white.opacity(0.14)).interactive(), in: Circle())
+                .overlay(rim)
+                .shadow(color: .black.opacity(0.28), radius: 10, y: 5)
         } else {
             face.background(.ultraThinMaterial, in: Circle())
-                .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
+                .background(Circle().fill(.white.opacity(0.12)))
+                .overlay(rim)
+                .shadow(color: .black.opacity(0.28), radius: 10, y: 5)
         }
     }
 }

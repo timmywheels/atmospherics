@@ -79,13 +79,13 @@ struct NowPlayingView: View {
                         }
                     }
                     if mixer.activePreset != nil || mixer.isImagining { Divider() }
-                    Button("Library", systemImage: "books.vertical") { showLibrary = true }
+                    Button("Library", systemImage: Theme.Symbol.library) { showLibrary = true }
                     Menu("Sleep timer · \(mixer.timer == .off ? "off" : mixer.timer.label)", systemImage: "moon") {
                         ForEach(Mixer.Timer.allCases, id: \.self) { t in
                             Button(t == .off ? "No timer" : "Stop after \(t.label)") { mixer.setTimer(t) }
                         }
                     }
-                    Button("Save this mix", systemImage: "bookmark") { saving = true }
+                    Button("Save this mix", systemImage: Theme.Symbol.save) { saving = true }
                     Menu("Temperature · \(tempUnitLabel)", systemImage: "thermometer.medium") {
                         Picker("Temperature", selection: $tempUnit) {
                             Text("Auto").tag("auto")
@@ -153,10 +153,7 @@ struct NowPlayingView: View {
                         .foregroundStyle(Theme.muted)
                         .transition(.opacity)
                 }
-                HStack(spacing: 8) {
-                    ResetTuning()
-                    SoundsMenu(edit: { showMixer = true }, save: { saving = true })
-                }
+                ResetTuning()
             }
             .padding(.top, 14)
             .animation(.smooth, value: mixer.timer)
@@ -168,7 +165,7 @@ struct NowPlayingView: View {
 
             // Where to go next, and play, in reach of a thumb.
             HStack(spacing: 12) {
-                DescribeBar(teleport: { openTeleport(typing: false) }, describe: { openTeleport(typing: true) })
+                DescribeBar { openTeleport(typing: true) }
                 PlayButton()
             }
             .padding(.top, 10)
@@ -326,7 +323,7 @@ struct Carousel: View {
                 }
                 Spacer(minLength: 0)
                 PageActions(favorite: here ? mixer.favoriteKey : slot.destination?.favoriteKey,
-                            save: { saving = true }, library: openLibrary,
+                            save: { saving = true }, edit: openMixer, library: openLibrary, teleport: teleport,
                             surprise: { mixer.requestTravel(forward: true) })
                     .padding(.bottom, 4)
             }
@@ -355,9 +352,9 @@ struct Carousel: View {
         .accessibilityHint("Teleport somewhere")
         .contextMenu {
             if here {
-                Button("Teleport…", systemImage: Atmosphere.teleportSymbol) { teleport() }
-                Button("Save this mix", systemImage: "bookmark") { saving = true }
-                Button("Library", systemImage: "books.vertical") { openLibrary() }
+                Button("Teleport…", systemImage: Theme.Symbol.teleport) { teleport() }
+                Button("Save this mix", systemImage: Theme.Symbol.save) { saving = true }
+                Button("Library", systemImage: Theme.Symbol.library) { openLibrary() }
             }
         }
     }
@@ -655,29 +652,6 @@ private struct SoundsPill: View {
     }
 }
 
-/// What you can do with what's playing: change its sounds, or keep it in your library.
-private struct SoundsMenu: View {
-    let edit: () -> Void
-    let save: () -> Void
-
-    var body: some View {
-        Menu {
-            Button("Edit sounds", systemImage: "slider.horizontal.3", action: edit)
-            Button("Save this mix", systemImage: "bookmark", action: save)
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.text)
-                .frame(width: 34, height: 26)
-                .background(Capsule().fill(Color.white.opacity(0.06)))
-                .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Sound options")
-    }
-}
-
 /// When you've tuned the scene playing (in Layers): a plain way back to how it sounds by default,
 /// after asking.
 struct ResetTuning: View {
@@ -722,54 +696,53 @@ private struct ConfirmReset: ViewModifier {
     }
 }
 
-/// Teleport's globe, then where to go in your own words: "Describe the vibe…".
+/// Where to go in your own words: "Describe the vibe…", which opens Teleport ready to type.
 private struct DescribeBar: View {
-    let teleport: () -> Void
     let describe: () -> Void
 
     var body: some View {
-        HStack(spacing: 0) {
-            Button(action: teleport) {
-                Image(systemName: Atmosphere.teleportSymbol)
+        Button(action: describe) {
+            HStack(spacing: 10) {
+                Image(systemName: "text.bubble")
                     .font(.system(size: 15))
-                    .frame(width: 44, height: 48)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .padding(.leading, 6)
-            .accessibilityLabel("Teleport")
-            .accessibilityHint("Build a scene to go to")
-
-            Button(action: describe) {
                 Text("Describe the vibe…")
                     .font(Theme.label(15))
-                    .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-                    .contentShape(Rectangle())
+                Spacer(minLength: 0)
             }
-            .buttonStyle(.plain)
-            .accessibilityHint("Say where to go in your own words")
+            .padding(.horizontal, 20)
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .contentShape(Capsule())
         }
-        .padding(.trailing, 20)
+        .buttonStyle(.plain)
         .foregroundStyle(Theme.secondary)
         .background(Capsule().fill(Color.white.opacity(0.06)))
         .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+        .accessibilityHint("Say where to go in your own words")
     }
 }
 
-/// What you can do with a place, down the right of its name, in glass: save it as a mix, the
-/// Library, make it a favorite, and Surprise me, which slides on to somewhere new as a swipe does.
+/// What you can do with a place, down the right of its name, in glass: keep it (the bookmark: a
+/// favorite, or for the weather outside or a real place, a mix of your own), change its sounds,
+/// the Library, Teleport, and Surprise me, which slides on to somewhere new as a swipe does.
 private struct PageActions: View {
     let favorite: String?
     let save: () -> Void
+    let edit: () -> Void
     let library: () -> Void
+    let teleport: () -> Void
     let surprise: () -> Void
 
     var body: some View {
-        VStack(spacing: 10) {
-            button("bookmark", "Save this mix", action: save)
-            button("books.vertical", "Library", action: library)
-            if let favorite { FavoriteToggle(key: favorite, size: 17, glass: true) }
-            button(Atmosphere.surpriseSymbol, "Surprise me", action: surprise)
+        VStack(spacing: 8) {
+            if let favorite {
+                FavoriteToggle(key: favorite, size: 16, glass: true)
+            } else {
+                button(Theme.Symbol.keep, "Save this mix", action: save)
+            }
+            button(Theme.Symbol.edit, "Edit sounds", action: edit)
+            button(Theme.Symbol.library, "Library", action: library)
+            button(Theme.Symbol.teleport, "Teleport", action: teleport)
+            button(Theme.Symbol.surprise, "Surprise me", action: surprise)
         }
     }
 
@@ -779,7 +752,7 @@ private struct PageActions: View {
             action()
         } label: {
             Image(systemName: symbol)
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(Theme.text)
                 .glassCircle()
         }

@@ -53,11 +53,11 @@ struct MacListen: View {
             HStack(spacing: 14) {
                 LayersLink(orbs: mixer.byVolume) { navigation.tab = .layers }
                 ResetTuning()
-                BarButton(symbol: Atmosphere.teleportSymbol, label: "Teleport", help: "Teleport  ⌘K") {
+                BarButton(symbol: Theme.Symbol.teleport, label: "Teleport", help: "Teleport  ⌘K") {
                     navigation.tab = .teleport
                 }
                 // On to somewhere new, as → and a swipe do.
-                BarButton(symbol: Atmosphere.surpriseSymbol, label: "Surprise me", help: "Surprise me  →") {
+                BarButton(symbol: Theme.Symbol.surprise, label: "Surprise me", help: "Surprise me  →") {
                     mixer.requestTravel(forward: true)
                 }
                 TimerMenu()
