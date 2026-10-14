@@ -3,7 +3,9 @@ import AVFoundation
 // Cuts the separate calls out of a recording, for the sounds that come and go (`SoundKind.rhythm`
 // in the app): a wolf's howl, a run of hoots, a foghorn's blast, a bell tolling. Each take keeps a
 // moment of quiet before the call and its tail after, fades in and out so it starts and ends in
-// silence, and keeps the recording's level, so a call plays as loud as it did in the loop.
+// silence, and is brought to -20 LUFS, the level every recording shares, so its sound's presence
+// alone sets how loud it plays. (Calls cut at the recording's own level came out up to 10 dB apart:
+// one loon barely there, the next one loud. How near each call sounds, the app varies itself.)
 //
 //   swift calls.swift find <recording.m4a> [low-high Hz] [rise dB]
 //       Where the calls are, as "start end" in seconds. Listening only in the calls' own band
@@ -129,6 +131,11 @@ func cut() throws {
                     dst[i] = src[from + i] * Float(g)
                 }
             }
+            let (was, gain) = try leveling(take)
+            for c in 0..<channels {
+                let dst = take.floatChannelData![c]
+                for i in 0..<Int(take.frameLength) { dst[i] *= gain }
+            }
             // Apple's AAC encoder, which loses less than encoding again with ffmpeg's; then copied
             // into a new file by ffmpeg, to drop the 50 KB of padding the encoder leaves at the front.
             let name = "\(sound)\(k + 1).m4a"
@@ -146,9 +153,46 @@ func cut() throws {
             try ffmpeg.run()
             ffmpeg.waitUntilExit()
             try? FileManager.default.removeItem(at: encoded)
-            print(String(format: "%@%d  %.1f s", sound, k + 1, span.1 - span.0))
+            print(String(format: "%@%d  %.1f s  %.1f LUFS, %+.1f dB", sound, k + 1, span.1 - span.0, was, 20 * log10(Double(gain))))
         }
     }
+}
+
+// MARK: Leveling
+
+/// The level every recording shares (`Mix.reference` in the app).
+let target = -20.0
+
+/// A take's loudness (LUFS, measured by ffmpeg's EBU R128 meter) and the gain that brings it to
+/// `target`, held under full scale.
+func leveling(_ take: AVAudioPCMBuffer) throws -> (loudness: Double, gain: Float) {
+    let wav = FileManager.default.temporaryDirectory.appendingPathComponent("take.wav")
+    try? FileManager.default.removeItem(at: wav)
+    do {
+        let file = try AVAudioFile(forWriting: wav, settings: take.format.settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+        try file.write(from: take)
+    }
+    let ffmpeg = Process()
+    ffmpeg.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    ffmpeg.arguments = ["ffmpeg", "-hide_banner", "-nostats", "-i", wav.path, "-af", "ebur128", "-f", "null", "-"]
+    let pipe = Pipe()
+    ffmpeg.standardError = pipe
+    try ffmpeg.run()
+    let lines = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).components(separatedBy: "\n")
+    ffmpeg.waitUntilExit()
+    try? FileManager.default.removeItem(at: wav)
+    // The summary: "Integrated loudness:", then "I: -20.1 LUFS".
+    guard let at = lines.lastIndex(where: { $0.contains("Integrated loudness:") }), at + 1 < lines.count,
+          let loudness = lines[at + 1].split(separator: " ").compactMap({ Double($0) }).first else {
+        throw NSError(domain: "calls", code: 1, userInfo: [NSLocalizedDescriptionKey: "no loudness from ffmpeg"])
+    }
+    var peak: Float = 0
+    for c in 0..<Int(take.format.channelCount) {
+        let data = take.floatChannelData![c]
+        for i in 0..<Int(take.frameLength) { peak = max(peak, abs(data[i])) }
+    }
+    let gain = min(Float(pow(10, (target - loudness) / 20)), 0.98 / max(peak, 1e-6))
+    return (loudness, gain)
 }
 
 let args = CommandLine.arguments

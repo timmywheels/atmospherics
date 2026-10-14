@@ -8,6 +8,10 @@ struct NowPlayingView: View {
     @State private var showLibrary = false
     @State private var dragX: CGFloat = 0
     @State private var showMixer = false
+    /// How far up Layers is pulled.
+    @State private var layersDetent = MixerView.opening
+    /// The whole screen's height, for where Layers comes up to.
+    @State private var screenHeight: CGFloat = 0
     @State private var showTeleport = false
     /// Teleport opened from Describe the vibe… starts with the keyboard up.
     @State private var teleportTyping = false
@@ -60,6 +64,35 @@ struct NowPlayingView: View {
         showTeleport = true
     }
 
+    /// Layers, coming up halfway so the form stays in view above it.
+    private func openLayers() {
+        layersDetent = MixerView.opening
+        showMixer = true
+    }
+
+    /// Tapping the form: Layers, or with Layers up, puts it away.
+    private func toggleLayers() {
+        if showMixer { showMixer = false } else { openLayers() }
+    }
+
+    /// One drawer at a time: anything else asked for with Layers up waits for it to go down.
+    private func afterLayers(_ next: @escaping () -> Void) {
+        guard showMixer else { return next() }
+        showMixer = false
+        Task {
+            try? await Task.sleep(for: .seconds(0.4))
+            next()
+        }
+    }
+
+    /// Where the top of Layers is on the screen while it's up (halfway, the system's `.medium`;
+    /// it's the same once it's pulled higher, with nothing to see), so the form can rise into the
+    /// room above it.
+    private var layersTop: CGFloat? {
+        guard showMixer, MixerView.detents.contains(.medium), screenHeight > 0 else { return nil }
+        return screenHeight / 2
+    }
+
     /// Playing an atmosphere (not a Library mix started from one): its own weather and time apply.
     private var inAtmosphere: Bool { mixer.mode == .atmosphere && mixer.activePreset == nil }
 
@@ -79,13 +112,13 @@ struct NowPlayingView: View {
                         }
                     }
                     if mixer.activePreset != nil || mixer.isImagining { Divider() }
-                    Button("Library", systemImage: "books.vertical") { showLibrary = true }
+                    Button("Library", systemImage: Theme.Symbol.library) { afterLayers { showLibrary = true } }
                     Menu("Sleep timer · \(mixer.timer == .off ? "off" : mixer.timer.label)", systemImage: "moon") {
                         ForEach(Mixer.Timer.allCases, id: \.self) { t in
                             Button(t == .off ? "No timer" : "Stop after \(t.label)") { mixer.setTimer(t) }
                         }
                     }
-                    Button("Save this mix", systemImage: "bookmark") { saving = true }
+                    Button("Save this mix", systemImage: Theme.Symbol.save) { afterLayers { saving = true } }
                     Menu("Temperature · \(tempUnitLabel)", systemImage: "thermometer.medium") {
                         Picker("Temperature", selection: $tempUnit) {
                             Text("Auto").tag("auto")
@@ -112,7 +145,10 @@ struct NowPlayingView: View {
                 .buttonStyle(.plain)
                 Spacer()
                 // Your own weather, one tap back to it.
-                Button { withAnimation(.smooth(duration: 0.35)) { mixer.goHome() } } label: {
+                Button {
+                    Haptics.play(.tap)
+                    withAnimation(.smooth(duration: 0.35)) { mixer.goHome() }
+                } label: {
                     HStack(spacing: 6) {
                         Image(systemName: mixer.outsideSymbol)
                         Text(mixer.outsideLabel)
@@ -128,52 +164,58 @@ struct NowPlayingView: View {
             .tracking(1.3)
             .foregroundStyle(Theme.muted)
 
-            Carousel(dragX: $dragX, openMixer: { showMixer = true }, teleport: { openTeleport(typing: false) },
-                     openLibrary: { showLibrary = true })
+            Carousel(dragX: $dragX, openMixer: toggleLayers, teleport: { openTeleport(typing: false) },
+                     openLibrary: { showLibrary = true }, drawerTop: layersTop)
+                .animation(.smooth(duration: 0.5), value: layersTop)
                 .frame(minHeight: 400, maxHeight: .infinity)
 
-            .sensoryFeedback(.impact(weight: .medium), trigger: mixer.mode)
+            .haptic(.tap, trigger: mixer.mode)
 
-            // What's playing (tap it for its layers), a way back if you've tuned it, and the sleep
-            // timer if there is one.
-            HStack(spacing: 14) {
-                Button { showMixer = true } label: {
-                    LayerStrip(orbs: mixer.byVolume)
-                        .padding(.vertical, 6)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("Opens Layers")
-                if mixer.timer != .off {
-                    Text(mixer.timer.label)
-                        .font(Theme.label(11))
-                        .foregroundStyle(Theme.muted)
-                        .transition(.opacity)
-                }
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 0) {
+                // What's playing (tap it for its layers), a way back if you've tuned it, and the
+                // sleep timer if there is one.
+                HStack(spacing: 14) {
+                    Button { openLayers() } label: {
+                        LayerStrip(orbs: mixer.byVolume)
+                            .padding(.vertical, 6)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens Layers")
+                    if mixer.timer != .off {
+                        Text(mixer.timer.label)
+                            .font(Theme.label(11))
+                            .foregroundStyle(Theme.muted)
+                            .transition(.opacity)
+                    }
                     ResetTuning()
-                    SoundsMenu(edit: { showMixer = true }, save: { saving = true })
                 }
-            }
-            .padding(.top, 14)
-            .animation(.smooth, value: mixer.timer)
-            .animation(.smooth, value: mixer.currentPlaceIsTweaked)
+                .padding(.top, 14)
+                .animation(.smooth, value: mixer.timer)
+                .animation(.smooth, value: mixer.currentPlaceIsTweaked)
 
-            VolumeLine()
-                .frame(height: 40)
-                .padding(.top, 2)
+                VolumeLine()
+                    .frame(height: 40)
+                    .padding(.top, 2)
 
-            // Where to go next, and play, in reach of a thumb.
-            HStack(spacing: 12) {
-                DescribeBar(teleport: { openTeleport(typing: false) }, describe: { openTeleport(typing: true) })
-                PlayButton()
+                // Where to go next, and play, in reach of a thumb.
+                HStack(spacing: 12) {
+                    DescribeBar { openTeleport(typing: true) }
+                    PlayButton()
+                }
+                .padding(.top, 10)
             }
-            .padding(.top, 10)
+            // Under Layers, gone, so its glass is clear.
+            .opacity(showMixer ? 0 : 1)
+            .animation(.smooth(duration: 0.3), value: showMixer)
         }
         .padding(.horizontal, 28)
         .padding(.top, 18)
         .padding(.bottom, 16)
-        .background { SceneWash(orbs: mixer.byVolume) }
+        .background {
+            SceneWash(orbs: mixer.byVolume)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { screenHeight = $0 }
+        }
         .contentShape(Rectangle())
         .simultaneousGesture(
             DragGesture(minimumDistance: 30).onEnded { g in
@@ -181,7 +223,10 @@ struct NowPlayingView: View {
                 // A drag on the glass turned it; it wasn't a swipe.
                 guard abs(up) > 80, abs(up) > abs(g.translation.width) * 1.5,
                       !SculptureSpin.home.recentlyTouched else { return }
-                if up > 0 {
+                if showMixer {
+                    // Above Layers: up pulls it the rest of the way, down puts it away.
+                    if up > 0 { layersDetent = .large } else { showMixer = false }
+                } else if up > 0 {
                     showLibrary = true
                 } else {
                     // Swipe down: change the weather (an atmosphere's own, or the place's).
@@ -193,8 +238,10 @@ struct NowPlayingView: View {
         .accessibilityAction(named: "Library") { showLibrary = true }
         .accessibilityAction(named: "Teleport") { openTeleport(typing: false) }
         .accessibilityAction(named: "Change the weather") { inAtmosphere ? mixer.cycleAtmosphereSky() : mixer.cycleSky() }
-        .accessibilityAction(named: "Layers") { showMixer = true }
-        .navigationDestination(isPresented: $showMixer) { MixerView() }
+        .accessibilityAction(named: "Layers") { openLayers() }
+        .sheet(isPresented: $showMixer) {
+            MixerView(detent: $layersDetent)
+        }
         .overlay(alignment: .bottom) {
             ZStack {
                 if let text = mixer.notice ?? hint { HintBubble(text: text) }
@@ -210,208 +257,320 @@ struct NowPlayingView: View {
         .sheet(isPresented: $showTeleport) {
             TeleportView(start: mixer.mode == .atmosphere ? mixer.atmosphere : nil, typing: teleportTyping)
         }
-        .sensoryFeedback(.impact(weight: .heavy), trigger: mixer.shuffleCount)
-        .sensoryFeedback(.impact(flexibility: .solid, intensity: 1), trigger: mixer.skyOverride)
-        .sensoryFeedback(.impact(flexibility: .solid, intensity: 1), trigger: mixer.atmosphere?.sky)
+        .haptic(.thud, trigger: mixer.shuffleCount)
+        .haptic(.tap, trigger: mixer.skyOverride)
+        .haptic(.tap, trigger: mixer.atmosphere?.sky)
+        // A tap as Layers, Teleport or the Library opens, however it was asked for.
+        .haptic(.tap, trigger: showMixer) { _, now in now }
+        .haptic(.tap, trigger: showTeleport) { _, now in now }
+        .haptic(.tap, trigger: showLibrary) { _, now in now }
     }
 
 }
-
-enum Route: Hashable { case mixer }
 #endif
 
-/// The halo, title, weather and layers as a page, with the previous and next places beside it.
-/// Drag follows the finger 1:1; let go past a quarter of the width (or flick) to land on the neighbour.
-/// On a Mac, two fingers on the trackpad do the same, and the keyboard and menus slide it too.
-/// A drag that starts on the glass turns the form instead.
+/// The halo, title, weather and layers of where you are. Swipe across to go on or back: the form
+/// stays where it is and turns into the next place under the finger (sounds the two share grow or
+/// shrink, the rest fade out or in), while the names cross-fade, drifting the way you swipe. Let go
+/// past a third of the way, or flick, and it goes there; otherwise it eases back. On a Mac, two
+/// fingers on the trackpad do the same, and the keyboard and menus morph it too. A drag that starts
+/// on the glass turns the form instead. With Layers up from the bottom, the form rises into the
+/// room above it, and the names and buttons, under it, fade away.
 struct Carousel: View {
     @Environment(Mixer.self) private var mixer
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// How far the finger has gone: only a nudge of the names where there's nowhere to go.
     @Binding var dragX: CGFloat
     let openMixer: () -> Void
     /// Tapping the name: Teleport.
     let teleport: () -> Void
     let openLibrary: () -> Void
+    /// Where on the screen the top of a drawer over the place is, while there's one up.
+    var drawerTop: CGFloat? = nil
+    /// The place's buttons, sprung up out of ⋯.
+    @State private var actionsOpen = false
     @State private var pastThreshold = false
-    @State private var settling = false
+    /// How far the form has turned under the finger, in notches of about 15°: a soft tick each.
+    @State private var turnNotch = 0
     @State private var saving = false
-    /// While a swipe lands, the two pages are drawn from a snapshot so the sound can switch at
-    /// release without the sliding pages changing under the finger.
-    @State private var frozen: (outgoing: Mixer.Page, incoming: Mixer.Page, forward: Bool)?
-    /// The live page's form, whose glass a drag can take hold of.
+    /// Two places being blended, while a swipe or a trip is under way, and how far (`blend`, 0 to 1).
+    @State private var pair: Pair?
+    @State private var blend: Double = 0
+    /// Finishing a trip, or easing back from one called off.
+    @State private var landing = false
+    /// The form, whose glass a drag can take hold of.
     @State private var formSize: CGSize = .zero
     /// Where the current drag started, and whether that was on the glass.
     @State private var grab: (at: CGPoint, onForm: Bool)?
 
-    private let gap: CGFloat = 56
-    /// Neighbouring pages only draw their sculptures while they're sliding into view.
-    private var sliding: Bool { dragX != 0 || settling }
+    private struct Pair {
+        let from: Mixer.Page
+        let to: Mixer.Page
+        let forward: Bool
+    }
+
+    private var livePage: Mixer.Page {
+        Mixer.Page(title: mixer.title, line: mixer.weather.line, orbs: mixer.byVolume, lines: mixer.titleLines)
+    }
+
+    /// Tapping the form: tucks the buttons away if they're out, or else it's Layers.
+    private func tapForm() {
+        if actionsOpen { actionsOpen = false } else { openMixer() }
+    }
 
     var body: some View {
         GeometryReader { proxy in
             let w = proxy.size.width
-            let step = w + gap
-            ZStack(alignment: .topLeading) {
-                if let f = frozen {
-                    PageView(page: f.outgoing, live: true).frame(width: w).offset(x: dragX)
-                    PageView(page: f.incoming, live: true).frame(width: w).offset(x: (f.forward ? step : -step) + dragX)
-                } else {
-                    if let prev = mixer.previous {
-                        PageView(page: mixer.page(for: prev), live: sliding).frame(width: w).offset(x: -step + dragX)
-                    }
-                    currentPage.frame(width: w).offset(x: dragX)
-                    if let next = mixer.next {
-                        PageView(page: mixer.page(for: next), live: sliding).frame(width: w).offset(x: step + dragX)
-                    }
+            let live = livePage
+            // The room above a drawer, for the form alone.
+            let room = drawerTop.map { max(160, $0 - proxy.frame(in: .global).minY - 10) }
+            MorphView(from: pair?.from ?? live, to: pair?.to ?? live, forward: pair?.forward ?? true, t: pair == nil ? 0 : blend,
+                      still: pair == nil, nudge: pair == nil ? dragX * 0.4 : 0, room: room, favorite: mixer.favoriteKey,
+                      formSize: $formSize, openMixer: tapForm, teleport: { actionsOpen = false; teleport() },
+                      save: { saving = true }, library: { actionsOpen = false; openLibrary() })
+                .frame(width: w, height: proxy.size.height, alignment: .topLeading)
+                .contentShape(Rectangle())
+                .gesture(drag(width: w))
+                #if os(macOS)
+                .background(TrackpadSwipe(changed: { follow($0, width: w) },
+                                          ended: { release(projected: $0, width: w) }))
+                #endif
+                .onChange(of: mixer.travelRequest) { _, request in
+                    guard let request, !landing else { return }
+                    arrive(forward: request.forward, duration: 0.55)
                 }
-            }
-            .frame(width: w, height: proxy.size.height, alignment: .topLeading)
-            .contentShape(Rectangle())
-            .gesture(drag(width: w, step: step))
-            #if os(macOS)
-            .background(TrackpadSwipe(changed: { follow($0, width: w) },
-                                      ended: { release(projected: $0, width: w, step: step) }))
-            #endif
-            .onChange(of: mixer.travelRequest) { _, request in
-                guard let request, !settling else { return }
-                land(forward: request.forward, step: step, duration: 0.55)
-            }
         }
+        #if os(iOS)
+        // Down the right of the name, staying put as one place turns into the next.
+        .overlay(alignment: .bottomTrailing) {
+            PageActions(open: $actionsOpen, favorite: mixer.favoriteKey, save: { saving = true }, edit: openMixer,
+                        library: openLibrary, teleport: teleport, surprise: { mixer.requestTravel(forward: true) })
+                .padding(.bottom, 4)
+                .opacity(drawerTop == nil ? 1 : 0)
+                .allowsHitTesting(drawerTop == nil)
+        }
+        .onChange(of: drawerTop == nil) { _, clear in
+            if !clear { actionsOpen = false }
+        }
+        #endif
+        .saveMixPrompt(isPresented: $saving)
         .onAppear { mixer.carouselShowing = true }
         .onDisappear { mixer.carouselShowing = false }
-        .sensoryFeedback(.impact(flexibility: .solid, intensity: 1), trigger: pastThreshold) { _, now in now }
+        .haptic(.tick, trigger: pastThreshold) { _, now in now }
         .accessibilityAction(named: "Travel somewhere new") { mixer.travel(forward: true) }
         .accessibilityAction(named: "Go back") { mixer.travel(forward: false) }
     }
 
-    /// The live page: the real mix, with the name opening Teleport.
-    private var currentPage: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SoundForm(orbs: mixer.byVolume)
-                .frame(maxHeight: .infinity)
-                .onGeometryChange(for: CGSize.self) { $0.size } action: { formSize = $0 }
-                .contentShape(Rectangle())
-                .onTapGesture { openMixer() }
-                .accessibilityAddTraits(.isButton)
-                .accessibilityLabel("Open layers")
-            HStack(alignment: .lastTextBaseline, spacing: 8) {
-                Button { teleport() } label: {
-                    PageTitle(lines: mixer.titleLines)
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("Teleport somewhere")
-                // At the edge on a phone; beside the name in a wide Mac window.
-                #if os(iOS)
-                Spacer(minLength: 0)
-                #endif
-                if let key = mixer.favoriteKey {
-                    FavoriteToggle(key: key, size: 19)
-                        .alignmentGuide(.lastTextBaseline) { $0[VerticalAlignment.center] + 7 }
-                        #if os(iOS)
-                        .offset(x: 10)
-                        #endif
-                }
-                #if os(macOS)
-                Spacer(minLength: 0)
-                #endif
-            }
-            .contextMenu {
-                Button("Teleport…", systemImage: Atmosphere.teleportSymbol) { teleport() }
-                Button("Save this mix", systemImage: "bookmark") { saving = true }
-                Button("Library", systemImage: "books.vertical") { openLibrary() }
-            }
-            .saveMixPrompt(isPresented: $saving)
-            PageLines(line: mixer.weather.line)
-        }
-    }
-
-    private func drag(width: CGFloat, step: CGFloat) -> some Gesture {
+    private func drag(width: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 10)
             .onChanged { g in
-                if turnsForm(g) { return SculptureSpin.home.drag(g.translation) }
+                if turnsForm(g) {
+                    SculptureSpin.home.drag(g.translation)
+                    let notch = Int((abs(g.translation.width) + abs(g.translation.height)) / 26)
+                    if notch != turnNotch {
+                        turnNotch = notch
+                        Haptics.play(.soft)
+                    }
+                    return
+                }
                 guard abs(g.translation.width) > abs(g.translation.height) else { return }
                 follow(g.translation.width, width: width)
             }
             .onEnded { g in
-                if turnsForm(g) { return SculptureSpin.home.release(g.velocity, coast: !reduceMotion) }
-                release(projected: g.predictedEndTranslation.width, width: width, step: step)
+                if turnsForm(g) {
+                    turnNotch = 0
+                    return SculptureSpin.home.release(g.velocity, coast: !reduceMotion)
+                }
+                release(projected: g.predictedEndTranslation.width, width: width)
             }
     }
 
     /// Whether this drag took hold of the glass: decided where it starts, and kept for the drag.
-    /// (The live page sits at the top left, so the drag's start is a point in its form.)
     private func turnsForm(_ g: DragGesture.Value) -> Bool {
         if let grab, grab.at == g.startLocation { return grab.onForm }
-        let onForm = !settling && dragX == 0 && SoundForm.touches(g.startLocation, orbs: mixer.byVolume, size: formSize)
+        let onForm = !landing && pair == nil && SoundForm.touches(g.startLocation, orbs: mixer.byVolume, size: formSize)
         grab = (g.startLocation, onForm)
         return onForm
     }
 
-    /// The pages follow the finger.
+    /// The form turns toward where the finger is heading, all the way at most of the width across.
+    /// The place it's turning into is worked out once, as the swipe sets off that way.
     private func follow(_ translation: CGFloat, width: CGFloat) {
-        guard !settling else { return }
-        var x = translation
-        // Resist past an edge with nothing beyond it.
-        if (x < 0 && mixer.next == nil) || (x > 0 && mixer.previous == nil) { x = 40 * tanh(x / 120) }
-        dragX = x
-        pastThreshold = abs(x) > width * 0.25
-    }
-
-    /// Let go: `projected` is where a flick would carry the pages.
-    private func release(projected: CGFloat, width: CGFloat, step: CGFloat) {
-        guard !settling else { return }
-        let forward = dragX < 0
-        // Travel only if the finger ends up past a quarter of the way, or flicks onward;
-        // pulling back toward the start cancels, it never sends you the other way.
-        let sameWay = dragX != 0 && (projected < 0) == forward
-        let commit = sameWay && (abs(dragX) > width * 0.25 || abs(projected) > width * 0.6)
-            && (forward ? mixer.next != nil : mixer.previous != nil)
-        pastThreshold = false
-        guard commit else {
-            withAnimation(.spring(duration: 0.4, bounce: 0.2)) { dragX = 0 }
+        guard !landing else { return }
+        let forward = translation < 0
+        guard let destination = forward ? mixer.next : mixer.previous else {
+            // Nowhere that way: the names give a little, and come back.
+            pair = nil
+            dragX = 40 * tanh(translation / 120)
             return
         }
-        land(forward: forward, step: step)
+        dragX = translation
+        if pair?.forward != forward {
+            pair = Pair(from: livePage, to: mixer.page(for: destination), forward: forward)
+        }
+        blend = min(1, Double(abs(translation) / (width * 0.7)))
+        pastThreshold = blend > 0.33
     }
 
-    /// Slides the rest of the way to the neighbour, switching the sound as it goes.
-    private func land(forward: Bool, step: CGFloat, duration: Double = 0.3) {
-        settling = true
-        // Snapshot both pages, then switch the sound right away.
-        let outgoing = Mixer.Page(title: mixer.title, line: mixer.weather.line, orbs: mixer.byVolume, lines: mixer.titleLines)
-        if let dest = forward ? mixer.next : mixer.previous {
-            frozen = (outgoing, mixer.page(for: dest), forward)
+    /// Let go: `projected` is where a flick would carry the finger.
+    private func release(projected: CGFloat, width: CGFloat) {
+        guard !landing else { return }
+        pastThreshold = false
+        guard let pair else {
+            withAnimation(.spring(duration: 0.35, bounce: 0.25)) { dragX = 0 }
+            return
         }
-        mixer.travel(forward: forward)
-        withAnimation(.spring(duration: duration, bounce: 0)) {
-            dragX = forward ? -step : step
-        } completion: {
-            // The destination is centred and is already the live page: swap without a jump.
-            var t = Transaction()
-            t.disablesAnimations = true
-            withTransaction(t) {
-                frozen = nil
-                dragX = 0
+        dragX = 0
+        // Go only if it's past a third of the way, or flicked onward; pulling back calls it off.
+        let commit = (projected < 0) == pair.forward && (blend > 0.33 || abs(projected) > width * 0.5)
+        if commit {
+            arrive(forward: pair.forward, duration: 0.35)
+        } else {
+            landing = true
+            withAnimation(.spring(duration: 0.35, bounce: 0)) { blend = 0 } completion: {
+                self.pair = nil
+                landing = false
             }
-            settling = false
+        }
+    }
+
+    /// Goes on or back: the sound switches at once (it glides over by itself) while the form and
+    /// the names finish turning into the place arrived at.
+    private func arrive(forward: Bool, duration: Double) {
+        guard let destination = forward ? mixer.next : mixer.previous else { return }
+        if pair?.forward != forward {
+            pair = Pair(from: livePage, to: mixer.page(for: destination), forward: forward)
+            blend = 0
+        }
+        landing = true
+        var quiet = Transaction()
+        quiet.disablesAnimations = true
+        withTransaction(quiet) { mixer.travel(forward: forward) }
+        withAnimation(.easeOut(duration: duration)) { blend = 1 } completion: {
+            // Arrived: the place turned into is the live one now, drawn the same.
+            withTransaction(quiet) {
+                pair = nil
+                blend = 0
+            }
+            landing = false
         }
     }
 }
 
-/// A neighbouring place, previewed with its live weather and sounds.
-private struct PageView: View {
-    let page: Mixer.Page
-    var live = false
+/// One place turning into another, `t` of the way from `from` to `to`: the form with each sound
+/// at its level that far between them (sounds only one of them has fade out or in), and the names
+/// cross-fading, drifting the way it goes. Still (`from` and `to` both where you are), the name
+/// opens Teleport, and more on a long press. Given `room` (with a drawer up below), the form fits
+/// in that much at the top, and the names, under the drawer, fade away.
+private struct MorphView: View, Animatable {
+    let from: Mixer.Page
+    let to: Mixer.Page
+    let forward: Bool
+    var t: Double
+    let still: Bool
+    let nudge: CGFloat
+    let room: CGFloat?
+    let favorite: String?
+    @Binding var formSize: CGSize
+    let openMixer: () -> Void
+    let teleport: () -> Void
+    let save: () -> Void
+    let library: () -> Void
+
+    var animatableData: Double {
+        get { t }
+        set { t = newValue }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SoundForm(orbs: page.orbs.sorted { $0.volume > $1.volume }, live: live)
-                .frame(maxHeight: .infinity)
-            PageTitle(lines: page.lines ?? [page.title], chevron: false)
+            SoundForm(orbs: Self.blend(from.orbs, to.orbs, t))
+                .frame(height: room)
+                .frame(maxHeight: room == nil ? .infinity : nil)
+                .onGeometryChange(for: CGSize.self) { $0.size } action: { formSize = $0 }
+                .contentShape(Rectangle())
+                .onTapGesture { openMixer() }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel(room == nil ? "Open layers" : "Close layers")
+            #if os(iOS)
+            // The names, leaving room down the right for what you can do with the place
+            // (`PageActions`, which stays put above).
+            HStack(alignment: .bottom, spacing: 12) {
+                crossfade
+                Spacer(minLength: 0)
+                Color.clear.frame(width: PageActions.width, height: 1)
+            }
+            .opacity(room == nil ? 1 : 0)
+            .allowsHitTesting(room == nil)
+            .accessibilityHidden(room != nil)
+            #else
+            HStack(alignment: .lastTextBaseline, spacing: 8) {
+                crossfade
+                if still, let favorite {
+                    FavoriteToggle(key: favorite, size: 19)
+                        .alignmentGuide(.lastTextBaseline) { $0[VerticalAlignment.center] + 7 }
+                }
+                Spacer(minLength: 0)
+            }
+            #endif
+        }
+    }
+
+    /// The names going and coming, each drifting a little the way it goes.
+    private var crossfade: some View {
+        let drift: CGFloat = 36 * (forward ? -1 : 1)
+        return ZStack(alignment: .bottomLeading) {
+            names(from, live: still)
+                .opacity(1 - t)
+                .offset(x: drift * t + nudge)
+            names(to, live: false)
+                .opacity(t)
+                .offset(x: -drift * (1 - t))
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func names(_ page: Mixer.Page, live: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button { teleport() } label: {
+                PageTitle(lines: page.lines ?? [page.title], chevron: true)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Teleport somewhere")
+            .contextMenu {
+                Button("Teleport…", systemImage: Theme.Symbol.teleport) { teleport() }
+                Button("Save this mix", systemImage: Theme.Symbol.save) { save() }
+                Button("Library", systemImage: Theme.Symbol.library) { library() }
+            }
             PageLines(line: page.line)
         }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        .allowsHitTesting(live)
+    }
+
+    /// The sounds `t` of the way from one mix to another: each at its level that far between them,
+    /// turned toward where it sits in the second, loudest first. A sound keeps the same identity
+    /// throughout, so its light grows and shrinks rather than going out and coming back.
+    static func blend(_ a: [Orb], _ b: [Orb], _ t: Double) -> [Orb] {
+        func angle(_ o: Orb) -> Double { atan2(o.y - 0.5, o.x - 0.5) }
+        var first: [SoundKind: Orb] = [:], second: [SoundKind: Orb] = [:]
+        for o in a where first[o.kind] == nil || o.volume > first[o.kind]!.volume { first[o.kind] = o }
+        for o in b where second[o.kind] == nil || o.volume > second[o.kind]!.volume { second[o.kind] = o }
+        var kinds = b.map(\.kind)
+        for o in a where second[o.kind] == nil { kinds.append(o.kind) }
+        var seen = Set<SoundKind>()
+        return kinds.filter { seen.insert($0).inserted }.compactMap { kind -> Orb? in
+            let oa = first[kind], ob = second[kind]
+            let va = oa?.volume ?? 0, vb = ob?.volume ?? 0
+            let v = va + (vb - va) * t
+            guard v > 0.004 else { return nil }
+            let from = (oa ?? ob).map(angle) ?? 0
+            let to = ob.map(angle) ?? from
+            var turn = to - from
+            if turn > .pi { turn -= 2 * .pi } else if turn < -.pi { turn += 2 * .pi }
+            let at = from + turn * t, r = (1 - v) * 0.5
+            return Orb(id: kind.stableID, kind: kind, x: 0.5 + cos(at) * r, y: 0.5 + sin(at) * r)
+        }
+        .sorted { $0.volume > $1.volume }
     }
 }
 
@@ -627,29 +786,6 @@ private struct SoundsPill: View {
     }
 }
 
-/// What you can do with what's playing: change its sounds, or keep it in your library.
-private struct SoundsMenu: View {
-    let edit: () -> Void
-    let save: () -> Void
-
-    var body: some View {
-        Menu {
-            Button("Edit sounds", systemImage: "slider.horizontal.3", action: edit)
-            Button("Save this mix", systemImage: "bookmark", action: save)
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.text)
-                .frame(width: 34, height: 26)
-                .background(Capsule().fill(Color.white.opacity(0.06)))
-                .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Sound options")
-    }
-}
-
 /// When you've tuned the scene playing (in Layers): a plain way back to how it sounds by default,
 /// after asking.
 struct ResetTuning: View {
@@ -684,7 +820,7 @@ private struct ConfirmReset: ViewModifier {
     func body(content: Content) -> some View {
         content.confirmationDialog("Reset this scene?", isPresented: $isPresented, titleVisibility: .visible) {
             Button("Reset", role: .destructive) {
-                Haptics.tap(.light)
+                Haptics.play(.tap)
                 withAnimation(.smooth) { mixer.resetCurrentPlace() }
             }
             Button("Cancel", role: .cancel) {}
@@ -694,57 +830,149 @@ private struct ConfirmReset: ViewModifier {
     }
 }
 
-/// Teleport's globe, then where to go in your own words: "Describe the vibe…".
-/// At its end, Surprise me: somewhere new, chosen for you.
+/// Where to go in your own words: "Describe the vibe…", which opens Teleport ready to type.
 private struct DescribeBar: View {
-    @Environment(Mixer.self) private var mixer
-    let teleport: () -> Void
     let describe: () -> Void
-    @State private var surprises = 0
 
     var body: some View {
-        HStack(spacing: 0) {
-            Button(action: teleport) {
-                Image(systemName: Atmosphere.teleportSymbol)
+        Button(action: describe) {
+            HStack(spacing: 10) {
+                Image(systemName: "text.bubble")
                     .font(.system(size: 15))
-                    .frame(width: 44, height: 48)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .padding(.leading, 6)
-            .accessibilityLabel("Teleport")
-            .accessibilityHint("Build a scene to go to")
-
-            Button(action: describe) {
                 Text("Describe the vibe…")
                     .font(Theme.label(15))
-                    .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-                    .contentShape(Rectangle())
+                Spacer(minLength: 0)
             }
-            .buttonStyle(.plain)
-            .accessibilityHint("Say where to go in your own words")
-
-            Button { surprise() } label: {
-                Image(systemName: Atmosphere.surpriseSymbol)
-                    .font(.system(size: 15))
-                    .frame(width: 52, height: 48)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Surprise me")
-            .accessibilityHint("Teleports somewhere new")
+            .padding(.horizontal, 20)
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .contentShape(Capsule())
         }
+        .buttonStyle(.plain)
         .foregroundStyle(Theme.secondary)
         .background(Capsule().fill(Color.white.opacity(0.06)))
         .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
-        .sensoryFeedback(.impact(weight: .heavy), trigger: surprises)
+        .accessibilityHint("Say where to go in your own words")
+    }
+}
+
+/// What you can do with the place you're in, tucked behind one glass button down the right of its
+/// name, ⋯. Tap it and the rest spring up out of it one after another, nearest first: keep it (the
+/// bookmark: a favorite, or for the weather outside or a real place, a mix of your own), change its
+/// sounds, the sleep timer (each tap the next one, and off after the longest), the Library,
+/// Teleport, and Surprise me, which slides on to somewhere new as a swipe does. Tap × or the form
+/// to tuck them away; the ones that open something tuck them away as they do. It stays put while
+/// places slide past beneath it.
+private struct PageActions: View {
+    static let width: CGFloat = 42
+    private static let gap: CGFloat = 8
+    @Environment(Mixer.self) private var mixer
+    @Binding var open: Bool
+    let favorite: String?
+    let save: () -> Void
+    let edit: () -> Void
+    let library: () -> Void
+    let teleport: () -> Void
+    let surprise: () -> Void
+
+    /// Top to bottom: what's about this place, then the ways somewhere else, nearest the thumb.
+    private enum Action: Int, CaseIterable { case keep, edit, timer, library, teleport, surprise }
+
+    var body: some View {
+        let count = Action.allCases.count
+        VStack(spacing: Self.gap) {
+            ForEach(Action.allCases, id: \.self) { action in
+                // How many places up from ⋯ it sits.
+                let steps = count - action.rawValue
+                face(action)
+                    .scaleEffect(open ? 1 : 0.4)
+                    .opacity(open ? 1 : 0)
+                    .offset(y: open ? 0 : CGFloat(steps) * (Self.width + Self.gap))
+                    // Up out of ⋯ nearest first, with a little spring; back in farthest first, quicker.
+                    .animation(open ? .spring(duration: 0.42, bounce: 0.28).delay(Double(steps - 1) * 0.035)
+                                    : .smooth(duration: 0.26).delay(Double(count - steps) * 0.018),
+                               value: open)
+                    .allowsHitTesting(open)
+                    .accessibilityHidden(!open)
+            }
+            more
+        }
     }
 
-    private func surprise() {
-        var next = Atmosphere.random()
-        while next == mixer.atmosphere { next = Atmosphere.random() }
-        surprises += 1
-        withAnimation(.smooth(duration: 0.5)) { mixer.go(to: next) }
+    /// ⋯, turning into × while the rest are out.
+    private var more: some View {
+        Button {
+            Haptics.play(open ? .tick : .tap)
+            open.toggle()
+        } label: {
+            Image(systemName: open ? "xmark" : Theme.Symbol.more)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.text)
+                .contentTransition(.symbolEffect(.replace))
+                .glassCircle()
+        }
+        .buttonStyle(.plain)
+        .animation(.smooth(duration: 0.3), value: open)
+        .accessibilityLabel(open ? "Close" : "More")
+    }
+
+    @ViewBuilder private func face(_ action: Action) -> some View {
+        switch action {
+        case .keep:
+            if let favorite {
+                FavoriteToggle(key: favorite, size: 16, glass: true)
+            } else {
+                button(Theme.Symbol.keep, "Save this mix", tucks: true, action: save)
+            }
+        case .edit: button(Theme.Symbol.edit, "Edit sounds", tucks: true, action: edit)
+        case .timer: timer
+        case .library: button(Theme.Symbol.library, "Library", tucks: true, action: library)
+        case .teleport: button(Theme.Symbol.teleport, "Teleport", tucks: true, action: teleport)
+        // Out it stays, to go on again.
+        case .surprise: button(Theme.Symbol.surprise, "Surprise me", tucks: false, action: surprise)
+        }
+    }
+
+    /// The sleep timer, showing how long it's set for: each tap the next one, off after the longest.
+    /// (Its tick comes from the play button, which feels every change to the timer.)
+    private var timer: some View {
+        Button { mixer.cycleTimer() } label: {
+            ZStack {
+                if mixer.timer == .off {
+                    Image(systemName: Theme.Symbol.timer)
+                        .font(.system(size: 15, weight: .medium))
+                        .transition(.blurReplace)
+                } else {
+                    Text(mixer.timer.label)
+                        .font(Theme.label(13, .semibold))
+                        .contentTransition(.numericText())
+                        .transition(.blurReplace)
+                }
+            }
+            .foregroundStyle(Theme.text)
+            .glassCircle()
+            .animation(.smooth(duration: 0.3), value: mixer.timer)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Sleep timer")
+        .accessibilityValue(mixer.timer.seconds.map {
+            "Stops after " + Duration.seconds($0).formatted(.units(allowed: [.hours, .minutes], width: .wide))
+        } ?? "Off")
+        .accessibilityHint("Tap for the next one")
+    }
+
+    private func button(_ symbol: String, _ label: String, tucks: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.play(.tap)
+            if tucks { open = false }
+            action()
+        } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Theme.text)
+                .glassCircle()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }
 
@@ -784,9 +1012,9 @@ private struct PlayButton: View {
                 }
             }
         }
-        .sensoryFeedback(.impact(weight: .heavy), trigger: mixer.isPlaying)
-        .sensoryFeedback(.impact(weight: .heavy), trigger: held)
-        .sensoryFeedback(.impact(weight: .medium), trigger: mixer.timer)
+        .haptic(.thud, trigger: mixer.isPlaying)
+        .haptic(.thud, trigger: held)
+        .haptic(.tick, trigger: mixer.timer)
         .accessibilityElement()
         .accessibilityAddTraits(.isButton)
         .accessibilityLabel(mixer.isPlaying ? "Pause" : "Play")
@@ -865,7 +1093,7 @@ struct VolumeLine: View {
         }
         .animation(.snappy(duration: 0.15), value: sliding)
         // A tick per 10% as it slides.
-        .sensoryFeedback(.impact(flexibility: .rigid, intensity: 0.8), trigger: Int((mixer.volume * 10).rounded(.down))) { _, _ in sliding }
+        .haptic(.tick, trigger: Int((mixer.volume * 10).rounded(.down))) { _, _ in sliding }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Volume")
         .accessibilityValue(mixer.volume < 0.01 ? "Muted" : "\(Int((mixer.volume * 100).rounded())) percent")

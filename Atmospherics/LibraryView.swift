@@ -139,15 +139,15 @@ struct LibraryView: View {
                 .frame(width: 540, height: 680)
                 #endif
         }
-        .sensoryFeedback(.impact(weight: .medium), trigger: filter)
-        .sensoryFeedback(.impact(weight: .heavy), trigger: deletes)
-        .sensoryFeedback(.impact(weight: .medium), trigger: mixer.savedMixes.map(\.id))
+        .haptic(.tick, trigger: filter)
+        .haptic(.thud, trigger: deletes)
+        .haptic(.tap, trigger: mixer.savedMixes.map(\.id))
     }
 
     /// One row of the list: tap to play it.
     private func item(_ preset: Preset) -> some View {
         Button {
-            Haptics.tap()
+            Haptics.play(.thud)
             mixer.load(preset)
             if let done { done() } else { dismiss() }
         } label: {
@@ -166,7 +166,7 @@ struct LibraryView: View {
         let page = mixer.page(for: .atmosphere(a))
         let current = mixer.mode == .atmosphere && mixer.activePreset == nil && mixer.atmosphere == a
         return Button {
-            Haptics.tap()
+            Haptics.play(.thud)
             mixer.go(to: a)
             if let done { done() } else { dismiss() }
         } label: {
@@ -235,7 +235,7 @@ struct SaveMixPrompt: ViewModifier {
                 Text("It'll keep sounding exactly like this, in Library › Yours.")
             }
             .onChange(of: isPresented) { _, shown in if shown { name = mixer.suggestedSaveName } }
-            .sensoryFeedback(.success, trigger: saves)
+            .haptic(.thud, trigger: saves)
     }
 }
 

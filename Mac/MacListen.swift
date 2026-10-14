@@ -53,11 +53,11 @@ struct MacListen: View {
             HStack(spacing: 14) {
                 LayersLink(orbs: mixer.byVolume) { navigation.tab = .layers }
                 ResetTuning()
-                BarButton(symbol: Atmosphere.teleportSymbol, label: "Teleport", help: "Teleport  ⌘K") {
+                BarButton(symbol: Theme.Symbol.teleport, label: "Teleport", help: "Teleport  ⌘K") {
                     navigation.tab = .teleport
                 }
                 // On to somewhere new, as → and a swipe do.
-                BarButton(symbol: Atmosphere.surpriseSymbol, label: "Surprise me", help: "Surprise me  →") {
+                BarButton(symbol: Theme.Symbol.surprise, label: "Surprise me", help: "Surprise me  →") {
                     mixer.requestTravel(forward: true)
                 }
                 TimerMenu()
@@ -82,7 +82,7 @@ struct MacListen: View {
             .animation(.smooth(duration: 0.3), value: mixer.notice)
         }
         .task { await runHints() }
-        .sensoryFeedback(.impact(weight: .medium), trigger: mixer.shuffleCount)
+        .haptic(.thud, trigger: mixer.shuffleCount)
     }
 
     /// Shows each hint once, the first times the window opens.
@@ -208,7 +208,7 @@ struct TimerMenu: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("Sleep timer")
-        .sensoryFeedback(.selection, trigger: mixer.timer)
+        .haptic(.tick, trigger: mixer.timer)
     }
 }
 
@@ -249,7 +249,7 @@ private struct MacPlayButton: View {
             }
             .pickerStyle(.inline)
         }
-        .sensoryFeedback(.impact(weight: .medium), trigger: mixer.isPlaying)
+        .haptic(.thud, trigger: mixer.isPlaying)
         .accessibilityLabel(mixer.isPlaying ? "Pause" : "Play")
     }
 }

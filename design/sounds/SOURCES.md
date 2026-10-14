@@ -1,7 +1,7 @@
 # Recorded sound sources
 
 Every recording is public domain or CC0 (no attribution required). Credited here anyway.
-Sounds that come and go (`SoundKind.rhythm`, in Atmospherics/Rhythm.swift) play one take at a time with quiet between, instead of looping. Thunder and lightning clips are made with `prepare.py --once`. The calls of wolves, owls, loons, howlers and whales, the foghorn's blasts and the church bells' tolling are cut from their loops (kept in design/sounds/loops/, out of the app) by `calls.swift`. Planes, the tram, geese and the temple bell play their one recording. Loops are made with `prepare.py` (60 s from the given start unless noted): each is mastered to -20 LUFS with its natural dynamics (a gentle compressor only tames events well above the recording's norm), then seam crossfaded.
+Sounds that come and go (`SoundKind.rhythm`, in Atmospherics/Rhythm.swift) play one take at a time with quiet between, instead of looping. Thunder and lightning clips are made with `prepare.py --once`. The calls of wolves, owls, loons, howlers and whales, the foghorn's blasts and the church bells' tolling are cut from their loops (kept in design/sounds/loops/, out of the app) by `calls.swift`, each take brought to -20 LUFS like every other recording. Planes, the tram, geese and the temple bell play their one recording. Loops are made with `prepare.py` (60 s from the given start unless noted): each is mastered to -20 LUFS with its natural dynamics (a gentle compressor only tames events well above the recording's norm), then seam crossfaded.
 
 | Sound | Source | Author | License | Start |
 |---|---|---|---|---|
@@ -59,7 +59,7 @@ Freesound files were taken from their public HQ previews (about 128 kbps MP3).
 | foghorn | https://freesound.org/s/140898/ | exuberate | CC0 | 4 s (86 s loop, exactly four blasts; takes cut by calls.swift) |
 | peepers | https://freesound.org/s/423812/ | kvgarlic | CC0 | 10 s (110 s loop) |
 | geese | https://freesound.org/s/842773/ | onionaire | CC0 | 2 s (92 s, one flyover, plays once) |
-| traffic | https://freesound.org/s/110310/ | nickpursehouse | CC0 | 60 s (120 s loop) |
+| traffic | https://freesound.org/s/214319/ | lazymonk | CC0 | 95 s (120 s loop; a New York street, horns and all, replacing a recording that sounded like a highway) |
 | highway | https://freesound.org/s/448092/ | courter | CC0 | 175 s (120 s loop) |
 | planes | https://freesound.org/s/383068/ | Kinoton | CC0 | 0 s (105 s, one flyover, plays once) |
 | lapping | https://freesound.org/s/520246/ | blaukreuz | CC0 | 2 s (130 s loop) |

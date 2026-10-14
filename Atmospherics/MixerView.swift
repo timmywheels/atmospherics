@@ -1,54 +1,126 @@
 import SwiftUI
 
 #if os(iOS)
-/// Layers: every sound that's playing, each with its own level to set (`SoundList`), washed in the
-/// colors of the mix, and below, every sound to add or take away (`SoundSections`). (On the Mac,
-/// `MacLayers` shows the same parts.)
+/// Layers, a drawer over the place: every sound that's playing, each with its own level to set
+/// (`SoundList`). It comes up halfway, in glass, with the form still in view above it, so you can
+/// watch it change as you set the levels (and turn it, or swipe on to the next place). Pulled up,
+/// it fills the screen, washed in the colors of the mix, with every sound to add or take away below
+/// (`SoundSections`). Swipe it down to put it away. (On the Mac, `MacLayers` shows the same parts.)
 struct MixerView: View {
     @Environment(Mixer.self) private var mixer
+    /// How far up it's pulled.
+    @Binding var detent: PresentationDetent
     @State private var saving = false
     @State private var resetting = false
+    /// How tall it is right now, following a finger pulling it up or down.
+    @State private var height: CGFloat = 0
+    /// How tall it is halfway up: the least it's been since it came up.
+    @State private var halfway = CGFloat.infinity
+
+    /// Halfway and all the way. (Before iOS 18 the layers fit rather than scroll, so only the whole
+    /// screen has room for them.)
+    static var detents: Set<PresentationDetent> { SoundList.scrolls ? [.medium, .large] : [.large] }
+    /// Where it opens: halfway, where there's a halfway.
+    static var opening: PresentationDetent { SoundList.scrolls ? .medium : .large }
+
+    private var halves: Bool { Self.detents.contains(.medium) }
+    /// How much more of it is showing than halfway.
+    private var above: CGFloat { halfway.isFinite ? max(0, height - halfway) : 0 }
 
     var body: some View {
+        // Laid out for halfway, with the sounds to pick from below, out of sight until it's pulled
+        // higher, and then coming up into view under the finger rather than squeezing the layers.
         VStack(spacing: 0) {
-            SoundList()
-
-            SoundSections()
+            VStack(spacing: 0) {
+                header
+                SoundList()
+            }
+            .frame(height: halves && halfway.isFinite ? halfway : nil)
+            if !halves || halfway.isFinite {
+                SoundSections(height: max(SoundSections.height, above))
+            }
+        }
+        // As tall as the drawer, not the sounds out of sight below.
+        .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
+        .clipped()
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
+            height = h
+            if h > 100 { halfway = min(halfway, h) }
         }
         .foregroundStyle(Theme.text)
-        .background { SceneWash(orbs: mixer.orbs) }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
+        // Glass while the place shows above it, the mix's colors as it comes up over the place.
+        .background { SceneWash(orbs: mixer.orbs).opacity(halves ? min(1, above / SoundSections.height) : 1) }
+        .presentationDetents(Self.detents, selection: $detent)
+        .presentationDragIndicator(.visible)
+        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+        .modifier(DrawerFace())
+        .saveMixPrompt(isPresented: $saving)
+        .haptic(.tick, trigger: detent)
+    }
+
+    /// What it is and where, and the ways to keep it or put it back.
+    private var header: some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("LAYERS")
                     .font(Theme.caps(11))
                     .tracking(1.3)
                     .foregroundStyle(Theme.muted)
+                Text(mixer.title)
+                    .font(Theme.label(15, .medium))
+                    .lineLimit(1)
+                    .contentTransition(.opacity)
             }
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                if mixer.currentPlaceIsTweaked {
-                    Button { resetting = true } label: {
-                        Text("Reset").font(Theme.label(12, .medium))
-                    }
+            Spacer(minLength: 8)
+            if mixer.currentPlaceIsTweaked {
+                pill("Reset") { resetting = true }
                     .accessibilityLabel("Reset \(mixer.currentPlaceName) to default")
-                }
-                Button { saving = true } label: {
-                    Text("Save").font(Theme.label(12, .medium))
-                }
-                .disabled(mixer.orbs.isEmpty)
+                    .confirmReset(isPresented: $resetting)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
+            pill("Save") { saving = true }
+                .disabled(mixer.orbs.isEmpty)
+                .opacity(mixer.orbs.isEmpty ? 0.4 : 1)
         }
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .saveMixPrompt(isPresented: $saving)
-        .confirmReset(isPresented: $resetting)
+        .padding(.horizontal, 24)
+        .padding(.top, 28)
+        .padding(.bottom, 4)
+        .animation(.smooth, value: mixer.currentPlaceIsTweaked)
+    }
+
+    private func pill(_ title: String, action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.play(.tap)
+            action()
+        } label: {
+            Text(title)
+                .font(Theme.label(13, .medium))
+                .padding(.vertical, 7)
+                .padding(.horizontal, 14)
+                .background(Capsule().fill(Color.white.opacity(0.06)))
+                .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// The drawer's face: the system's own Liquid Glass where there is it (iOS 26), frosted glass before.
+private struct DrawerFace: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content
+        } else {
+            content.presentationBackground(.ultraThinMaterial)
+        }
     }
 }
 #endif
 
 /// Every sound that's playing, a layer each in the order they came in, filled in its color as far
 /// across as it's loud: tap or drag across one to set its level, or hold it to take it away. Last,
-/// an empty layer brings in a sound at random. (The sounds to pick from are below, in
-/// `SoundSections`.) All in the monospace.
+/// an empty layer brings in a sound that fits. They scroll when there are more than fit. (The
+/// sounds to pick from are below, in `SoundSections`.)
 struct SoundList: View {
     @Environment(Mixer.self) private var mixer
 
@@ -61,28 +133,48 @@ struct SoundList: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 8)
                 .padding(.bottom, 16)
-            GeometryReader { proxy in
-                // As tall as there's room for, down to a fingertip's height with a lot playing.
-                let height = min(84, max(44, proxy.size.height / CGFloat(mixer.orbs.count + 1)))
-                VStack(spacing: 0) {
-                    Rectangle().fill(Theme.hairline).frame(height: 1)
-                    ForEach(mixer.orbs) { orb in
-                        LevelRow(orb: orb, height: height)
-                        Rectangle().fill(Theme.hairline).frame(height: 1)
-                    }
-                    RandomLayer(height: height)
-                    Rectangle().fill(Theme.hairline).frame(height: 1)
+            if Self.scrolls {
+                // A fingertip's height and then some, however many are playing.
+                ScrollView { rows(height: 72) }
+                    .scrollIndicators(.hidden)
+                    .scrollBounceBehavior(.basedOnSize)
+            } else {
+                // Before iOS 18 a drag across a layer holds a list still, so they fit instead: as tall
+                // as there's room for, down to a fingertip's height with a lot playing.
+                GeometryReader { proxy in
+                    rows(height: min(84, max(44, proxy.size.height / CGFloat(mixer.orbs.count + 1))))
                 }
+                .clipped()
             }
-            .clipped()
         }
         .animation(.snappy, value: mixer.orbs.map(\.id))
+    }
+
+    private func rows(height: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            Rectangle().fill(Theme.hairline).frame(height: 1)
+            ForEach(mixer.orbs) { orb in
+                LevelRow(orb: orb, height: height)
+                Rectangle().fill(Theme.hairline).frame(height: 1)
+            }
+            AddLayer(height: height)
+            Rectangle().fill(Theme.hairline).frame(height: 1)
+        }
+    }
+
+    static var scrolls: Bool {
+        #if os(iOS)
+        if #available(iOS 18.0, *) { return true }
+        return false
+        #else
+        return true
+        #endif
     }
 }
 
 /// One sound as a layer: filled in its color from the left as far as it's loud, its name large and
-/// its level small. Tap anywhere across it to set the level
-/// there (it glides over), or drag across to slide it.
+/// its level small. Tap anywhere across it to set the level there (it glides over), or drag across
+/// to slide it; a drag that starts up or down scrolls the list instead.
 private struct LevelRow: View {
     @Environment(Mixer.self) private var mixer
     let orb: Orb
@@ -96,36 +188,36 @@ private struct LevelRow: View {
 
     var body: some View {
         GeometryReader { proxy in
-            bar(width: proxy.size.width)
+            let width = proxy.size.width
+            let row = bar(width: width)
                 .contentShape(Rectangle())
-                .onTapGesture { location in set(location.x, of: proxy.size.width, gliding: true) }
-                .gesture(
-                    DragGesture(minimumDistance: 4)
-                        .onChanged { g in
-                            sliding = true
-                            removing = g.location.x <= proxy.size.width * 0.04
-                            set(g.location.x, of: proxy.size.width, gliding: false)
-                        }
-                        .onEnded { _ in
-                            sliding = false
-                            if removing {
-                                removing = false
-                                withAnimation(.snappy) { mixer.remove(orb.id) }
-                            }
-                        }
-                )
+                .onTapGesture { location in set(location.x, of: width, gliding: true) }
+            #if os(iOS)
+            if #available(iOS 18.0, *) {
+                row.gesture(SidewaysPan { x in slide(to: x, of: width) } ended: { done in endSlide(done) })
+            } else {
+                row.gesture(DragGesture(minimumDistance: 4)
+                    .onChanged { g in slide(to: g.location.x, of: width) }
+                    .onEnded { _ in endSlide(true) })
+            }
+            #else
+            row.gesture(DragGesture(minimumDistance: 4)
+                .onChanged { g in slide(to: g.location.x, of: width) }
+                .onEnded { _ in endSlide(true) })
+            #endif
         }
         .frame(height: height)
         .contextMenu {
             Button(role: .destructive) {
+                Haptics.play(.thud)
                 withAnimation(.snappy) { mixer.remove(orb.id) }
             } label: { Label("Remove \(orb.kind.name)", systemImage: "xmark") }
         }
-        // A tap where you set it, a tick per 10% as it slides, and a firm one at the edge where
+        // A tap where you set it, a tick per 10% as it slides, and a landing at the edge where
         // letting go removes it.
-        .sensoryFeedback(.impact(weight: .medium), trigger: taps)
-        .sensoryFeedback(.impact(weight: .heavy), trigger: removing) { _, now in now }
-        .sensoryFeedback(.impact(flexibility: .rigid, intensity: 0.8), trigger: percent / 10) { _, _ in sliding }
+        .haptic(.tap, trigger: taps)
+        .haptic(.thud, trigger: removing) { _, now in now }
+        .haptic(.tick, trigger: percent / 10) { _, _ in sliding }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(orb.kind.name)
         .accessibilityValue("\(percent) percent")
@@ -133,6 +225,22 @@ private struct LevelRow: View {
             mixer.adjustVolume(orb.id, by: direction == .increment ? 0.1 : -0.1)
         }
         .accessibilityAction(named: "Remove") { mixer.remove(orb.id) }
+    }
+
+    private func slide(to x: CGFloat, of width: CGFloat) {
+        sliding = true
+        removing = x <= width * 0.04
+        set(x, of: width, gliding: false)
+    }
+
+    /// Let go (or, not `done`, called off): at the far left, the layer goes.
+    private func endSlide(_ done: Bool) {
+        sliding = false
+        guard removing else { return }
+        removing = false
+        guard done else { return }
+        Haptics.play(.tap)
+        withAnimation(.snappy) { mixer.remove(orb.id) }
     }
 
     /// Sets the level to how far across `x` is: gliding there for a tap, straight there as you slide.
@@ -172,19 +280,24 @@ private struct LevelRow: View {
     }
 }
 
-/// The last layer, empty: tap it to bring in a sound that isn't playing yet, picked at random.
-private struct RandomLayer: View {
+/// The last layer, empty: tap it to bring in a sound that belongs here and isn't playing yet. One
+/// of this place's own if any are left (owls at the cabin, crickets at the beach), then one like
+/// those playing, then any.
+private struct AddLayer: View {
     @Environment(Mixer.self) private var mixer
     let height: CGFloat
 
     var body: some View {
-        let waiting = SoundKind.available.filter { kind in !mixer.orbs.contains { $0.kind == kind } }
+        let playing = Set(mixer.orbs.map(\.kind))
+        let waiting = SoundKind.available.filter { !playing.contains($0) }
+        let own = mixer.currentCast.filter { !playing.contains($0) }
+        let alike = waiting.filter { kind in playing.contains { $0.category == kind.category } }
         Button {
-            guard let kind = waiting.randomElement() else { return }
-            Haptics.tap(.light)
+            guard let kind = own.randomElement() ?? alike.randomElement() ?? waiting.randomElement() else { return }
+            Haptics.play(.tap)
             withAnimation(.snappy) { mixer.add(kind) }
         } label: {
-            Text("+ Random")
+            Text("+ Add one that fits")
                 .font(Theme.display(height > 64 ? 32 : 24))
                 .foregroundStyle(Theme.muted)
                 .padding(.horizontal, 24)
@@ -194,7 +307,7 @@ private struct RandomLayer: View {
         .buttonStyle(.plain)
         .frame(height: height)
         .disabled(waiting.isEmpty)
-        .accessibilityLabel("Add a random sound")
+        .accessibilityLabel("Add a sound that fits")
     }
 }
 
@@ -203,6 +316,9 @@ private struct RandomLayer: View {
 /// adds it or takes it away. Pills keep their places, so nothing jumps when you tap.
 struct SoundSections: View {
     @Environment(Mixer.self) private var mixer
+    /// How much of them shows at least.
+    static let height: CGFloat = 252
+    var height: CGFloat = Self.height
 
     private static let order: [SoundKind.Category] = [.water, .nature, .night, .jungle, .city, .calm, .tones, .noise]
 
@@ -220,7 +336,7 @@ struct SoundSections: View {
             .padding(.vertical, 12)
         }
         .scrollIndicators(.hidden)
-        .frame(height: 252)
+        .frame(height: height)
         // Fade at the top and bottom edges, so it reads as a list that keeps going.
         .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.06),
                                      .init(color: .black, location: 0.88), .init(color: .clear, location: 1)],
@@ -248,7 +364,7 @@ struct SoundSections: View {
 
     private func pill(_ kind: SoundKind, on: Bool) -> some View {
         Button {
-            Haptics.tap(.light)
+            Haptics.play(.tap)
             withAnimation(.snappy) {
                 if on {
                     for orb in mixer.orbs where orb.kind == kind { mixer.remove(orb.id) }
@@ -272,3 +388,40 @@ struct SoundSections: View {
         .accessibilityLabel(on ? "Remove \(kind.name)" : "Add \(kind.name)")
     }
 }
+
+#if os(iOS)
+/// A drag across a layer, as UIKit's pan: it only takes hold of a drag that sets off sideways, so one
+/// up or down is the list's to scroll. (SwiftUI's own drag holds the list still.)
+@available(iOS 18.0, *)
+private struct SidewaysPan: UIGestureRecognizerRepresentable {
+    /// Where across the layer the finger is.
+    let changed: (CGFloat) -> Void
+    /// Let go (true) or called off (false).
+    let ended: (Bool) -> Void
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let pan = UIPanGestureRecognizer()
+        pan.delegate = context.coordinator
+        return pan
+    }
+
+    func handleUIGestureRecognizerAction(_ pan: UIPanGestureRecognizer, context: Context) {
+        switch pan.state {
+        case .began, .changed: changed(context.converter.localLocation.x)
+        case .ended: ended(true)
+        case .cancelled, .failed: ended(false)
+        default: break
+        }
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = recognizer as? UIPanGestureRecognizer else { return true }
+            let velocity = pan.velocity(in: pan.view)
+            return abs(velocity.x) > abs(velocity.y)
+        }
+    }
+}
+#endif
