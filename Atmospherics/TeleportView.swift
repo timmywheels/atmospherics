@@ -331,10 +331,9 @@ struct TeleportView: View {
                 ForEach(Atmosphere.curated) { a in
                     let page = mixer.page(for: .atmosphere(a))
                     let current = mixer.mode == .atmosphere && mixer.activePreset == nil && mixer.atmosphere == a
-                    let source = mixer.liveSource(for: a)
                     Button { go(to: a) } label: {
                         ColorCard(hues: page.orbs.sorted { $0.volume > $1.volume }.prefix(3).map(\.kind.hue),
-                                  top: source.map { "Live from \($0.place.title) · \($0.conditions.temperature)" } ?? a.setting.info.name,
+                                  top: a.setting.info.name,
                                   title: page.title, sounds: page.orbs,
                                   badge: current ? (mixer.isPlaying ? "Playing" : "Here") : nil, outlined: current, minHeight: 112,
                                   trailingRoom: 30)
