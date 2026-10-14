@@ -59,7 +59,7 @@ Freesound files were taken from their public HQ previews (about 128 kbps MP3).
 | foghorn | https://freesound.org/s/140898/ | exuberate | CC0 | 4 s (86 s loop, exactly four blasts; takes cut by calls.swift) |
 | peepers | https://freesound.org/s/423812/ | kvgarlic | CC0 | 10 s (110 s loop) |
 | geese | https://freesound.org/s/842773/ | onionaire | CC0 | 2 s (92 s, one flyover, plays once) |
-| traffic | https://freesound.org/s/110310/ | nickpursehouse | CC0 | 60 s (120 s loop) |
+| traffic | https://freesound.org/s/214319/ | lazymonk | CC0 | 95 s (120 s loop; a New York street, horns and all, replacing a recording that sounded like a highway) |
 | highway | https://freesound.org/s/448092/ | courter | CC0 | 175 s (120 s loop) |
 | planes | https://freesound.org/s/383068/ | Kinoton | CC0 | 0 s (105 s, one flyover, plays once) |
 | lapping | https://freesound.org/s/520246/ | blaukreuz | CC0 | 2 s (130 s loop) |
