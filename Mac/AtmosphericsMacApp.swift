@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Atmospherics for the Mac: one window with the halo, Teleport, Layers and the Library, and a
+/// Atmospherics for the Mac: one window with the halo (and Tune over it) and the Library, and a
 /// menu bar control to play, travel and set a timer without it. The sound keeps playing when the
 /// window is closed.
 @main
@@ -117,15 +117,32 @@ final class MacNavigation {
     static let mainWindow = "main"
 
     enum Tab: String, CaseIterable, Identifiable {
-        case listen = "Listen", teleport = "Teleport", layers = "Layers", library = "Library"
+        case listen = "Listen", library = "Library"
 
         var id: Self { self }
-        var key: KeyEquivalent { KeyEquivalent(Character("\(Self.allCases.firstIndex(of: self)! + 1)")) }
+        /// ⌘ and this.
+        var key: KeyEquivalent {
+            switch self {
+            case .listen: "1"
+            case .library: "2"
+            }
+        }
     }
 
     var tab: Tab = .listen
     /// Set to ask the window for the save prompt (from the menu bar or the Playback menu).
     var saving = false
-    /// Set to ask the window to confirm a reset (from Layers or the Playback menu).
+    /// Tune, over Listen (⌘E).
+    var tuning = false
+    /// Asked to search (⌘K, the menu bar): the Library, opened afresh, ready to type.
+    var searchRequests = 0
+    var searchNext = false
+
+    func search() {
+        tab = .library
+        searchNext = true
+        searchRequests += 1
+    }
+    /// Set to ask the window to confirm a reset (from Tune or the Playback menu).
     var resetting = false
 }

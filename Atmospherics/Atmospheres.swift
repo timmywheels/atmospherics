@@ -197,7 +197,7 @@ enum Setting: String, CaseIterable, Codable {
                         muffle: 0.45)
         case .beach:
             return Info(name: "Beach", go: "to the beach", lead: "The beach", at: "at the beach", indoors: false,
-                        signature: [(.ocean, 0.5), (.lapping, 0.25), (.gulls, 0.2), (.palms, 0.15), (.crickets, 0.15), (.wind, 0.1)],
+                        signature: [(.ocean, 0.45), (.shore, 0.35), (.gulls, 0.2), (.palms, 0.15), (.crickets, 0.15), (.wind, 0.1)],
                         core: [], climate: .subtropical, latitude: 28, month: 8,
                         skies: [.clear, .wind, .fog, .drizzle, .rain, .thunderstorm], times: all,
                         line: "Waves rolling in", rainOn: nil)
@@ -543,7 +543,8 @@ struct Atmosphere: Hashable, Codable, Identifiable {
         (.drizzle, ["drizzle", "drizzly", "light rain", "soft rain", "sprinkle"]),
         (.rain, ["rainy", "raining", "rain", "wet"]),
         (.fog, ["foggy", "fog", "misty", "mist", "haze"]),
-        (.wind, ["windy", "wind", "gale", "gusty", "breezy"]),
+        // (A breeze is a sound of its own, not a windy sky.)
+        (.wind, ["windy", "wind", "gale", "gusty"]),
         (.clear, ["clear", "sunny", "starry", "stars", "calm"]),
     ]
 

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Keeps a scene or a mix in your Library's Favorites: a bookmark, filled when it's kept. In
+/// Keeps a place, a scene or a mix in Yours, in the Library: a bookmark, filled when it's kept. In
 /// `glass`, a round glass button like the others beside it.
 struct FavoriteToggle: View {
     @Environment(Mixer.self) private var mixer
@@ -27,9 +27,9 @@ struct FavoriteToggle: View {
         }
         .buttonStyle(.plain)
         .haptic(.tap, trigger: taps)
-        .accessibilityLabel(on ? "Remove from favorites" : "Add to favorites")
+        .accessibilityLabel(on ? "Take out of Yours" : "Save to Yours")
         #if os(macOS)
-        .help(on ? "Remove from favorites" : "Add to favorites")
+        .help(on ? "Take out of Yours  ⌘D" : "Save to Yours  ⌘D")
         #endif
     }
 }

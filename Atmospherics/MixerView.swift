@@ -58,50 +58,10 @@ struct MixerView: View {
         .haptic(.tick, trigger: detent)
     }
 
-    /// What it is and where, and the ways to keep it or put it back.
     private var header: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("LAYERS")
-                    .font(Theme.caps(11))
-                    .tracking(1.3)
-                    .foregroundStyle(Theme.muted)
-                Text(mixer.title)
-                    .font(Theme.label(15, .medium))
-                    .lineLimit(1)
-                    .contentTransition(.opacity)
-            }
-            Spacer(minLength: 8)
-            if mixer.currentPlaceIsTweaked {
-                pill("Reset") { resetting = true }
-                    .accessibilityLabel("Reset \(mixer.currentPlaceName) to default")
-                    .confirmReset(isPresented: $resetting)
-                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
-            }
-            pill("Save") { saving = true }
-                .disabled(mixer.orbs.isEmpty)
-                .opacity(mixer.orbs.isEmpty ? 0.4 : 1)
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 28)
-        .padding(.bottom, 4)
-        .animation(.smooth, value: mixer.currentPlaceIsTweaked)
-    }
-
-    private func pill(_ title: String, action: @escaping () -> Void) -> some View {
-        Button {
-            Haptics.play(.tap)
-            action()
-        } label: {
-            Text(title)
-                .font(Theme.label(13, .medium))
-                .padding(.vertical, 7)
-                .padding(.horizontal, 14)
-                .background(Capsule().fill(Color.white.opacity(0.06)))
-                .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
+        TuneHeader(reset: { resetting = true }, save: { saving = true })
+            .confirmReset(isPresented: $resetting)
+            .padding(.top, 28)
     }
 }
 
@@ -123,17 +83,21 @@ private struct DrawerFace: ViewModifier {
 /// sounds to pick from are below, in `SoundSections`.)
 struct SoundList: View {
     @Environment(Mixer.self) private var mixer
+    /// Inside something that scrolls already (the Mac's Tune drawer): every layer, laid out whole.
+    var embedded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(mixer.currentPlaceIsTweaked ? "Your changes to \(mixer.currentPlaceName) are kept"
-                 : "Drag a layer to set it, or to the far left to remove it.")
+            Text(mixer.currentPlaceIsTweaked ? "Your changes to \(mixer.currentPlaceName) are kept. Reset to hear it as it was."
+                 : "Slide a layer to set it; pull it past silent to remove it.")
                 .font(Theme.mono(11))
                 .foregroundStyle(Theme.muted)
                 .padding(.horizontal, 24)
-                .padding(.top, 8)
+                .padding(.top, 18)
                 .padding(.bottom, 16)
-            if Self.scrolls {
+            if embedded {
+                rows(height: 64)
+            } else if Self.scrolls {
                 // A fingertip's height and then some, however many are playing.
                 ScrollView { rows(height: 72) }
                     .scrollIndicators(.hidden)
@@ -172,17 +136,149 @@ struct SoundList: View {
     }
 }
 
+/// The top of Tune: what's playing, with the bookmark that saves it; for a real place its live
+/// weather, for a scene its other skies (each another scene, to go to); and Reset, once it's
+/// tuned, and Save as new.
+struct TuneHeader: View {
+    @Environment(Mixer.self) private var mixer
+    let reset: () -> Void
+    let save: () -> Void
+    /// A way to put it away, where there's no other (the Mac's drawer).
+    var close: (() -> Void)? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 10) {
+                    // First, at the top left: where a Mac puts a way out.
+                    if let close {
+                        Button(action: close) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(Theme.secondary)
+                                .frame(width: 26, height: 26)
+                                .background(Circle().fill(.white.opacity(0.06)))
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .help("Close  ⌘E")
+                        .accessibilityLabel("Close Tune")
+                    }
+                    Text("TUNE")
+                        .font(Theme.caps(11))
+                        .tracking(1.3)
+                        .foregroundStyle(Theme.muted)
+                    Spacer()
+                }
+                // The name on a line of its own, so it's never cut short by the buttons.
+                // In the serif, as on the home screen.
+                HStack(alignment: .center, spacing: 6) {
+                    Text(mixer.title)
+                        .font(Theme.display(30))
+                        .lineLimit(2)
+                        .contentTransition(.opacity)
+                    if let key = mixer.favoriteKey {
+                        FavoriteToggle(key: key, size: 15)
+                            .frame(width: 32, height: 32)
+                    }
+                }
+            }
+            if let live = mixer.liveLine {
+                Text(live)
+                    .font(Theme.mono(11))
+                    .foregroundStyle(Theme.secondary)
+                    .contentTransition(.opacity)
+            } else if mixer.mode == .atmosphere, mixer.activePreset == nil, let a = mixer.atmosphere {
+                OtherSkies(scene: a)
+            }
+            HStack(spacing: 8) {
+                if mixer.currentPlaceIsTweaked {
+                    pill("Reset", action: reset)
+                        .accessibilityLabel("Reset \(mixer.currentPlaceName) to default")
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                }
+                pill("Save as new…", action: save)
+                    .disabled(mixer.orbs.isEmpty)
+                    .opacity(mixer.orbs.isEmpty ? 0.4 : 1)
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.bottom, 4)
+        .animation(.smooth, value: mixer.currentPlaceIsTweaked)
+    }
+
+    private func pill(_ title: String, action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.play(.tap)
+            action()
+        } label: {
+            Text(title)
+                .font(Theme.label(13, .medium))
+                .padding(.vertical, 7)
+                .padding(.horizontal, 14)
+                .background(Capsule().fill(Color.white.opacity(0.06)))
+                .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// A scene's other vibes (its other skies), as places to go: "Snow · Rain · Clear", the one you're in lit. Each is
+/// another scene, with its own tuning and its own bookmark.
+private struct OtherSkies: View {
+    @Environment(Mixer.self) private var mixer
+    let scene: Atmosphere
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("OTHER VIBES FOR THIS \(scene.setting.info.name.uppercased())")
+                .font(Theme.caps(10))
+                .tracking(1.2)
+                .foregroundStyle(Theme.muted)
+            // Wrapping, so every one shows (a mouse can't scroll sideways).
+            FlowLayout(spacing: 8) {
+                ForEach(scene.setting.info.skies, id: \.self) { sky in
+                    let here = sky == scene.sky
+                    Button {
+                        guard !here else { return }
+                        Haptics.play(.thud)
+                        withAnimation(.smooth) { mixer.setAtmosphereSky(sky) }
+                    } label: {
+                        Text(sky.name)
+                            .font(Theme.body(13, .medium))
+                            .foregroundStyle(here ? Theme.background : Theme.text)
+                            .padding(.vertical, 7)
+                            .padding(.horizontal, 13)
+                            .background(Capsule().fill(here ? Theme.text : .clear))
+                            .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(here ? .isSelected : [])
+                }
+            }
+        }
+    }
+}
+
 /// One sound as a layer: filled in its color from the left as far as it's loud, its name large and
-/// its level small. Tap anywhere across it to set the level there (it glides over), or drag across
-/// to slide it; a drag that starts up or down scrolls the list instead.
+/// its level small. Slide across it to move the level from where it is (a tap does nothing, so a
+/// stray touch never changes it); keep pulling past silent and the layer comes away, to remove when
+/// let go. A drag that starts up or down scrolls the list instead.
 private struct LevelRow: View {
     @Environment(Mixer.self) private var mixer
     let orb: Orb
     let height: CGFloat
-    @State private var sliding = false
-    @State private var taps = 0
-    /// Dragged all the way to the left edge: let go there and the layer goes.
+    /// The level the slide started from: a drag moves it from there, by how far the finger goes,
+    /// so where the finger lands doesn't matter, and a tap does nothing.
+    @State private var from: Double?
+    /// How far the layer is pulled past silent, to the left: far enough and letting go removes it.
+    @State private var pull: CGFloat = 0
     @State private var removing = false
+    private static let removeAt: CGFloat = 80
+
+    private var sliding: Bool { from != nil }
 
     private var percent: Int { Int((orb.volume * 100).rounded()) }
 
@@ -190,19 +286,19 @@ private struct LevelRow: View {
         GeometryReader { proxy in
             let width = proxy.size.width
             let row = bar(width: width)
+                .offset(x: -pull)
                 .contentShape(Rectangle())
-                .onTapGesture { location in set(location.x, of: width, gliding: true) }
             #if os(iOS)
             if #available(iOS 18.0, *) {
-                row.gesture(SidewaysPan { x in slide(to: x, of: width) } ended: { done in endSlide(done) })
+                row.gesture(SidewaysPan { dx in slide(by: dx, of: width) } ended: { done in endSlide(done) })
             } else {
-                row.gesture(DragGesture(minimumDistance: 4)
-                    .onChanged { g in slide(to: g.location.x, of: width) }
+                row.gesture(DragGesture(minimumDistance: 6)
+                    .onChanged { g in slide(by: g.translation.width, of: width) }
                     .onEnded { _ in endSlide(true) })
             }
             #else
             row.gesture(DragGesture(minimumDistance: 4)
-                .onChanged { g in slide(to: g.location.x, of: width) }
+                .onChanged { g in slide(by: g.translation.width, of: width) }
                 .onEnded { _ in endSlide(true) })
             #endif
         }
@@ -213,44 +309,42 @@ private struct LevelRow: View {
                 withAnimation(.snappy) { mixer.remove(orb.id) }
             } label: { Label("Remove \(orb.kind.name)", systemImage: "xmark") }
         }
-        // A tap where you set it, a tick per 10% as it slides, and a landing at the edge where
-        // letting go removes it.
-        .haptic(.tap, trigger: taps)
+        // A tick per 10% as it slides, and a landing once it's pulled far enough to remove.
         .haptic(.thud, trigger: removing) { _, now in now }
         .haptic(.tick, trigger: percent / 10) { _, _ in sliding }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(orb.kind.name)
-        .accessibilityValue("\(percent) percent")
+        .accessibilityValue(orb.kind.rhythm == .bed ? "\(percent) percent" : "\(percent) percent, \(mixer.pace(of: orb.kind).rawValue.lowercased())")
         .accessibilityAdjustableAction { direction in
             mixer.adjustVolume(orb.id, by: direction == .increment ? 0.1 : -0.1)
         }
         .accessibilityAction(named: "Remove") { mixer.remove(orb.id) }
+        .accessibilityAction(named: "More or less often") { mixer.cyclePace(of: orb.kind) }
     }
 
-    private func slide(to x: CGFloat, of width: CGFloat) {
-        sliding = true
-        removing = x <= width * 0.04
-        set(x, of: width, gliding: false)
+    /// The finger `dx` across from where it started: the level moves that much of the width. Past
+    /// silent, the layer itself comes away to the left, harder the further, until it's far enough
+    /// to remove.
+    private func slide(by dx: CGFloat, of width: CGFloat) {
+        let start = from ?? orb.volume
+        from = start
+        let level = start + Double(dx / max(1, width))
+        mixer.setVolume(orb.id, to: min(1, max(0, level)))
+        let over = level < 0 ? CGFloat(-level) * width : 0
+        pull = 120 * tanh(over / 160)
+        removing = over > Self.removeAt
     }
 
-    /// Let go (or, not `done`, called off): at the far left, the layer goes.
+    /// Let go (or, not `done`, called off): pulled far enough, the layer goes; otherwise it settles back.
     private func endSlide(_ done: Bool) {
-        sliding = false
-        guard removing else { return }
+        from = nil
+        let remove = removing && done
         removing = false
-        guard done else { return }
-        Haptics.play(.tap)
-        withAnimation(.snappy) { mixer.remove(orb.id) }
-    }
-
-    /// Sets the level to how far across `x` is: gliding there for a tap, straight there as you slide.
-    private func set(_ x: CGFloat, of width: CGFloat, gliding: Bool) {
-        let to = min(1, max(0, Double(x / max(1, width))))
-        if gliding {
-            taps += 1
-            withAnimation(.snappy(duration: 0.22)) { mixer.setVolume(orb.id, to: to) }
+        if remove {
+            Haptics.play(.tap)
+            withAnimation(.snappy) { mixer.remove(orb.id) }
         } else {
-            mixer.setVolume(orb.id, to: to)
+            withAnimation(.spring(duration: 0.35, bounce: 0.3)) { pull = 0 }
         }
     }
 
@@ -262,13 +356,32 @@ private struct LevelRow: View {
                                      startPoint: .leading, endPoint: .trailing))
                 .background(Theme.background.opacity(0.3))
                 .frame(width: filled)
-            HStack(alignment: .firstTextBaseline) {
+            // The name, and its level and pace centered on the row beside it.
+            HStack(alignment: .center) {
                 Text(orb.kind.short)
                     .font(Theme.display(height > 64 ? 32 : 24))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Spacer(minLength: 12)
-                Text(removing ? "LET GO TO REMOVE" : "\(percent)%")
+                if orb.kind.rhythm != .bed && !removing {
+                    // How often it comes: tap for the next.
+                    Button {
+                        Haptics.play(.tick)
+                        mixer.cyclePace(of: orb.kind)
+                    } label: {
+                        Text(mixer.pace(of: orb.kind).rawValue.uppercased())
+                            .font(Theme.caps(11))
+                            .foregroundStyle(Theme.text.opacity(0.85))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(.black.opacity(0.22)))
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("How often: \(mixer.pace(of: orb.kind).rawValue)")
+                    .accessibilityHint("Tap for more or less often")
+                }
+                Text(removing ? "LET GO TO REMOVE" : pull > 4 ? "KEEP PULLING TO REMOVE" : "\(percent)%")
                     .font(Theme.caps(11))
                     .foregroundStyle(Theme.text.opacity(0.85))
             }
@@ -316,31 +429,38 @@ private struct AddLayer: View {
 /// adds it or takes it away. Pills keep their places, so nothing jumps when you tap.
 struct SoundSections: View {
     @Environment(Mixer.self) private var mixer
-    /// How much of them shows at least.
+    /// How much of them shows at least (nil: as tall as there's room for, as in the Library).
     static let height: CGFloat = 252
-    var height: CGFloat = Self.height
-
-    private static let order: [SoundKind.Category] = [.water, .nature, .night, .jungle, .city, .calm, .tones, .noise]
+    var height: CGFloat? = Self.height
+    /// Inside something that scrolls already, its pills wrapping rather than scrolling sideways
+    /// (for a mouse, on the Mac).
+    var embedded = false
 
     var body: some View {
-        let playing = Set(mixer.orbs.map(\.kind))
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                if let place = mixer.currentCastPlace, !mixer.currentCast.isEmpty {
-                    section(place, kinds: mixer.currentCast, playing: playing)
-                }
-                ForEach(Self.order, id: \.self) { category in
-                    section(category.rawValue, kinds: SoundKind.available.filter { $0.category == category }, playing: playing)
-                }
-            }
-            .padding(.vertical, 12)
+        if embedded {
+            sections
+        } else {
+            ScrollView { sections }
+                .scrollIndicators(.hidden)
+                .frame(height: height)
+                // Fade at the top and bottom edges, so it reads as a list that keeps going.
+                .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.06),
+                                             .init(color: .black, location: 0.88), .init(color: .clear, location: 1)],
+                                     startPoint: .top, endPoint: .bottom))
         }
-        .scrollIndicators(.hidden)
-        .frame(height: height)
-        // Fade at the top and bottom edges, so it reads as a list that keeps going.
-        .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.06),
-                                     .init(color: .black, location: 0.88), .init(color: .clear, location: 1)],
-                             startPoint: .top, endPoint: .bottom))
+    }
+
+    private var sections: some View {
+        let playing = Set(mixer.orbs.map(\.kind))
+        return VStack(alignment: .leading, spacing: 18) {
+            if let place = mixer.currentCastPlace, !mixer.currentCast.isEmpty {
+                section("Belongs in \(place)", kinds: mixer.currentCast, playing: playing)
+            }
+            ForEach(SoundKind.Shelf.allCases, id: \.self) { shelf in
+                section(shelf.rawValue, kinds: SoundKind.available.filter { $0.shelf == shelf }, playing: playing)
+            }
+        }
+        .padding(.vertical, 12)
     }
 
     private func section(_ title: String, kinds: [SoundKind], playing: Set<SoundKind>) -> some View {
@@ -350,28 +470,30 @@ struct SoundSections: View {
                 .tracking(1.2)
                 .foregroundStyle(Theme.muted)
                 .padding(.horizontal, 24)
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    ForEach(kinds) { kind in
-                        pill(kind, on: playing.contains(kind))
-                    }
+            if embedded {
+                FlowLayout(spacing: 8) {
+                    ForEach(kinds) { kind in pill(kind, on: playing.contains(kind)) }
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 24)
+            } else {
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(kinds) { kind in
+                            pill(kind, on: playing.contains(kind))
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                }
+                .scrollIndicators(.hidden)
             }
-            .scrollIndicators(.hidden)
         }
     }
 
+    /// Lit while it's playing: tap to bring it in (at half its level) or take it away.
     private func pill(_ kind: SoundKind, on: Bool) -> some View {
         Button {
-            Haptics.play(.tap)
-            withAnimation(.snappy) {
-                if on {
-                    for orb in mixer.orbs where orb.kind == kind { mixer.remove(orb.id) }
-                } else {
-                    mixer.add(kind)
-                }
-            }
+            Haptics.play(.soft)
+            withAnimation(.snappy) { on ? mixer.removeAll(kind) : mixer.add(kind) }
         } label: {
             HStack(spacing: 7) {
                 Circle().fill(kind.orb).frame(width: 7, height: 7)
@@ -389,12 +511,38 @@ struct SoundSections: View {
     }
 }
 
+extension SoundKind {
+    /// Where a sound is filed for browsing: weather apart from water, the jungle with the rest of
+    /// nature, the fire with the calm.
+    enum Shelf: String, CaseIterable {
+        case weather = "Weather", water = "Water", nature = "Nature", night = "Night", city = "City & home",
+             calm = "Calm", tones = "Focus tones", noise = "Noise"
+    }
+
+    var shelf: Shelf {
+        switch self {
+        case .rain, .lightRain, .heavyRain, .thunder, .lightning, .tentRain, .tinRoof,
+             .wind, .breeze, .treeWind, .gusts, .howl: .weather
+        case .ocean, .stream, .waterfall, .caveDrips, .lake, .lapping, .shore, .rocks, .buoy, .halyards,
+             .gulls, .foghorn, .whales: .water
+        case .birds, .crickets, .cicadas, .frogs, .winterBirds, .geese, .peepers, .palms,
+             .howlers, .jungleBirds, .parrots, .canopy, .treeFrogs: .nature
+        case .owls, .loons, .wolves, .leaves: .night
+        case .cityHum, .cityNight, .train, .steamTrain, .electricTrain, .fan, .cafe, .busyCafe, .library, .cabin, .typing, .clock, .rainyStreet,
+             .traffic, .highway, .planes, .tram, .motorbikes, .bazaar, .fountain: .city
+        case .chimes, .drone, .bells, .templeBell, .fire: .calm
+        case .betaBeats, .gammaBeats, .betaPulse: .tones
+        case .brown, .pink, .white, .green, .grey, .blue, .violet: .noise
+        }
+    }
+}
+
 #if os(iOS)
 /// A drag across a layer, as UIKit's pan: it only takes hold of a drag that sets off sideways, so one
 /// up or down is the list's to scroll. (SwiftUI's own drag holds the list still.)
 @available(iOS 18.0, *)
 private struct SidewaysPan: UIGestureRecognizerRepresentable {
-    /// Where across the layer the finger is.
+    /// How far across the finger has gone since it set off.
     let changed: (CGFloat) -> Void
     /// Let go (true) or called off (false).
     let ended: (Bool) -> Void
@@ -409,7 +557,7 @@ private struct SidewaysPan: UIGestureRecognizerRepresentable {
 
     func handleUIGestureRecognizerAction(_ pan: UIPanGestureRecognizer, context: Context) {
         switch pan.state {
-        case .began, .changed: changed(context.converter.localLocation.x)
+        case .began, .changed: changed(pan.translation(in: pan.view).x)
         case .ended: ended(true)
         case .cancelled, .failed: ended(false)
         default: break

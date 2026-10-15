@@ -13,7 +13,9 @@ struct MacCommands: Commands {
         }
 
         // One window, so no New Window.
-        CommandGroup(replacing: .newItem) {}
+        CommandGroup(replacing: .newItem) {
+            NewMixCommand(mixer: mixer)
+        }
 
         CommandGroup(before: .toolbar) {
             TabCommands(navigation: navigation)
@@ -38,6 +40,11 @@ private struct TabCommands: View {
             }
             .keyboardShortcut(tab.key, modifiers: .command)
         }
+        Button(navigation.tuning && navigation.tab == .listen ? "Hide Tune" : "Show Tune") {
+            if navigation.tab == .listen { navigation.tuning.toggle() } else { navigation.tab = .listen; navigation.tuning = true }
+            openWindow(id: MacNavigation.mainWindow)
+        }
+        .keyboardShortcut("e")
         Divider()
     }
 }
@@ -63,13 +70,21 @@ private struct PlaybackCommands: View {
         Button("Go Back") { mixer.requestTravel(forward: false) }
             .keyboardShortcut(.leftArrow, modifiers: .command)
             .disabled(mixer.previous == nil)
-        Button(mixer.activePreset != nil ? "Back to \(mixer.presetReturnName)" : "Go Home") {
-            mixer.activePreset != nil ? mixer.leavePreset() : mixer.goHome()
+        Menu("Go To") {
+            ForEach(Array(Mixer.Lens.allCases.enumerated()), id: \.element) { i, lens in
+                Button(lens.rawValue) { mixer.choose(lens) }
+                    .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: [.command, .option])
+            }
         }
-        .keyboardShortcut("h", modifiers: [.command, .shift])
-        .disabled(mixer.activePreset == nil && mixer.mode == .match)
-        Button("Teleport…") {
-            navigation.tab = .teleport
+        Button("Where You Are") { withAnimation(.smooth(duration: 0.35)) { mixer.goHome() } }
+            .keyboardShortcut("h", modifiers: [.command, .shift])
+            .disabled(!mixer.awayFromPlaces && mixer.mode == .match)
+        if mixer.awayFromPlaces {
+            Button("Back to \(mixer.lastPlaceName)") { mixer.backToPlace() }
+                .keyboardShortcut("b", modifiers: [.command, .shift])
+        }
+        Button("Search…") {
+            navigation.search()
             openWindow(id: MacNavigation.mainWindow)
         }
         .keyboardShortcut("k")
@@ -80,29 +95,25 @@ private struct PlaybackCommands: View {
             }
         }
         if mixer.mode == .atmosphere, mixer.activePreset == nil, let a = mixer.atmosphere {
-            // An atmosphere's own weather and time, from those that suit it.
-            Picker("Weather", selection: Binding(get: { a.sky }, set: { mixer.setAtmosphereSky($0) })) {
+            // A scene's other skies and times: each another scene, to go to. (A real place is
+            // always its real weather.)
+            Picker("Other Vibes", selection: Binding(get: { a.sky }, set: { mixer.setAtmosphereSky($0) })) {
                 ForEach(a.setting.info.skies, id: \.self) { Text($0.name).tag($0) }
             }
             Picker("Time of Day", selection: Binding(get: { a.time }, set: { mixer.setAtmosphereTime($0) })) {
                 ForEach(a.setting.info.times, id: \.self) { Text($0.name).tag($0) }
             }
-        } else {
-            Picker("Weather", selection: Binding(get: { mixer.skyOverride }, set: { mixer.setSky($0) })) {
-                ForEach(Mixer.SkyOverride.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-            }
-            Picker("Time of Day", selection: Binding(get: { mixer.timeOverride }, set: { mixer.setTime($0) })) {
-                ForEach(Mixer.TimeOverride.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-            }
-            Button("Back to Live Weather") { withAnimation(.smooth) { mixer.clearOverrides() } }
-                .disabled(!mixer.isImagining)
         }
         Divider()
-        Button("Save This Mix…") {
+        if let key = mixer.favoriteKey {
+            Button(mixer.isFavorite(key) ? "Remove from Yours" : "Save") { mixer.toggleFavorite(key) }
+                .keyboardShortcut("d")
+        }
+        Button("Save as New…") {
             openWindow(id: MacNavigation.mainWindow)
             navigation.saving = true
         }
-        .keyboardShortcut("s")
+        .keyboardShortcut("s", modifiers: [.command, .shift])
         Button(mixer.mode == .atmosphere ? "Reset Scene to Default…" : "Reset \(mixer.currentPlaceName.capitalizedFirst) to Default…") {
             openWindow(id: MacNavigation.mainWindow)
             navigation.resetting = true
@@ -132,5 +143,19 @@ struct MacSettings: View {
         .frame(width: 400)
         .fixedSize()
         .preferredColorScheme(.dark)
+    }
+}
+
+/// File › New Mix: an empty mix to build from any sounds, with Tune open.
+private struct NewMixCommand: View {
+    let mixer: Mixer
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button("New Mix") {
+            mixer.startFromScratch()
+            openWindow(id: MacNavigation.mainWindow)
+        }
+        .keyboardShortcut("n")
     }
 }

@@ -3,20 +3,22 @@ import SwiftUI
 import CoreHaptics
 #endif
 
-/// Taps you can feel. On the iPhone they're Core Haptics patterns, a good deal firmer than the
-/// system's own taps: a soft tick as the form turns under a finger, a crisp tick for a notch or a
-/// choice, a firm tap for a button, and a heavier landing for arriving somewhere, play and pause,
-/// or taking a layer away. (Without Core Haptics, the system's strongest taps.) On a Mac it's the
-/// Force Touch trackpad, felt only while touching it.
+/// Taps you can feel, but never a jolt. On the iPhone they're Core Haptics patterns, kept light:
+/// a soft tick as the form turns under a finger, a crisp tick for a notch or a choice, a tap for a
+/// button, and a fuller landing for arriving somewhere, play and pause, or taking a layer away.
+/// The wheel's detents are a little firmer and sharper, to feel each word go by. (Without Core Haptics, the system's
+/// taps, softened.) On a Mac it's the Force Touch trackpad, felt only while touching it.
 enum Haptics {
     enum Feel {
         /// The form turning under a finger: barely there.
         case soft
         /// A slider's notch, a part chosen: crisp.
         case tick
-        /// A button: firm.
+        /// The wheel passing a word: a picker's click.
+        case detent
+        /// A button: light.
         case tap
-        /// Arriving somewhere, play and pause, a layer taken away: a firm tap with weight after it.
+        /// Arriving somewhere, play and pause, a layer taken away: a tap with a little weight after it.
         case thud
     }
 
@@ -24,15 +26,18 @@ enum Haptics {
         #if os(iOS)
         if let engine = Engine.shared, (try? engine.play(feel)) != nil { return }
         let impact: (UIImpactFeedbackGenerator.FeedbackStyle, CGFloat) = switch feel {
-        case .soft: (.soft, 0.7)
-        case .tick: (.rigid, 1)
-        case .tap, .thud: (.heavy, 1)
+        case .soft: (.soft, 0.45)
+        case .tick: (.rigid, 0.6)
+        case .detent: (.rigid, 0.9)
+        case .tap: (.medium, 0.6)
+        case .thud: (.medium, 0.8)
         }
         UIImpactFeedbackGenerator(style: impact.0).impactOccurred(intensity: impact.1)
         #else
-        NSHapticFeedbackManager.defaultPerformer.perform(feel == .soft || feel == .tick ? .alignment : .generic, performanceTime: .now)
+        NSHapticFeedbackManager.defaultPerformer.perform(feel == .tap || feel == .thud ? .generic : .alignment, performanceTime: .now)
         #endif
     }
+
 
     #if os(iOS)
     /// The phone's haptic engine, started on first use and again after the system stops it.
@@ -76,10 +81,11 @@ enum Haptics {
                 ], relativeTime: time, duration: duration)
             }
             let events: [CHHapticEvent] = switch feel {
-            case .soft: [hit(0.45, 0.2)]
-            case .tick: [hit(0.85, 0.85)]
-            case .tap: [hit(1, 0.6)]
-            case .thud: [hit(1, 0.45), hum(0.6, 0.15, at: 0.01, for: 0.09), hit(0.7, 0.3, at: 0.11)]
+            case .soft: [hit(0.3, 0.15)]
+            case .tick: [hit(0.5, 0.7)]
+            case .detent: [hit(0.85, 0.9)]
+            case .tap: [hit(0.6, 0.45)]
+            case .thud: [hit(0.7, 0.35), hum(0.3, 0.1, at: 0.01, for: 0.07), hit(0.4, 0.25, at: 0.09)]
             }
             return try CHHapticPattern(events: events, parameters: [])
         }
@@ -89,7 +95,7 @@ enum Haptics {
 
 extension View {
     /// Plays `feel` when `trigger` changes (and `when` agrees), as `sensoryFeedback` does, with the
-    /// app's own, firmer haptics.
+    /// app's own haptics.
     func haptic<T: Equatable>(_ feel: Haptics.Feel, trigger: T, when: ((T, T) -> Bool)? = nil) -> some View {
         onChange(of: trigger) { old, new in
             if when?(old, new) ?? true { Haptics.play(feel) }

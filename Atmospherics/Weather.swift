@@ -187,6 +187,18 @@ final class LocationProvider: NSObject, CLLocationManagerDelegate {
 
     var isDenied: Bool { status == .denied || status == .restricted }
 
+    /// Allowed already: asking where you are won't bring up the system's question.
+    var isAllowed: Bool {
+        #if DEBUG
+        if Self.standIn != nil { return true }
+        #endif
+        #if os(iOS)
+        return [.authorizedWhenInUse, .authorizedAlways].contains(manager.authorizationStatus)
+        #else
+        return [.authorizedAlways, .authorized].contains(manager.authorizationStatus)
+        #endif
+    }
+
     func current() async throws -> (CLLocationCoordinate2D, String) {
         #if DEBUG
         if let standIn = Self.standIn { return standIn }

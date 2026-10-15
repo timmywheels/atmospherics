@@ -19,8 +19,9 @@ Sounds that come and go (`SoundKind.rhythm`, in Atmospherics/Rhythm.swift) play 
 | tentRain | https://freesound.org/s/251233/ | pulswelle | CC0 | 20 s |
 | tinRoof | https://freesound.org/s/521773/ | MrFossy | CC0 | 10 s |
 | whales | https://commons.wikimedia.org/wiki/File:Humpback_whale_wheezeblow.ogg | US National Park Service, Glacier Bay | Public domain | 1 s (55 s loop; takes cut by calls.swift) |
-| lake | https://freesound.org/s/614299/ | TheFlyFishingFilmmaker | CC0 | 20 s |
-| cafe | https://freesound.org/s/46310/ | moxobna | CC0 | 30 s |
+| lake | https://freesound.org/s/376795/ | amholma | CC0 | 2 s (95 s loop; small waves on a quiet shore, replacing 614299, which splashed) |
+| cafe | https://freesound.org/s/813868/ | CVLTIV8R | CC0 | 2 s (138 s loop; Northtown Coffee, Arcata, CA) |
+| busyCafe | https://freesound.org/s/260062/ | mhtaylor67 | CC0 | 3 s (228 s loop; a busy coffee-shop counter) |
 | library | https://freesound.org/s/620683/ | xkeril | CC0 | 30 s |
 | cabin | https://freesound.org/s/447825/ | courter | CC0 | 30 s |
 | bells | https://freesound.org/s/413157/ | lazymonk | CC0 | 30 s (takes cut by calls.swift) |
@@ -48,7 +49,9 @@ Freesound files were taken from their public HQ previews (about 128 kbps MP3).
 | ocean | https://freesound.org/s/623052/ | goochiano | CC0 | 20 s (90 s loop) |
 | birds | https://freesound.org/s/466242/ | richwise | CC0 | 20 s (100 s loop) |
 | stream | https://freesound.org/s/454155/ | kyles | CC0 | 3 s (60 s loop) |
-| train | https://freesound.org/s/150875/ | worldfire | CC0 | 30 s (100 s loop) |
+| train | https://freesound.org/s/852635/ | TILE_SFX | CC0 | 3 s (195 s loop; inside an outbound vintage Metra train, no voices) |
+| steamTrain | https://freesound.org/s/133099/ | allh | CC0 | 2 s (128 s loop; a wooden steam-train carriage) |
+| electricTrain | https://freesound.org/s/341208/ | Yoyodaman234 | CC0 | 1 s (44 s loop; on board an electric commuter train) |
 | wind | https://freesound.org/s/521736/ | Fission9 | CC0 | 2 s (55 s loop) |
 | cicadas | https://freesound.org/s/396810/ | Jedo | CC0 | 30 s (90 s loop) |
 | frogs | https://freesound.org/s/135561/ | felix.blume | CC0 | 2 s (55 s loop) |
@@ -63,6 +66,7 @@ Freesound files were taken from their public HQ previews (about 128 kbps MP3).
 | highway | https://freesound.org/s/448092/ | courter | CC0 | 175 s (120 s loop) |
 | planes | https://freesound.org/s/383068/ | Kinoton | CC0 | 0 s (105 s, one flyover, plays once) |
 | lapping | https://freesound.org/s/520246/ | blaukreuz | CC0 | 2 s (130 s loop) |
+| shore | https://freesound.org/s/352356/ | Alex_hears_things | CC0 | 2 s (155 s loop; waves lapping on sand, close) |
 | palms | https://freesound.org/s/423800/ | klangfabrik | CC0 | 2 s (120 s loop; low-passed at 15 kHz to drop preview artifacts) |
 | rocks | https://freesound.org/s/411509/ | felix.blume | CC0 | 3 s (150 s loop) |
 | buoy | https://freesound.org/s/675693/ | craigsmith | CC0 | 1 s (85 s loop) |
@@ -71,6 +75,6 @@ Freesound files were taken from their public HQ previews (about 128 kbps MP3).
 | motorbikes | https://freesound.org/s/452418/ | kyles | CC0 | 30 s (145 s loop) |
 | fountain | https://freesound.org/s/572465/ | frnk_cnt | CC0 | 3 s (118 s loop) |
 | templeBell | https://freesound.org/s/397352/ | Vurca | CC0 | 0 s (29 s, one strike, plays once) |
-| bazaar | https://freesound.org/s/511005/ | 3bagbrew | CC0 | 14 s (52 s loop, before the singing starts) |
+| bazaar (crowd) | https://freesound.org/s/245973/ and https://freesound.org/s/129344/ | Paul368, Awesoman | CC0 | 78 s loop: a crowd chattering, crossfaded into an outdoor crowd |
 | chimes | https://freesound.org/s/695627/ | SugarANDRocks | CC0 | 5 s (120 s loop; chimes in the night wind) |
 | fan | https://freesound.org/s/870765/ | CHallSmith | CC0 | 3 s (55 s loop; a house fan in a window) |

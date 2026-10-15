@@ -5,8 +5,8 @@
 //     design/soundscapes/inspect.swift
 // Each sound shows its estimated loudness in LUFS; the scene's total is in brackets.
 //   /tmp/inspect [live|seasons|atmospheres]
-// `atmospheres` shows each hand-picked atmosphere imagined at dawn, afternoon and night, then
-// which are live from a real place right now.
+// `atmospheres` shows each hand-picked atmosphere imagined at dawn, afternoon and night. (Scenes
+// play in weather of their own; only places are live.)
 import Foundation
 
 @main
@@ -32,14 +32,6 @@ struct Inspect {
                 let name = a.title(in: c, at: now).padding(toLength: 38, withPad: " ", startingAt: 0)
                 print("  \(String(format: "%02d", hour))h \(name) [\(Int(Mix.loudness(scene).rounded()))] \(Int(c.temperatureC))°C  \(mix)")
             }
-        }
-        let places = Place.all
-        guard let all = try? await WeatherService().conditions(for: places) else { print("weather failed"); return }
-        let conditions = Dictionary(zip(places.map(\.name), all), uniquingKeysWith: { a, _ in a })
-        print("\nLive right now:")
-        for a in Atmosphere.curated {
-            let line = a.liveSource(among: places, conditions: conditions).map { a.sky.live(in: $0.place.name) } ?? "imagined"
-            print("  \(a.id.padding(toLength: 28, withPad: " ", startingAt: 0)) \(line)")
         }
     }
 

@@ -1,11 +1,12 @@
 import SwiftUI
 
-/// The window: the scene's colors filling it, the four parts as pills in the toolbar with a way
+/// The window: the scene's colors filling it, the two parts as pills in the toolbar with a way
 /// back beside the window buttons, and the part you're in below.
 struct MacWindow: View {
     @Environment(Mixer.self) private var mixer
     @Environment(MacNavigation.self) private var navigation
     @Environment(\.openWindow) private var openWindow
+    @AppStorage("onboarded") private var onboarded = true
     /// Read so temperatures redraw when the unit changes in Settings.
     @AppStorage("tempUnit") private var tempUnit = "auto"
 
@@ -13,29 +14,55 @@ struct MacWindow: View {
         @Bindable var navigation = navigation
         Group {
             switch navigation.tab {
-            case .listen: MacListen()
-            case .teleport:
-                TeleportView(start: mixer.mode == .atmosphere ? mixer.atmosphere : nil) { navigation.tab = .listen }
-            case .layers: MacLayers()
-            case .library: LibraryView(current: mixer.activePreset) { navigation.tab = .listen }
+            case .listen:
+                // Tune as a drawer over the right of Listen, as on the phone.
+                GeometryReader { proxy in
+                    ZStack(alignment: .trailing) {
+                        MacListen()
+                        if navigation.tuning {
+                            TuneDrawer(room: proxy.size.width)
+                                .transition(.move(edge: .trailing))
+                        }
+                    }
+                }
+                .animation(.smooth(duration: 0.28), value: navigation.tuning)
+            case .library:
+                LibraryView(current: mixer.activePreset, focus: navigation.searchNext) { navigation.tab = .listen }
+                    .id(navigation.searchRequests)
+                    .onAppear { navigation.searchNext = false }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .transition(.opacity)
         .modifier(WindowBar(selection: $navigation.tab))
         .background {
-            // Listening and Layers sit in the scene's colors; Teleport and the Library have their own.
+            // Listening sits in the scene's colors; the Library has its own.
             SceneWash(orbs: mixer.byVolume)
-                .opacity(navigation.tab == .listen || navigation.tab == .layers ? 1 : 0)
+                .opacity(navigation.tab == .listen ? 1 : 0)
                 .background(Theme.background)
                 .ignoresSafeArea()
         }
-        // Wide enough for the toolbar's one piece (back and the four tabs) beside the window buttons.
+        // Wide enough for the toolbar's one piece (back and the two tabs) beside the window buttons.
         .frame(minWidth: 480, minHeight: 640)
         .foregroundStyle(Theme.text)
         .tint(Theme.text)
         .preferredColorScheme(.dark)
         .animation(.smooth(duration: 0.3), value: navigation.tab)
+        // The first time: the welcome, over the window.
+        .overlay {
+            if !onboarded {
+                Onboarding {
+                    withAnimation(.smooth(duration: 0.6)) { onboarded = true }
+                    navigation.tab = .listen
+                }
+                .transition(.opacity)
+            }
+        }
+        // A new mix from scratch: Listen, with Tune open beside it.
+        .onChange(of: mixer.tuneRequests) { _, _ in
+            navigation.tab = .listen
+            navigation.tuning = true
+        }
         .saveMixPrompt(isPresented: $navigation.saving)
         .confirmReset(isPresented: $navigation.resetting)
         .alert("Audio error", isPresented: .constant(mixer.errorMessage != nil)) {
@@ -52,11 +79,13 @@ struct MacWindow: View {
     }
 }
 
-/// The toolbar, as tall as a Mac's (the window buttons centered in it): a way back and the four
+/// The toolbar, as tall as a Mac's (the window buttons centered in it): a way back and the two
 /// parts as pills, as one piece in the middle. One piece, so the toolbar never has to fit two
 /// side by side and tuck one into an overflow menu when the window is narrow. Plain, without the
 /// glass a toolbar item gets by default.
 private struct WindowBar: ViewModifier {
+    @Environment(MacNavigation.self) private var navigation
+    @AppStorage("onboarded") private var onboarded = true
     @Binding var selection: MacNavigation.Tab
 
     func body(content: Content) -> some View {
@@ -72,16 +101,22 @@ private struct WindowBar: ViewModifier {
         }
     }
 
+    /// Out of the way while Tune is up over Listen: the drawer runs to the top of the window, and
+    /// its × (or ⌘E, or Esc) is the way back.
     private var bar: some View {
-        HStack(spacing: 8) {
+        let tuning = (navigation.tuning && selection == .listen) || !onboarded
+        return HStack(spacing: 8) {
             BackButton(selection: $selection)
             TabPills(selection: $selection)
         }
+        .opacity(tuning ? 0 : 1)
+        .allowsHitTesting(!tuning)
+        .animation(.smooth(duration: 0.2), value: tuning)
         .fixedSize()
     }
 }
 
-/// The four parts in one capsule, the one you're in lit by a pill that slides between them.
+/// The two parts in one capsule, the one you're in lit by a pill that slides between them.
 private struct TabPills: View {
     @Binding var selection: MacNavigation.Tab
     @State private var hovered: MacNavigation.Tab?
@@ -108,7 +143,7 @@ private struct TabPills: View {
                 }
                 .buttonStyle(.plain)
                 .onHover { hovered = $0 ? tab : (hovered == tab ? nil : hovered) }
-                .help("\(tab.rawValue)  ⌘\(String(tab.key.character))")
+                .help("\(tab.rawValue)  ⌘\(String(tab.key.character).uppercased())")
                 .accessibilityAddTraits(selection == tab ? .isSelected : [])
             }
         }
@@ -120,35 +155,32 @@ private struct TabPills: View {
     }
 }
 
-/// From Teleport, Layers or the Library, back to listening; while listening, back to the place
-/// before this one (as swiping right does). Always there, so the tabs never shift; dimmed when
-/// there's nowhere to go back to.
+/// From the Library, back to listening. One job: while listening it's out of
+/// sight (traveling back is ←, ⌘← and the arrow over the halo), but keeps its place, so the tabs
+/// never shift.
 private struct BackButton: View {
-    @Environment(Mixer.self) private var mixer
     @Binding var selection: MacNavigation.Tab
     @State private var hovering = false
 
     var body: some View {
-        let last = selection == .listen ? mixer.backStack.last : nil
-        let enabled = selection != .listen || last != nil
-        let label = selection != .listen ? "Back to Listen" : last.map { "Back to \(mixer.page(for: $0).title)  ←" } ?? "Back"
-        Button {
-            if selection != .listen { selection = .listen } else { mixer.requestTravel(forward: false) }
-        } label: {
+        let enabled = selection != .listen
+        Button { selection = .listen } label: {
             Image(systemName: "chevron.left")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(hovering && enabled ? Theme.text : Theme.secondary)
+                .foregroundStyle(hovering ? Theme.text : Theme.secondary)
                 .frame(width: 28, height: 28)
-                .background(Circle().fill(.white.opacity(hovering && enabled ? 0.12 : 0.05)))
+                .background(Circle().fill(.white.opacity(hovering ? 0.12 : 0.05)))
                 .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
-        .opacity(enabled ? 1 : 0.35)
+        .opacity(enabled ? 1 : 0)
         .onHover { hovering = $0 }
-        .help(label)
-        .accessibilityLabel(label)
+        .help("Back to Listen")
+        .accessibilityLabel("Back to Listen")
+        .accessibilityHidden(!enabled)
         .animation(.smooth(duration: 0.2), value: enabled)
     }
 }
+

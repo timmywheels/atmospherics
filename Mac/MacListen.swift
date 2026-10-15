@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// Listening: the halo and the scene's name, with the ones before and after beside it. Swipe
-/// with two fingers or press ← → to travel, click the light for its layers or drag it to turn it,
-/// click the name to teleport. Along the bottom, what's playing (click it for its layers),
-/// Teleport and Surprise me, the sleep timer and play.
+/// Listening: the wheel, the halo and the scene's name, with the ones before and after beside it.
+/// Swipe with two fingers or press ← → to travel, ↑ ↓ to turn the wheel, click the light for its
+/// layers or drag it to turn it, click the name to search. Along the bottom, what's playing
+/// (click it for its layers), the sleep timer and play.
 struct MacListen: View {
     @Environment(Mixer.self) private var mixer
     @Environment(MacNavigation.self) private var navigation
@@ -15,34 +15,18 @@ struct MacListen: View {
 
     private static let hints = [
         "Swipe with two fingers, or press → to travel",
-        "Click the light to see its layers",
-        "Click the name to teleport",
+        "Click the light to tune it  ⌘E",
+        "Click the name for the Library, ⌘K to search",
         "Drag the light to turn it",
+        "↑ ↓ turn the wheel",
     ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Your own weather, as on the phone; click to go back to it.
-            HStack {
-                Spacer()
-                Button { withAnimation(.smooth(duration: 0.35)) { mixer.goHome() } } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: mixer.outsideSymbol)
-                        Text(mixer.outsideLabel)
-                    }
-                    .font(Theme.caps(11))
-                    .tracking(1.3)
-                    .foregroundStyle(Theme.muted)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("The weather outside your window  ⇧⌘H")
-                .accessibilityLabel("Outside. \(mixer.outsideLabel)")
-            }
-            .frame(height: 18)
+            // What swiping goes through, as on the phone. (Outside on it, or ⇧⌘H, is your own weather.)
+            ModeWheel()
 
-            Carousel(dragX: $dragX, openMixer: { navigation.tab = .layers }, teleport: { navigation.tab = .teleport },
-                     openLibrary: { navigation.tab = .library })
+            Carousel(dragX: $dragX, openMixer: { navigation.tuning.toggle() }, search: { navigation.tab = .library })
                 .frame(minHeight: 340, maxHeight: .infinity)
                 .overlay { TravelArrows() }
 
@@ -51,15 +35,8 @@ struct MacListen: View {
                 .padding(.top, 6)
 
             HStack(spacing: 14) {
-                LayersLink(orbs: mixer.byVolume) { navigation.tab = .layers }
+                LayersLink(orbs: mixer.byVolume) { navigation.tuning.toggle() }
                 ResetTuning()
-                BarButton(symbol: Theme.Symbol.teleport, label: "Teleport", help: "Teleport  ⌘K") {
-                    navigation.tab = .teleport
-                }
-                // On to somewhere new, as → and a swipe do.
-                BarButton(symbol: Theme.Symbol.surprise, label: "Surprise me", help: "Surprise me  →") {
-                    mixer.requestTravel(forward: true)
-                }
                 TimerMenu()
                 MacPlayButton()
             }
@@ -73,6 +50,8 @@ struct MacListen: View {
         .focused($focused)
         .onKeyPress(.leftArrow) { mixer.requestTravel(forward: false); return .handled }
         .onKeyPress(.rightArrow) { mixer.requestTravel(forward: true); return .handled }
+        .onKeyPress(.upArrow) { mixer.turnWheel(forward: false); return .handled }
+        .onKeyPress(.downArrow) { mixer.turnWheel(forward: true); return .handled }
         .onAppear { focused = true }
         .overlay(alignment: .bottom) {
             ZStack {
@@ -87,6 +66,11 @@ struct MacListen: View {
 
     /// Shows each hint once, the first times the window opens.
     private func runHints() async {
+        // Not over the welcome: after it.
+        while !UserDefaults.standard.bool(forKey: "onboarded") {
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+        }
         while hintStep < Self.hints.count {
             try? await Task.sleep(for: .seconds(1.5))
             guard !Task.isCancelled else { return }
@@ -150,31 +134,8 @@ private struct LayersLink: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help("Layers  ⌘3")
-        .accessibilityHint("Opens Layers")
-    }
-}
-
-/// A quiet symbol along the bottom that lights up under the pointer.
-private struct BarButton: View {
-    let symbol: String
-    let label: String
-    let help: String
-    let action: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(hovering ? Theme.text : Theme.muted)
-                .padding(6)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .help(help)
-        .accessibilityLabel(label)
+        .help("Tune  ⌘E")
+        .accessibilityHint("Opens Tune")
     }
 }
 

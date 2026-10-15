@@ -1,7 +1,7 @@
 import Foundation
 
-struct Preset: Identifiable {
-    enum Tag: String, CaseIterable { case sleep = "Sleep", focus = "Focus", relax = "Relax" }
+struct Preset: Identifiable, Equatable {
+    enum Tag: String, CaseIterable { case sleep = "Sleep", focus = "Focus", relax = "Relax", meditate = "Meditate" }
 
     /// How well research backs a focus mix, in plain words (see FocusScienceView).
     enum Evidence: String {
@@ -19,6 +19,8 @@ struct Preset: Identifiable {
     var evidence: Evidence? = nil
 
     var id: String { savedID?.uuidString ?? name }
+
+    static func == (a: Preset, b: Preset) -> Bool { a.id == b.id }
     var isSaved: Bool { savedID != nil }
 
     static let all: [Preset] = [
@@ -57,7 +59,7 @@ struct Preset: Identifiable {
         Preset(name: "Low Tide", tag: .relax, length: "45 min", description: "Ocean, green noise",
                mix: [(.ocean, 0.8), (.green, 0.4)]),
         Preset(name: "Thursday’s Storm", tag: .sleep, length: "8 h", description: "Rain, wind, thunder, lightning",
-               mix: [(.rain, 0.9), (.wind, 0.6), (.thunder, 0.4), (.lightning, 0.35), (.brown, 0.3)]),
+               mix: [(.rain, 0.85), (.wind, 0.55), (.thunder, 0.6), (.lightning, 0.55), (.brown, 0.3)]),
         Preset(name: "Fog Bank", tag: .focus, length: "2 h", description: "White noise, ocean",
                mix: [(.white, 0.5), (.ocean, 0.5)]),
         Preset(name: "Ember", tag: .relax, length: "30 min", description: "Fire, brown noise, birds",
@@ -86,7 +88,7 @@ struct Preset: Identifiable {
         Preset(name: "Reading Room", tag: .focus, length: "2 h", description: "A library's hush, rain on the windows",
                mix: [(.library, 0.7), (.rain, 0.3)]),
         Preset(name: "Coffee Shop", tag: .focus, length: "90 min", description: "A lively café's murmur, for creative work",
-               mix: [(.cafe, 0.75), (.rain, 0.25)], evidence: .some),
+               mix: [(.busyCafe, 0.75), (.rain, 0.25)], evidence: .some),
         Preset(name: "Late Draft", tag: .relax, length: "90 min", description: "Typing, a clock, pink noise",
                mix: [(.typing, 0.5), (.clock, 0.25), (.pink, 0.4)]),
         Preset(name: "Cave Retreat", tag: .relax, length: "1 h", description: "Cave drips, a warm drone",
@@ -99,6 +101,17 @@ struct Preset: Identifiable {
                mix: [(.violet, 0.4), (.pink, 0.45)]),
         Preset(name: "Rainforest", tag: .relax, length: "1 h", description: "Canopy, howler monkeys, a waterfall",
                mix: [(.canopy, 0.7), (.howlers, 0.3), (.waterfall, 0.3)]),
+        // To sit with: little that changes, nothing that asks for attention.
+        Preset(name: "Temple Morning", tag: .meditate, length: "20 min", description: "A bell now and then over a stream",
+               mix: [(.templeBell, 0.35), (.stream, 0.45), (.birds, 0.15)]),
+        Preset(name: "Still Water", tag: .meditate, length: "20 min", description: "Water lapping, a light breeze, a low drone",
+               mix: [(.lapping, 0.55), (.breeze, 0.3), (.drone, 0.2)]),
+        Preset(name: "Deep Cave", tag: .meditate, length: "30 min", description: "Slow drips in the dark, a low drone",
+               mix: [(.caveDrips, 0.5), (.drone, 0.45)]),
+        Preset(name: "Wind Chimes", tag: .meditate, length: "20 min", description: "Chimes in a breeze, leaves",
+               mix: [(.chimes, 0.45), (.breeze, 0.4), (.leaves, 0.2)]),
+        Preset(name: "Quiet Rain", tag: .meditate, length: "30 min", description: "Light rain over a warm hush",
+               mix: [(.lightRain, 0.5), (.drone, 0.25), (.brown, 0.2)]),
     ]
 
     /// Places each sound at the distance from center that gives its volume,
@@ -116,12 +129,6 @@ struct Preset: Identifiable {
             return Orb(id: kind.stableID, kind: kind, x: 0.5 + cos(angle) * r, y: 0.5 + sin(angle) * r)
         }
     }
-}
-
-/// Match outside follows the local weather; Escape plays a real place's; Atmosphere plays a
-/// scene by name ("a log cabin in a snowstorm").
-enum Mode: String, Codable, CaseIterable {
-    case match, escape, atmosphere
 }
 
 /// What the header and subtitles say about the weather.
@@ -153,5 +160,23 @@ struct SavedMix: Codable, Identifiable, Equatable {
         Preset(name: name, tag: nil, length: "Yours", description: origin,
                mix: orbs.sorted { $0.volume > $1.volume }.map { ($0.kind, $0.volume) },
                savedOrbs: orbs, savedID: id)
+    }
+}
+
+extension Atmosphere {
+    /// The mood a scene is for, to file it in the Library: a café or a library for focus, a
+    /// temple or a misty dawn for meditating, nights and storms and tents for sleep, the rest to
+    /// relax.
+    var mood: Preset.Tag {
+        switch setting {
+        case .cafe, .library: return .focus
+        case .temple: return .meditate
+        default: break
+        }
+        if time == .dawn && sky == .fog { return .meditate }
+        if time == .night || [.snowstorm, .downpour, .thunderstorm].contains(sky) || [.tent, .tinRoof, .flight].contains(setting) {
+            return .sleep
+        }
+        return .relax
     }
 }

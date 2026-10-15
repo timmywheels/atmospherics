@@ -294,9 +294,12 @@ extension Vibe.Ask {
                 }
                 i = stop
             } else if let (sounds, end) = list(in: words, from: i, filling: false) {
-                // Named with no cue, a sound is wanted: "palm trees rustling", "waves only".
+                // Named with no cue, a sound is wanted: "palm trees rustling", "waves only". A
+                // wind of its own kind is wanted even as it names the sky: "a howling gale" is
+                // windy, and the howl.
                 let (change, next) = after(in: words, at: end) ?? (.present, end)
-                if change != .present || !names(i..<end) {
+                let ownWind = sounds.contains { $0.kinds.count == 1 && $0.kinds[0].family == .wind }
+                if change != .present || !names(i..<end) || ownWind {
                     asks += sounds.map { Vibe.Ask(change: change, sound: $0) }
                     asked.insert(integersIn: whole(i..<next))
                 }
@@ -424,7 +427,7 @@ final class SceneReader {
     static let shared = SceneReader()
     private var ready: LanguageModelSession?
 
-    /// Loads the model now, so it's ready for a description: when Teleport opens.
+    /// Loads the model now, so it's ready for a description: when search opens.
     func prewarm() {
         guard SystemLanguageModel.default.isAvailable, ready == nil else { return }
         let session = Self.session()

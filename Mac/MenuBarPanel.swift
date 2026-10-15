@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The menu bar control, in the colors of what's playing: what it is, play and travel, the volume,
-/// and one quiet line for the sleep timer, Teleport, the window and Quit.
+/// and one quiet line for the sleep timer, Search, the window and Quit.
 struct MenuBarPanel: View {
     @Environment(Mixer.self) private var mixer
     @Environment(MacNavigation.self) private var navigation
@@ -106,12 +106,15 @@ struct MenuBarPanel: View {
 
     // MARK: Footer
 
-    /// The sleep timer, then Teleport, the window and Quit.
+    /// The sleep timer, then Search, the window and Quit.
     private var footer: some View {
         HStack(spacing: 0) {
             TimerMenu()
             Spacer()
-            footerButton(help: "Teleport somewhere  ⌘K") { open(.teleport) } label: { Text("Teleport…") }
+            footerButton(help: "Search the Library  ⌘K") {
+                navigation.search()
+                open(.library)
+            } label: { Text("Search…") }
             footerButton(help: "Open the Atmospherics window") { open(navigation.tab) } label: { Text("Open") }
             footerButton(help: "Quit Atmospherics  ⌘Q") { NSApp.terminate(nil) } label: {
                 Image(systemName: "power").font(.system(size: 11, weight: .medium))

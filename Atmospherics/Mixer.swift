@@ -8,6 +8,13 @@ import MediaPlayer
 import SwiftUI
 import Observation
 
+/// Which field is playing, each kept apart so going from one to another and back finds it as it
+/// was: `match` your own weather, `escape` a real place's, `atmosphere` a scene by name ("a log
+/// cabin in a snowstorm"), and `mix` a Library mix or one of yours, apart from any place.
+enum Mode: String, Codable, CaseIterable {
+    case match, escape, atmosphere, mix
+}
+
 /// A sound placed on the field. Position is 0…1 in both axes; the center (0.5, 0.5) is full volume
 /// and the rim is silent.
 struct Orb: Identifiable, Codable, Equatable {
@@ -55,111 +62,18 @@ final class Mixer {
     var errorMessage: String?
 
     // Weather
-    enum WeatherState { case loading, ready, locationOff, failed }
+    /// `notAsked`: where you are hasn't been asked for yet, so it hasn't been looked up.
+    enum WeatherState { case loading, ready, locationOff, failed, notAsked }
     private(set) var weatherState: WeatherState = .loading
-    /// Live weather as fetched. Everything else reads the computed versions below, which apply
-    /// any weather or time-of-day override.
+    /// Live weather as fetched. A place is always its real weather now; imagined weather is what
+    /// a scene is for.
     private var liveHome: Conditions?
     private var liveEscape: (place: Place, conditions: Conditions)?
     private var livePlaceConditions: [String: Conditions] = [:]
 
-    var home: Conditions? { liveHome.map(overridden) }
-    var escape: (place: Place, conditions: Conditions)? { liveEscape.map { ($0.place, overridden($0.conditions)) } }
-    var placeConditions: [String: Conditions] { livePlaceConditions.mapValues(overridden) }
-
-    // MARK: Overrides
-
-    enum SkyOverride: String, CaseIterable {
-        case live = "Live", clear = "Clear", drizzle = "Drizzle", rain = "Rain", downpour = "Downpour"
-        case storm = "Storm", snow = "Snow", fog = "Fog", wind = "Windy"
-    }
-    enum TimeOverride: String, CaseIterable { case live = "Live", day = "Day", night = "Night" }
-
-    private(set) var skyOverride: SkyOverride = .live
-    private(set) var timeOverride: TimeOverride = .live
-    var isImagining: Bool { skyOverride != .live || timeOverride != .live }
-
-    func setSky(_ s: SkyOverride) {
-        skyOverride = s
-        defaults.set(s.rawValue, forKey: "skyOverride")
-        reapplyAfterOverride()
-    }
-
-    func setTime(_ t: TimeOverride) {
-        timeOverride = t
-        defaults.set(t.rawValue, forKey: "timeOverride")
-        reapplyAfterOverride()
-    }
-
-    /// Swipe down: the next weather in the list, wrapping back to Live.
-    func cycleSky() {
-        let all = SkyOverride.allCases
-        setSky(all[(all.firstIndex(of: skyOverride)! + 1) % all.count])
-    }
-
-    /// Clears both overrides at once.
-    func clearOverrides() {
-        skyOverride = .live
-        timeOverride = .live
-        defaults.set(SkyOverride.live.rawValue, forKey: "skyOverride")
-        defaults.set(TimeOverride.live.rawValue, forKey: "timeOverride")
-        reapplyAfterOverride()
-    }
-
-    private func reapplyAfterOverride() {
-        // An override is about a place's weather, so it takes you out of a Library mix.
-        if activePreset != nil { setActivePreset(nil) }
-        setFollowing(true, for: mode)
-        traveling = true
-        applyWeather(to: mode, animated: true)
-        updateNowPlaying()
-    }
-
-    /// Live conditions with the chosen sky and time swapped in.
-    private func overridden(_ c: Conditions) -> Conditions {
-        var c = c
-        switch timeOverride {
-        case .live: break
-        case .day: c.isDay = true; c.forcedPhase = .day
-        case .night: c.isDay = false; c.forcedPhase = .night
-        }
-        switch skyOverride {
-        case .live: break
-        case .clear: c.code = 0; c.precipitationMM = 0; c.windKMH = min(c.windKMH, 10)
-        case .drizzle: c.code = 53; c.precipitationMM = 0.2
-        case .rain: c.code = 63; c.precipitationMM = 1.5
-        case .downpour: c.code = 65; c.precipitationMM = 8
-        case .storm: c.code = 95; c.precipitationMM = max(c.precipitationMM, 4); c.windKMH = max(c.windKMH, 35); c.pressureHPA = min(c.pressureHPA, 998)
-        case .snow: c.code = 73; c.precipitationMM = 0; c.temperatureC = min(c.temperatureC, -2)
-        case .fog: c.code = 45; c.precipitationMM = 0; c.windKMH = min(c.windKMH, 6)
-        case .wind: c.code = 3; c.precipitationMM = 0; c.windKMH = max(c.windKMH, 45)
-        }
-        return c
-    }
-
-    /// "Imagining a rainy night in Tokyo".
-    func imaginingLine(at place: String) -> String {
-        let sky: String? = {
-            switch skyOverride {
-            case .live: return nil
-            case .clear: return timeOverride == .live ? "clear skies" : "clear"
-            case .drizzle: return timeOverride == .live ? "drizzle" : "drizzly"
-            case .rain: return timeOverride == .live ? "rain" : "rainy"
-            case .downpour: return timeOverride == .live ? "a downpour" : "pouring"
-            case .storm: return timeOverride == .live ? "a storm" : "stormy"
-            case .snow: return timeOverride == .live ? "snow" : "snowy"
-            case .fog: return timeOverride == .live ? "fog" : "foggy"
-            case .wind: return timeOverride == .live ? "wind" : "windy"
-            }
-        }()
-        let time: String? = timeOverride == .live ? nil : timeOverride.rawValue.lowercased()
-        switch (sky, time) {
-        case let (s?, t?): return "Imagining a \(s) \(t) in \(place)"
-        case let (s?, nil): return "Imagining \(s) in \(place)"
-        case let (nil, t?): return "Imagining \(t) in \(place)"
-        default: return ""
-        }
-    }
+    var home: Conditions? { liveHome }
+    var escape: (place: Place, conditions: Conditions)? { liveEscape }
+    var placeConditions: [String: Conditions] { livePlaceConditions }
     /// A place the user chose. When nil, Escape picks the place least like home.
     private(set) var pinnedPlace: Place?
     /// Places found through search, newest first.
@@ -207,6 +121,22 @@ final class Mixer {
     }
 
     init() {
+        #if DEBUG
+        // `-freshInstall`: as if for the first time (a simulator keeps its preferences through an
+        // uninstall), to see the welcome.
+        if ProcessInfo.processInfo.arguments.contains("-freshInstall"), let id = Bundle.main.bundleIdentifier {
+            UserDefaults.standard.removePersistentDomain(forName: id)
+        }
+        #endif
+        // Before the first welcome there was none: anyone who's used the app has had theirs, and
+        // has been asked where they are already.
+        if defaults.object(forKey: "onboarded") == nil {
+            let before = defaults.object(forKey: "mode") != nil || defaults.integer(forKey: "hintStep") > 0
+                || defaults.integer(forKey: "macHintStep") > 0 || defaults.data(forKey: "savedMixes") != nil
+                || defaults.data(forKey: "recent") != nil
+            defaults.set(before, forKey: "onboarded")
+            if before { defaults.set(true, forKey: "hereWanted") }
+        }
         let savedVolume = defaults.object(forKey: "volume") as? Double ?? 1
         volume = savedVolume
         engine.setVolume(Float(savedVolume * savedVolume))
@@ -224,21 +154,28 @@ final class Mixer {
         }
         titles = [
             .match: defaults.string(forKey: "title.match") ?? "Attic Rain",
-            .escape: defaults.string(forKey: "title.escape") ?? "Warm Night",
+            .escape: defaults.string(forKey: "title.escape") ?? "",
             .atmosphere: defaults.string(forKey: "title.atmosphere") ?? "",
+            .mix: defaults.string(forKey: "title.mix") ?? "",
         ]
         following = [
             .match: defaults.object(forKey: "following.match") as? Bool ?? true,
             .escape: defaults.object(forKey: "following.escape") as? Bool ?? true,
             .atmosphere: defaults.object(forKey: "following.atmosphere") as? Bool ?? true,
+            .mix: false,
         ]
         atmosphere = defaults.data(forKey: "atmosphere").flatMap { try? JSONDecoder().decode(Atmosphere.self, from: $0) }
         if let raw = defaults.string(forKey: "mode"), let saved = Mode(rawValue: raw) { mode = saved }
         customPlaces = (defaults.array(forKey: "customPlaces") as? [[String: Any]] ?? []).compactMap(Place.init(dictionary:)).map(Self.refreshed)
         pinnedPlace = defaults.string(forKey: "pinnedPlace").flatMap { name in allPlaces.first { $0.name == name } }
-        skyOverride = defaults.string(forKey: "skyOverride").flatMap(SkyOverride.init(rawValue:)) ?? .live
-        timeOverride = defaults.string(forKey: "timeOverride").flatMap(TimeOverride.init(rawValue:)) ?? .live
+        // Places stopped taking an imagined sky or time: once, say so to anyone who'd set one.
+        let imagined = ["skyOverride", "timeOverride"].contains { (defaults.string(forKey: $0) ?? "Live") != "Live" }
+        ["skyOverride", "timeOverride"].forEach { defaults.removeObject(forKey: $0) }
         tweaks = defaults.dictionary(forKey: "placeTweaks") as? [String: [String: Double]] ?? [:]
+        paces = (defaults.dictionary(forKey: "paces") as? [String: String] ?? [:]).reduce(into: [:]) { all, entry in
+            if let kind = SoundKind(rawValue: entry.key), let pace = Pace(rawValue: entry.value) { all[kind] = pace }
+        }
+        for (kind, pace) in paces { engine.setPace(pace.rate, for: kind) }
         if let data = defaults.data(forKey: "savedMixes"), let saved = try? JSONDecoder().decode([SavedMix].self, from: data) {
             // Layers was the mixer once, and Topology for a while.
             savedMixes = saved.map { saved in
@@ -253,12 +190,31 @@ final class Mixer {
             Preset.all.first { $0.id == id } ?? savedMixes.first { $0.id.uuidString == id }?.preset
         }
         if mode == .atmosphere && atmosphere == nil { mode = .match }
+        migrateToOwnSlots()
+        if mode == .mix && activePreset == nil { mode = .match }
+        lens = activePreset.map { $0.tag.map(Lens.init) } ?? (mode == .atmosphere ? .imagine : .outside)
         refreshUpcoming()
         apply()
         if mode == .atmosphere { applyWeather(to: .atmosphere, animated: false) }
         setUpSystemAudio()
         startClock()
-        PlayPauseIntent.handler = { [weak self] in self?.togglePlayback() }
+        PlayPauseIntent.handler = { [weak self] play in
+            guard let self else { return }
+            switch play {
+            case true?: if !self.isPlaying { self.play() }
+            case false?: if self.isPlaying { self.stop() }
+            case nil: self.togglePlayback()
+            }
+        }
+        #if os(iOS)
+        adoptWidgetsAtLaunch()
+        #endif
+        if imagined {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(2))
+                self?.announce("Travel always plays a place's real weather now. For weather of your own, try Imagine.", for: 6)
+            }
+        }
     }
 
     // MARK: Lock screen, interruptions, route changes
@@ -335,22 +291,53 @@ final class Mixer {
             activity = try? Activity.request(attributes: SoundscapeActivity(),
                                              content: .init(state: state, staleDate: nil))
         } else if let activity, changedForWidget {
-            Task { await activity.update(.init(state: state, staleDate: nil)) }
+            whileSending { await activity.update(.init(state: state, staleDate: nil)) }
         }
         #endif
     }
 
     #if os(iOS)
-    /// Ends any Live Activity left from an earlier version.
-    private func endAllActivities() {
-        guard !Activity<SoundscapeActivity>.activities.isEmpty else { return }
-        Task { for a in Activity<SoundscapeActivity>.activities { await a.end(nil, dismissalPolicy: .immediate) } }
+    /// Just launched, so nothing is playing: whatever the widget and the lock screen were left
+    /// showing (the app closed while playing, say) is put right. The Live Activity left from
+    /// before is taken up again, rather than another started beside it; any more are ended.
+    private func adoptWidgetsAtLaunch() {
+        let left = Activity<SoundscapeActivity>.activities
+        activity = left.first
+        let extras = left.dropFirst()
+        let stale = NowPlayingSnapshot.load()
+        if stale.isPlaying {
+            var paused = stale
+            paused.isPlaying = false
+            paused.save()
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+        guard let activity = activity else { return }
+        let state = SoundscapeActivity.ContentState(title: stale.title, place: stale.temperature.isEmpty ? stale.place : "\(stale.place) \(stale.temperature)",
+                                                    isPlaying: false, hues: stale.lights.map(\.hue))
+        whileSending {
+            for extra in extras { await extra.end(nil, dismissalPolicy: .immediate) }
+            await activity.update(.init(state: state, staleDate: nil))
+        }
+        endActivitySoon()
+    }
+
+    /// Runs `work` with time asked for to finish it, should the app be put away meanwhile (just
+    /// paused from the lock screen, nothing playing to keep it awake), so the widget and the
+    /// lock screen don't stop halfway, showing the wrong thing.
+    private func whileSending(_ work: @escaping () async -> Void) {
+        let app = UIApplication.shared
+        var id = UIBackgroundTaskIdentifier.invalid
+        id = app.beginBackgroundTask(withName: "Now playing") { app.endBackgroundTask(id) }
+        Task { @MainActor in
+            await work()
+            app.endBackgroundTask(id)
+        }
     }
 
     /// Ends the Live Activity a little after pausing, so a quick pause/play doesn't flicker it.
     private func endActivitySoon() {
         let current = activity
-        Task { [weak self] in
+        whileSending { [weak self] in
             try? await Task.sleep(for: .seconds(30))
             guard let self, !self.isPlaying, self.activity === current else { return }
             await current?.end(nil, dismissalPolicy: .immediate)
@@ -419,24 +406,26 @@ final class Mixer {
     var title: String { titles[mode] ?? "" }
     var weather: WeatherSummary {
         if let preset = activePreset {
-            let line = title == preset.name ? preset.description : "Started from \(preset.name)"
-            return WeatherSummary(place: "Library", temp: "", line: line, head: "Library mix")
+            let line = preset.description + (currentPlaceIsTweaked ? " · tuned by you" : "")
+            return WeatherSummary(place: "Library", temp: "", line: line, head: preset.isSaved ? "Yours" : "Library mix")
         }
         switch mode {
         case .match:
-            let head = following[.match] == true ? "Matching outside" : "Your mix"
+            let head = "Here"
             switch weatherState {
             case .loading where home == nil:
                 return WeatherSummary(place: "", temp: "", line: "Checking the weather…", head: head)
             case .locationOff:
                 return WeatherSummary(place: "Location off", temp: "",
-                                      line: "Allow location in Settings to match outside", head: "Your mix")
+                                      line: "Allow location in Settings to match outside", head: "Here")
             case .failed where home == nil:
-                return WeatherSummary(place: "Offline", temp: "", line: "Couldn't reach the weather", head: head)
+                return WeatherSummary(place: "Offline", temp: "", line: "Couldn't reach the weather · a quiet mix till then", head: head)
+            case .notAsked:
+                return WeatherSummary(place: "", temp: "", line: "Your weather, once you allow your location", head: head)
             default:
                 guard let home else { return WeatherSummary(place: "", temp: "", line: "", head: head) }
                 let line = following[.match] == true
-                    ? (isImagining ? imaginingLine(at: home.place) : "\(home.sceneDescription.capitalizedFirst) outside") + (tweaks["home"] != nil ? " · tuned by you" : "")
+                    ? "\(home.sceneDescription.capitalizedFirst) outside" + (tweaks["home"] != nil ? " · tuned by you" : "")
                     : "Your own mix, made here"
                 return WeatherSummary(place: home.place, temp: home.temperature, line: line, head: head)
             }
@@ -444,27 +433,31 @@ final class Mixer {
             guard let escape else {
                 if let pinned = pinnedPlace {
                     return WeatherSummary(place: pinned.title, temp: "", line: "Checking the weather in \(pinned.name)…",
-                                          head: "Escaping to \(pinned.name)")
+                                          head: "Live in \(pinned.name)")
                 }
-                return WeatherSummary(place: "", temp: "", line: "Finding somewhere else…", head: "Escaping outside")
+                return WeatherSummary(place: "", temp: "", line: "Finding somewhere else…", head: "Places")
             }
             let c = escape.conditions
             let line: String
             if following[.escape] != true {
                 line = "Your own mix, made in \(escape.place.name)"
             } else if pinnedPlace != nil {
-                line = (isImagining ? imaginingLine(at: escape.place.name) : "\(c.sceneDescription.capitalizedFirst) in \(escape.place.name)")
+                line = "\(c.sceneDescription.capitalizedFirst) in \(escape.place.name)"
                     + (tweaks[escape.place.name] != nil ? " · tuned by you" : "")
             } else {
                 line = Self.escapeLine(c)
             }
             return WeatherSummary(place: escape.place.title, temp: c.temperature, line: line,
-                                  head: "Escaping to \(escape.place.name)")
+                                  head: "Live in \(escape.place.name)")
         case .atmosphere:
             guard let a = atmosphere else { return WeatherSummary(place: "", temp: "", line: "", head: "Atmosphere") }
             let line = following[.atmosphere] != true ? "Your own mix, made from \(a.setting.info.name.lowercased())"
                 : a.setting.info.line + (tweaks[a.tweakKey] != nil ? " · tuned by you" : "")
             return WeatherSummary(place: a.setting.info.name, temp: "", line: line, head: "Atmosphere")
+        case .mix:
+            // One made from scratch (or what's left of a saved one since deleted).
+            let line = orbs.isEmpty ? "Nothing yet: add sounds in Tune" : "Your own · Save as new to keep it"
+            return WeatherSummary(place: "", temp: "", line: line, head: "Yours")
         }
     }
 
@@ -501,6 +494,7 @@ final class Mixer {
         updateNowPlaying()
         if shouldPlay && !isPlaying { play() }
         arrived()
+        lensFollows(.imagine)
     }
 
     /// Goes to a scene described in words, its sounds changed as asked. The changes are kept as
@@ -603,17 +597,58 @@ final class Mixer {
         update(id) { $0.x = 0.5 + ux * r; $0.y = 0.5 + uy * r }
     }
 
+    // MARK: Pace
+
+    /// How often a sound that comes and goes comes, wherever it plays: thunder rarely for a calm
+    /// night, constantly for a storm to get lost in.
+    enum Pace: String, CaseIterable {
+        case rarely = "Rarely", sometimes = "Now and then", often = "Often", constantly = "Constantly"
+
+        var rate: Double {
+            switch self {
+            case .rarely: 0.4
+            case .sometimes: 1
+            case .often: 2
+            case .constantly: 4
+            }
+        }
+    }
+
+    private(set) var paces: [SoundKind: Pace] = [:]
+
+    func pace(of kind: SoundKind) -> Pace { paces[kind] ?? .sometimes }
+
+    /// The next pace round, for a tap.
+    func cyclePace(of kind: SoundKind) {
+        let all = Pace.allCases
+        let next = all[((all.firstIndex(of: pace(of: kind)) ?? 1) + 1) % all.count]
+        paces[kind] = next == .sometimes ? nil : next
+        engine.setPace(next.rate, for: kind)
+        defaults.set(Dictionary(uniqueKeysWithValues: paces.map { ($0.key.rawValue, $0.value.rawValue) }), forKey: "paces")
+    }
+
     func remove(_ id: Orb.ID) {
         fields[mode]?.removeAll { $0.id == id }
         markCustom()
         apply()
     }
 
-    /// Drops a new sound in near the bottom of the field, quiet, ready to drag in.
-    func add(_ kind: SoundKind) {
-        fields[mode, default: []].append(Orb(kind: kind, x: 0.5 + (Double.random(in: -0.15...0.15)), y: 0.86))
+    /// Brings in a sound at `level`, somewhere around the field, and says so.
+    func add(_ kind: SoundKind, level: Double = 0.5) {
+        let angle = Double.random(in: 0..<(2 * .pi))
+        let r = (1 - level) * 0.5
+        fields[mode, default: []].append(Orb(kind: kind, x: 0.5 + cos(angle) * r, y: 0.5 + sin(angle) * r))
         markCustom()
         apply()
+        announce("\(kind.short) joins \(currentPlaceName)", for: 1.6)
+    }
+
+    /// Takes every layer of a sound away, and says so.
+    func removeAll(_ kind: SoundKind) {
+        fields[mode]?.removeAll { $0.kind == kind }
+        markCustom()
+        apply()
+        announce("\(kind.short) leaves \(currentPlaceName)", for: 1.6)
     }
 
     /// A Library mix that's playing. It stands on its own, apart from any place's weather.
@@ -625,18 +660,17 @@ final class Mixer {
 
     /// A name to start from when saving, e.g. "Waterford, light rain".
     var suggestedSaveName: String {
-        if let p = activePreset, title == p.name { return "\(p.name) (mine)" }
-        if title == "Your mix" { return "My mix \(savedMixes.count + 1)" }
-        if mode == .escape, let e = escape { return "\(e.place.title), \(e.conditions.mixName.lowercased())" }
-        if mode == .atmosphere, atmosphere != nil { return title }
-        if let h = home { return "\(h.place), \(h.mixName.lowercased())" }
+        if let p = activePreset { return p.isSaved ? "\(p.name), again" : "\(p.name), my way" }
+        if mode == .mix { return "My mix \(savedMixes.count + 1)" }
+        if mode == .escape, let e = escape { return "\(e.place.title), my way" }
+        if mode == .atmosphere, atmosphere != nil { return "\(title), my way" }
+        if let h = home { return "\(h.place), my way" }
         return title
     }
 
     private var saveOrigin: String {
         let date = Date().formatted(.dateTime.month(.abbreviated).day())
-        if let p = activePreset { return title == p.name ? "Copy of \(p.name), \(date)" : "Started from \(p.name), \(date)" }
-        if title == "Your mix" { return "Made in Layers, \(date)" }
+        if let p = activePreset { return "From \(p.name), \(date)" }
         if mode == .escape, let e = escape { return "Saved from \(e.place.name)'s \(e.conditions.mixName.lowercased()), \(date)" }
         if mode == .atmosphere, atmosphere != nil { return "Saved from \(title.prefix(1).lowercased() + title.dropFirst()), \(date)" }
         if let h = home { return "Saved from \(h.mixName.lowercased()) in \(h.place), \(date)" }
@@ -651,7 +685,50 @@ final class Mixer {
         savedMixes.insert(mix, at: 0)
         persistSaved()
         setActivePreset(mix.preset)
-        setTitle(mix.name, for: mode)
+        enterMix(mix.preset.orbs, title: mix.name)
+    }
+
+    // MARK: Welcome
+
+    /// The welcome's harbor, put together a sound at a time: an empty field of its own, playing.
+    func beginWelcome() {
+        setActivePreset(nil)
+        enterMix([], title: "A harbor, at dusk")
+        if !isPlaying { play() }
+    }
+
+    /// One more of the welcome's sounds, come in from `angle` (no word about it, as Tune would).
+    func welcome(_ kind: SoundKind, level: Double, angle: Double) {
+        let r = (1 - level) * 0.5
+        fields[.mix, default: []].append(Orb(kind: kind, x: 0.5 + cos(angle) * r, y: 0.5 + sin(angle) * r))
+        apply()
+    }
+
+    /// Asked to show Tune (a new mix from scratch wants its sounds): the screens watch this.
+    private(set) var tuneRequests = 0
+
+    /// An empty mix of your own, to build from any sounds: playing, so each one is heard as it
+    /// comes in, with Tune up to add them. Save as new keeps it.
+    func startFromScratch() {
+        setActivePreset(nil)
+        enterMix([], title: "New mix")
+        lensFollows(nil)
+        if !isPlaying { play() }
+        tuneRequests += 1
+    }
+
+    /// Plays `orbs` in the mix's own field, leaving the place it came from as it was.
+    private func enterMix(_ orbs: [Orb], title: String) {
+        transition?.cancel()
+        visualTarget = nil
+        fields[.mix] = orbs
+        setTitle(title, for: .mix)
+        if mode != .mix {
+            mode = .mix
+            defaults.set(Mode.mix.rawValue, forKey: "mode")
+        }
+        apply()
+        updateNowPlaying()
     }
 
     func rename(_ mix: SavedMix, to name: String) {
@@ -661,7 +738,7 @@ final class Mixer {
         persistSaved()
         if activePreset?.savedID == mix.id {
             setActivePreset(savedMixes[i].preset)
-            setTitle(trimmed, for: mode)
+            setTitle(trimmed, for: .mix)
         }
     }
 
@@ -669,7 +746,14 @@ final class Mixer {
         savedMixes.removeAll { $0.id == mix.id }
         persistSaved()
         if isFavorite(Self.favoriteKey(mix.preset)) { toggleFavorite(Self.favoriteKey(mix.preset)) }
-        if activePreset?.savedID == mix.id { setActivePreset(nil) }
+        tweaks[Self.tweakKey(mix.preset)] = nil
+        persistTweaks()
+        if activePreset?.savedID == mix.id { leaveMix() }
+    }
+
+    /// Out of a mix, back to the last real place, playing or paused as it was.
+    private func leaveMix() {
+        if let p = pinnedPlace { select(p, play: false) } else { goHome() }
     }
 
     // MARK: Favorites
@@ -683,10 +767,10 @@ final class Mixer {
     func toggleFavorite(_ key: String) {
         if let i = favorites.firstIndex(of: key) {
             favorites.remove(at: i)
-            announce("Removed from Favorites")
+            announce("Taken out of Yours")
         } else {
             favorites.insert(key, at: 0)
-            announce("Added to Favorites in your Library")
+            announce("Saved to Yours, in the Library")
         }
         defaults.set(favorites, forKey: "favorites")
     }
@@ -707,20 +791,25 @@ final class Mixer {
 
     nonisolated static func favoriteKey(_ preset: Preset) -> String { "mix:\(preset.id)" }
     nonisolated static func favoriteKey(_ atmosphere: Atmosphere) -> String { "scene:\(atmosphere.id)" }
+    /// The same as a visit to it is kept (`Visit`).
+    nonisolated static func favoriteKey(_ place: Place) -> String { "place:\(place.name)" }
 
-    /// What's playing, as something to favorite: a Library mix or a scene (not your own weather).
+    /// What's playing, as something to favorite: a Library mix, a scene or a real place (not
+    /// your own weather, always first among places).
     var favoriteKey: String? {
         if let p = activePreset { return Self.favoriteKey(p) }
         if mode == .atmosphere, let a = atmosphere { return Self.favoriteKey(a) }
+        if mode == .escape, let p = escape?.place { return Self.favoriteKey(p) }
         return nil
     }
 
     enum Favorite: Identifiable {
-        case scene(Atmosphere), mix(Preset)
+        case scene(Atmosphere), mix(Preset), place(Place)
         var id: String {
             switch self {
             case .scene(let a): Mixer.favoriteKey(a)
             case .mix(let p): Mixer.favoriteKey(p)
+            case .place(let p): Mixer.favoriteKey(p)
             }
         }
     }
@@ -731,6 +820,7 @@ final class Mixer {
         return favorites.compactMap { key in
             if key.hasPrefix("scene:"), let a = Atmosphere(id: String(key.dropFirst(6))) { return .scene(a) }
             if key.hasPrefix("mix:"), let p = mixes.first(where: { Self.favoriteKey($0) == key }) { return .mix(p) }
+            if key.hasPrefix("place:"), let p = allPlaces.first(where: { Self.favoriteKey($0) == key }) { return .place(p) }
             return nil
         }
     }
@@ -819,9 +909,61 @@ final class Mixer {
         }
     }
 
-    func moveSavedMixes(from source: IndexSet, to destination: Int) {
-        savedMixes.move(fromOffsets: source, toOffset: destination)
-        persistSaved()
+    // MARK: Yours
+
+    /// Everything you've kept, as one list: your own mixes (saved as new) and the places, scenes
+    /// and mixes you bookmarked.
+    enum YoursItem: Identifiable {
+        case saved(SavedMix), kept(Favorite)
+        var id: String {
+            switch self {
+            case .saved(let m): "saved:\(m.id.uuidString)"
+            case .kept(let f): f.id
+            }
+        }
+    }
+
+    /// Yours in your own order; anything kept since it was last arranged comes first.
+    private(set) var yoursOrder: [String] = UserDefaults.standard.stringArray(forKey: "yoursOrder") ?? []
+
+    var yoursItems: [YoursItem] {
+        var all: [String: YoursItem] = [:]
+        var newest: [String] = []
+        for m in savedMixes {
+            let item = YoursItem.saved(m)
+            all[item.id] = item
+            newest.append(item.id)
+        }
+        // A bookmark on one of your own mixes is the mix itself.
+        for f in favoriteItems {
+            if case .mix(let p) = f, p.isSaved { continue }
+            all[f.id] = .kept(f)
+            newest.append(f.id)
+        }
+        let arranged = yoursOrder.filter { all[$0] != nil }
+        let fresh = newest.filter { !arranged.contains($0) }
+        return (fresh + arranged).compactMap { all[$0] }
+    }
+
+    func moveYours(from source: IndexSet, to destination: Int) {
+        var ids = yoursItems.map(\.id)
+        ids.move(fromOffsets: source, toOffset: destination)
+        yoursOrder = ids
+        defaults.set(ids, forKey: "yoursOrder")
+    }
+
+    /// Takes something out of Yours: one of your own mixes is deleted, a bookmark lifted.
+    func removeFromYours(_ item: YoursItem) {
+        switch item {
+        case .saved(let m): delete(m)
+        case .kept(let f): if isFavorite(f.id) { toggleFavorite(f.id) }
+        }
+    }
+
+    /// Where you are, chosen: its weather, playing.
+    func playHere() {
+        goHome()
+        if !isPlaying { play() }
     }
 
     private func persistSaved() {
@@ -843,33 +985,52 @@ final class Mixer {
         }
     }
 
+    /// A real place's weather, as Tune shows it: "Live · A clear autumn night · 63°". Nil for a
+    /// scene or a mix.
+    var liveLine: String? {
+        let c: Conditions? = switch mode {
+        case .match: home
+        case .escape: escape?.conditions
+        case .atmosphere, .mix: nil
+        }
+        return c.map { "Live · \($0.sceneDescription.capitalizedFirst) · \($0.temperature)" }
+    }
+
     /// A symbol for the weather outside, beside it.
     var outsideSymbol: String { liveHome?.symbol ?? "location" }
 
-    /// Where "Back to …" returns from a Library mix: the place you were in, or home.
-    var presetReturnName: String {
-        if mode == .escape, let p = escape?.place { return p.name }
-        if mode == .atmosphere, let a = atmosphere { return a.setting.info.name.lowercased() }
-        return homeName
+    /// Whether there's a place to go back to: something other than a place is playing.
+    var awayFromPlaces: Bool { activePreset != nil || mode == .atmosphere }
+    /// The real place you were last in (`pinnedPlace`, nil for where you are): where Back to … and
+    /// the wheel's Places go.
+    var lastPlaceName: String { pinnedPlace?.name ?? homeName }
+
+    /// Back to the last real place, from a mix or a scene, playing it: a choice, not a browse.
+    func backToPlace() {
+        if let p = pinnedPlace { select(p) } else { goHome(); if !isPlaying { play() } }
     }
 
-    /// Leaves a Library mix and follows the weather where you were.
-    func leavePreset() {
-        setActivePreset(nil)
-        traveling = true
-        followWeatherAgain()
+    /// Turns the wheel a stop on or back, as ↑ ↓ do on a Mac.
+    func turnWheel(forward: Bool) {
+        let all = Lens.allCases
+        guard let lens else { return choose(forward ? all[0] : all[all.count - 1]) }
+        let i = all.firstIndex(of: lens) ?? 0
+        choose(all[(i + (forward ? 1 : -1) + all.count) % all.count])
     }
 
-    func load(_ preset: Preset) {
-        transition?.cancel()
+    /// Plays a mix in its own field, as you last tuned it, leaving the place you were in as it was.
+    func load(_ preset: Preset, play shouldPlay: Bool = true) {
         setActivePreset(preset)
-        setFollowing(false, for: mode)
-        fields[mode] = preset.orbs
-        titles[mode] = preset.name
-        defaults.set(preset.name, forKey: "title.\(mode.rawValue)")
-        apply()
-        if !isPlaying { play() }
+        let tuned = tweaks[Self.tweakKey(preset)]
+        enterMix(tuned == nil ? preset.orbs : Preset.layout(Self.applying(tuned, to: preset.mix)), title: preset.name)
+        if shouldPlay && !isPlaying { play() }
         arrived()
+        if let tag = preset.tag {
+            defaults.set(preset.id, forKey: "lens.\(Lens(tag).rawValue)")
+            lensFollows(Lens(tag))
+        } else {
+            lensFollows(nil)
+        }
     }
 
     private func update(_ id: Orb.ID, _ change: (inout Orb) -> Void) {
@@ -879,16 +1040,10 @@ final class Mixer {
         apply()
     }
 
+    /// An edit stays with what was edited, a place, a scene or a mix, as a lasting tweak to it
+    /// that Reset takes back. Nothing breaks away into a mix of its own unless saved as new.
     private func markCustom() {
-        // At a place (or home) that's following the weather, an edit becomes a lasting tweak to
-        // that place instead of breaking away from it.
-        if activePreset == nil, following[mode] == true, let key = tweakKey {
-            recordTweaks(for: key)
-            return
-        }
-        setFollowing(false, for: mode)
-        guard titles[mode] != "Your mix" else { return }
-        setTitle("Your mix", for: mode)
+        if let key = tweakKey { recordTweaks(for: key) }
     }
 
     // MARK: Per-place tweaks
@@ -896,12 +1051,20 @@ final class Mixer {
     /// Volume changes you've made to a place, by sound: added on top of what the weather gives.
     private(set) var tweaks: [String: [String: Double]] = [:]
 
-    /// The place the field belongs to right now ("home" for home), if it's following the weather.
+    /// What the field belongs to right now, for its tweaks: "home", a place's name, a scene's key,
+    /// or a mix's ("mix:" and its ID; "saved:" and its UUID for one of yours, so renaming keeps them).
     private var tweakKey: String? {
-        guard activePreset == nil else { return nil }
-        if mode == .escape { return escape?.place.name }
-        if mode == .atmosphere { return atmosphere?.tweakKey }
-        return "home"
+        if let p = activePreset { return Self.tweakKey(p) }
+        switch mode {
+        case .escape: return escape?.place.name
+        case .atmosphere: return atmosphere?.tweakKey
+        case .match: return "home"
+        case .mix: return nil
+        }
+    }
+
+    nonisolated static func tweakKey(_ preset: Preset) -> String {
+        preset.savedID.map { "saved:\($0.uuidString)" } ?? favoriteKey(preset)
     }
 
     var currentPlaceIsTweaked: Bool { tweakKey.map { !(tweaks[$0] ?? [:]).isEmpty } ?? false }
@@ -924,13 +1087,15 @@ final class Mixer {
         switch mode {
         case .escape: escape?.place.name ?? "this place"
         case .atmosphere: "this scene"
-        case .match: "home"
+        case .match: home?.place ?? "home"
+        case .mix: activePreset?.name ?? "this mix"
         }
     }
 
-    /// What the weather alone gives this mode, before tweaks.
+    /// What the weather alone gives this mode, before tweaks (for a mix, the mix as made).
     private func baseMix(for mode: Mode) -> [(SoundKind, Double)]? {
         switch mode {
+        case .mix: return activePreset?.mix
         case .match: return home.map { WeatherMix.orbs(for: $0, place: homePlace) }
         case .escape: return escape.map { WeatherMix.orbs(for: $0.conditions, place: $0.place) }
         case .atmosphere: return atmosphere.flatMap { a in atmosphereConditions.map { a.mix(in: $0) } }
@@ -963,14 +1128,61 @@ final class Mixer {
         return out.filter { $0.1 >= 0.03 }
     }
 
-    /// Puts the current place back to how it sounds by default, following the weather.
+    /// Puts what's playing back to how it sounds by default: a place or scene following its
+    /// weather, a mix as it was made.
     func resetCurrentPlace() {
         if let key = tweakKey {
             tweaks[key] = nil
             persistTweaks()
         }
+        if mode == .mix, let p = activePreset {
+            glide(to: p.orbs, duration: 1.5)
+            return
+        }
         traveling = true
         applyWeather(to: mode, animated: true)
+    }
+
+    /// Once, for fields from before each kind had its own: a Library mix played in a place's field
+    /// moves to the mix's, and a field that broke away as "Your mix" is kept in Yours, the place
+    /// going back to following its weather.
+    private func migrateToOwnSlots() {
+        guard defaults.integer(forKey: "migratedIA") < 1 else { return }
+        defaults.set(1, forKey: "migratedIA")
+        if let p = activePreset, mode != .mix {
+            fields[.mix] = fields[mode]
+            titles[.mix] = p.name
+            defaults.set(p.name, forKey: "title.mix")
+            following[mode] = true
+            defaults.set(true, forKey: "following.\(mode.rawValue)")
+            mode = .mix
+            defaults.set(Mode.mix.rawValue, forKey: "mode")
+        }
+        var kept = 0
+        for m in [Mode.match, .escape, .atmosphere] where titles[m] == "Your mix" || following[m] == false {
+            let orbs = (fields[m] ?? []).filter { $0.volume > 0.01 }
+            if !orbs.isEmpty {
+                kept += 1
+                let mix = SavedMix(name: kept == 1 ? "Your mix (kept)" : "Your mix (kept) \(kept)",
+                                   origin: "Kept from before, \(Date().formatted(.dateTime.month(.abbreviated).day()))",
+                                   orbs: orbs)
+                savedMixes.insert(mix, at: 0)
+                if m == mode {
+                    activePreset = mix.preset
+                    defaults.set(mix.preset.id, forKey: "activePreset")
+                    fields[.mix] = orbs
+                    titles[.mix] = mix.name
+                    defaults.set(mix.name, forKey: "title.mix")
+                    mode = .mix
+                    defaults.set(Mode.mix.rawValue, forKey: "mode")
+                }
+            }
+            titles[m] = ""
+            defaults.set("", forKey: "title.\(m.rawValue)")
+            following[m] = true
+            defaults.set(true, forKey: "following.\(m.rawValue)")
+        }
+        if kept > 0 { persistSaved() }
     }
 
     private func persistTweaks() { defaults.set(tweaks, forKey: "placeTweaks") }
@@ -1000,13 +1212,17 @@ final class Mixer {
         async let placeWeather = try? weatherService.conditions(for: places)
 
         do {
+            // Where you are only once you've asked for it (or allowed it already): never a
+            // question about your location at launch.
+            guard location.isAllowed || defaults.bool(forKey: "hereWanted") else { throw CancellationError() }
             let (coordinate, place) = try await location.current()
             homeCoordinate = coordinate
             liveHome = try await weatherService.conditions(at: coordinate, place: place)
             await resolveHomePlace(coordinate, name: place)
             weatherState = .ready
         } catch {
-            weatherState = location.isDenied ? .locationOff : .failed
+            weatherState = error is CancellationError ? .notAsked : location.isDenied ? .locationOff : .failed
+            if liveHome == nil { hereWithoutWeather() }
         }
 
         if let options = await placeWeather {
@@ -1024,6 +1240,16 @@ final class Mixer {
         applyWeather(to: .match, animated: true)
         applyWeather(to: .escape, animated: true)
         applyWeather(to: .atmosphere, animated: true)
+    }
+
+    /// Where you are with no weather to go on (no location, or offline): named as Here, never a
+    /// name left over from before, and never silent: a quiet mix till the weather comes.
+    private func hereWithoutWeather() {
+        setTitle("Here", for: .match)
+        if (fields[.match] ?? []).isEmpty {
+            fields[.match] = Preset.layout([(.breeze, 0.45), (.birds, 0.25), (.pink, 0.3)])
+            if mode == .match { apply() }
+        }
     }
 
     // MARK: Home's character
@@ -1091,6 +1317,8 @@ final class Mixer {
         case .atmosphere:
             guard let a = atmosphere, let c = atmosphereConditions else { return nil }
             return Self.applying(tweaks[a.tweakKey], to: a.mix(in: c))
+        case .mix:
+            return nil
         }
     }
 
@@ -1107,14 +1335,14 @@ final class Mixer {
     }
 
     /// Goes to a place: pins it, switches to Escape, and glides the field to its sound.
-    func select(_ place: Place) {
+    func select(_ place: Place, play shouldPlay: Bool = true) {
         setActivePreset(nil)
         // Choosing the place you're already in is just going home.
         if isNearHome(place) {
             pinnedPlace = nil
             defaults.removeObject(forKey: "pinnedPlace")
             goHome()
-            if !isPlaying { play() }
+            if shouldPlay && !isPlaying { play() }
             return
         }
         pinnedPlace = place
@@ -1129,12 +1357,18 @@ final class Mixer {
         setFollowing(true, for: .escape)
         applyWeather(to: .escape, animated: true)
         updateNowPlaying()
-        if !isPlaying { play() }
+        if shouldPlay && !isPlaying { play() }
         arrived()
+        lensFollows(.outside)
     }
 
     /// Comes back from a place to the local weather.
     func goHome() {
+        // Asked for where you are: now's the time to ask where that is.
+        if !defaults.bool(forKey: "hereWanted") {
+            defaults.set(true, forKey: "hereWanted")
+            Task { await refreshWeather(force: true) }
+        }
         setActivePreset(nil)
         traveling = true
         if mode != .match {
@@ -1146,6 +1380,10 @@ final class Mixer {
         setFollowing(true, for: .match)
         applyWeather(to: .match, animated: true)
         updateNowPlaying()
+        // Where you are is the place you were last in now.
+        pinnedPlace = nil
+        defaults.removeObject(forKey: "pinnedPlace")
+        lensFollows(.outside)
     }
 
     /// Hands an edited field back to the weather, without leaving the place.
@@ -1179,41 +1417,130 @@ final class Mixer {
         case home
         case place(Place)
         case atmosphere(Atmosphere)
+        case preset(Preset)
 
-        /// What marks it as a favorite, if it can be one: a scene can.
+        /// What marks it as a favorite, if it can be one: a scene or a mix can.
         var favoriteKey: String? {
-            if case .atmosphere(let a) = self { return Mixer.favoriteKey(a) }
-            return nil
+            switch self {
+            case .atmosphere(let a): Mixer.favoriteKey(a)
+            case .preset(let p): Mixer.favoriteKey(p)
+            default: nil
+            }
         }
     }
 
     /// Where the field is now.
     var here: Destination {
+        if let p = activePreset { return .preset(p) }
         if mode == .escape, let p = escape?.place { return .place(p) }
         if mode == .atmosphere, let a = atmosphere { return .atmosphere(a) }
         return .home
     }
 
-    /// Swiping travels through atmospheres, picked ahead of time so the carousel can show them
-    /// peeking in before you arrive. Back goes through where you've been.
-    private(set) var upcoming: Atmosphere?
-    private(set) var upcomingBack: Atmosphere?
-    private(set) var backStack: [Destination] = []
-    /// The hand-picked atmospheres, shuffled, so you hear them all before any comes round again.
-    @ObservationIgnored private var deck: [Atmosphere] = []
+    /// What the wheel at the top is turned to: what swiping goes through. Travel goes round where
+    /// you are and the real places, westward, in their weather now; Imagine through the scenes,
+    /// in weather of their own; the rest through the Library's mixes for focus, relaxing, sleep
+    /// and meditating.
+    enum Lens: String, CaseIterable {
+        case outside = "Travel", imagine = "Imagine", focus = "Focus", relax = "Relax", sleep = "Sleep", meditate = "Meditate"
 
-    var next: Destination? { upcoming.map { .atmosphere($0) } }
-    var previous: Destination? { backStack.last ?? upcomingBack.map { .atmosphere($0) } }
+        var tag: Preset.Tag? {
+            switch self {
+            case .focus: .focus
+            case .relax: .relax
+            case .sleep: .sleep
+            case .meditate: .meditate
+            case .outside, .imagine: nil
+            }
+        }
 
-    private func draw(excluding: [Atmosphere?]) -> Atmosphere {
-        if deck.isEmpty { deck = Atmosphere.curated.shuffled() }
-        let i = deck.firstIndex { a in !excluding.contains(a) } ?? 0
-        return deck.remove(at: i)
+        init(_ tag: Preset.Tag) {
+            self = switch tag {
+            case .focus: .focus
+            case .relax: .relax
+            case .sleep: .sleep
+            case .meditate: .meditate
+            }
+        }
     }
 
+    /// Nil when what's playing isn't on the wheel (one of yours): the wheel goes quiet, and
+    /// swiping goes through Yours.
+    private(set) var lens: Lens? = .outside
+
+    /// The wheel following what's playing, when it was started some other way (the Library,
+    /// Where to?, the menus): turned to its stop, or quiet, going through Yours.
+    private func lensFollows(_ new: Lens?) {
+        guard new != lens else { return }
+        lens = new
+        refreshUpcoming()
+    }
+
+    /// Turns the wheel to where that stop was left (Places, to the last place you were), or its
+    /// first. Turning it, like swiping, only changes what's there: paused stays paused.
+    func choose(_ new: Lens) {
+        guard new != lens else { return }
+        lens = new
+        switch new {
+        case .outside:
+            if let p = pinnedPlace { select(p, play: false) } else { goHome() }
+        case .imagine:
+            go(to: atmosphere ?? Atmosphere.curated[0], play: false)
+        default:
+            let mixes = ring(new)
+            let last = defaults.string(forKey: "lens.\(new.rawValue)")
+            if let p = mixes.first(where: { $0.id == last }) ?? mixes.first { load(p, play: false) }
+        }
+        refreshUpcoming()
+    }
+
+    /// A lens's mixes, in order, going round.
+    private func ring(_ lens: Lens) -> [Preset] {
+        guard let tag = lens.tag else { return [] }
+        return Preset.all.filter { $0.tag == tag }
+    }
+
+    /// The real places, going west from where you are, so swiping feels like turning a globe.
+    private var placesWestward: [Place] {
+        let home = homeCoordinate?.longitude ?? 0
+        func west(_ p: Place) -> Double { (home - p.longitude).truncatingRemainder(dividingBy: 360) + (home < p.longitude ? 360 : 0) }
+        return allPlaces.filter { !isNearHome($0) }.sorted { west($0) < west($1) }
+    }
+
+    /// Swiping travels round what the wheel is on, the next ones worked out ahead of time so the
+    /// carousel can show them peeking in before you arrive.
+    private(set) var upcoming: Destination?
+    private(set) var upcomingBack: Destination?
+
+    var next: Destination? { upcoming }
+    var previous: Destination? { upcomingBack }
+
     private func refreshUpcoming() {
-        upcoming = draw(excluding: [atmosphere])
-        upcomingBack = draw(excluding: [atmosphere, upcoming])
+        func around(_ all: [Destination]) {
+            guard all.count > 1 else { upcoming = nil; upcomingBack = nil; return }
+            let i = all.firstIndex(of: here) ?? -1
+            upcoming = all[(i + 1) % all.count]
+            upcomingBack = all[(i - 1 + all.count) % all.count]
+        }
+        switch lens {
+        case .outside?:
+            around([.home] + placesWestward.map { .place($0) })
+        case .imagine?:
+            // The scenes, and the one you're in if it isn't one of them (imagined, or another sky).
+            let scenes = Atmosphere.curated
+            around(scenes.map { .atmosphere($0) } + (atmosphere.map { scenes.contains($0) ? [] : [.atmosphere($0)] } ?? []))
+        case let lens?:
+            around(ring(lens).map { .preset($0) })
+        case nil:
+            around(yoursItems.map { item in
+                switch item {
+                case .saved(let m): .preset(m.preset)
+                case .kept(.scene(let a)): .atmosphere(a)
+                case .kept(.mix(let p)): .preset(p)
+                case .kept(.place(let p)): .place(p)
+                }
+            })
+        }
     }
 
     /// A slide for the carousel to make, asked for from outside it (the keyboard, the menus,
@@ -1232,19 +1559,15 @@ final class Mixer {
         if carouselShowing { travelRequest = TravelRequest(forward: forward) } else { travel(forward: forward) }
     }
 
-    /// Swipe left (forward) to a new place, or right (back) through where you've been.
+    /// Swipe left (forward) to the next, or right (back). Paused stays paused.
     func travel(forward: Bool) {
         guard let dest = forward ? next : previous else { return }
-        if forward {
-            backStack.append(here)
-        } else if !backStack.isEmpty {
-            backStack.removeLast()
-        }
         shuffleCount += 1
         switch dest {
         case .home: goHome()
-        case .place(let p): select(p)
-        case .atmosphere(let a): go(to: a)
+        case .place(let p): select(p, play: false)
+        case .atmosphere(let a): go(to: a, play: false)
+        case .preset(let p): load(p, play: false)
         }
         refreshUpcoming()
     }
@@ -1263,19 +1586,21 @@ final class Mixer {
         case .home:
             guard let h = home else { return Page(title: "Home", line: "", orbs: []) }
             let o = Preset.layout(Self.applying(tweaks["home"], to: WeatherMix.orbs(for: h, place: homePlace)))
-            return Page(title: h.mixName, line: isImagining ? imaginingLine(at: h.place) : "\(h.sceneDescription.capitalizedFirst) outside",
+            return Page(title: h.mixName, line: "\(h.sceneDescription.capitalizedFirst) outside",
                         orbs: o)
         case .place(let p):
             let o: [Orb]
             let line: String
             if let c = placeConditions[p.name] {
                 o = Preset.layout(Self.applying(tweaks[p.name], to: WeatherMix.orbs(for: c, place: p)))
-                line = isImagining ? imaginingLine(at: p.name) : "\(c.sceneDescription.capitalizedFirst) in \(p.name)"
+                line = "\(c.sceneDescription.capitalizedFirst) in \(p.name)"
             } else {
                 o = Preset.layout(p.signature.compactMap { k, v in k.playable.map { ($0, v) } })
                 line = p.country
             }
             return Page(title: p.title, line: line, orbs: o)
+        case .preset(let p):
+            return Page(title: p.name, line: p.description, orbs: p.orbs)
         case .atmosphere(let a):
             let c = a.imagined()
             return Page(title: a.title(in: c), line: a.setting.info.line,
@@ -1288,6 +1613,7 @@ final class Mixer {
         let target: [(SoundKind, Double)]
         let name: String
         switch mode {
+        case .mix: return
         case .match:
             guard let home else { return }
             target = Self.applying(tweaks["home"], to: WeatherMix.orbs(for: home, place: homePlace))

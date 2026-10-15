@@ -272,14 +272,14 @@ enum Ecology {
             let curve: [Double] = [0.9, 0.95, 1, 1, 0.9, 0.6, 0.25, 0, 0, 0, 0, 0,
                                    0, 0, 0, 0, 0, 0, 0, 0.15, 0.35, 0.55, 0.75, 0.85]
             return curve[t.hour]
-        case .cafe:
+        case .cafe, .busyCafe:
             switch t.hour {
             case 7: return 0.6
             case 8...19: return 1
             case 20, 21: return 0.7
             default: return 0
             }
-        case .train:
+        case .train, .steamTrain, .electricTrain:
             switch t.hour {
             case 0: return 0.3
             case 1...4: return 0
@@ -370,7 +370,7 @@ enum Ecology {
         case _ where steady:
             (depth, rests) = (0.15, false)
         case .ocean, .rain, .lightRain, .heavyRain, .tinRoof, .tentRain, .rainyStreet, .cityHum, .stream, .waterfall,
-             .lake, .lapping, .rocks, .fountain, .wind, .treeWind, .gusts, .howl, .breeze, .highway, .cityNight, .cabin, .fan, .caveDrips, .drone, .brown, .pink, .white, .green, .grey, .blue, .violet:
+             .lake, .lapping, .shore, .rocks, .fountain, .wind, .treeWind, .gusts, .howl, .breeze, .highway, .cityNight, .cabin, .fan, .caveDrips, .drone, .brown, .pink, .white, .green, .grey, .blue, .violet:
             (depth, rests) = (0.15, false)
         default:
             (depth, rests) = (0.5, true)
@@ -441,7 +441,7 @@ enum Ecology {
             let breeze = c.windKMH < 5 ? 0.4 : c.windKMH < 15 ? 0.7 : c.windKMH > 30 ? 1.4 : 1
             return c.isSnow ? breeze * 0.5 : breeze
         // Snow muffles a city; rain empties café terraces; wet roads hiss.
-        case .cityHum, .cityNight, .rainyStreet, .train:
+        case .cityHum, .cityNight, .rainyStreet, .train, .steamTrain, .electricTrain:
             return snowCover ? 0.65 : 1
         case .traffic:
             return snowCover ? 0.6 : 1
@@ -456,12 +456,12 @@ enum Ecology {
             return c.temperatureC < 1 ? 0 : 1
         case .bazaar:
             return heavy ? 0.6 : 1
-        case .cafe:
+        case .cafe, .busyCafe:
             return heavy ? 0.5 : snowCover ? 0.6 : 1
         case .whales:
             return heavy ? 0.6 : 1
         // Calm water laps; wind turns it into surf. Swell pounds the rocks harder in wind.
-        case .lapping:
+        case .lapping, .shore:
             return c.windKMH < 20 ? 1 : c.windKMH < 35 ? 0.85 : 0.6
         case .rocks:
             return c.windKMH < 10 ? 0.85 : c.windKMH > 30 ? 1.25 : 1
@@ -508,11 +508,25 @@ enum Soundscape {
             add(.thunder, 0.45)
             add(.lightning, 0.4)
         }
-        // A breeze is heard through what it moves (leaves, water); real wind past about 18 km/h, of
-        // the place's own kind (in the trees, at the window), and in gusts when it snows outdoors.
+        // A breeze is heard through what it moves (leaves, water); wind past about 18 km/h, of the
+        // place's own kind (in the trees, at the window), and in gusts when it snows outdoors. In the
+        // open it comes in levels: a steady breeze in a moderate wind, the rise and fall of real
+        // wind past about 30 km/h, and gusts on top past 45.
         if c.windKMH > 18 {
-            let kind: SoundKind = c.isSnow && windKind != .howl ? .gusts : windKind
-            add(kind, min(0.8, (c.windKMH - 15) / 35) * (c.isSnow ? 0.7 : 1))
+            let level = min(0.8, (c.windKMH - 15) / 35) * (c.isSnow ? 0.7 : 1)
+            if c.isSnow && windKind != .howl {
+                add(.gusts, level)
+            } else if windKind == .wind {
+                if c.windKMH < 30 {
+                    // The breeze sits further back than wind (`presenceDB`): brought up to meet it.
+                    add(.breeze, min(0.8, 0.25 + level * 1.6))
+                } else {
+                    add(.wind, level)
+                    if c.windKMH > 45 { add(.gusts, level * 0.6) }
+                }
+            } else {
+                add(windKind, level)
+            }
         }
 
         // The place itself, in season and at this hour.

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A card in the colors of a set of sounds, for the Library's mixes and Teleport's ideas: a
+/// A card in the colors of a set of sounds, for the Library's cards: a
 /// small line at the top, the name at the bottom, and under it either a line of text or the
 /// sounds themselves on one line. Outlined when it's what's playing.
 struct ColorCard: View {
