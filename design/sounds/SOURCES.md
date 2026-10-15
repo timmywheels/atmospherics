@@ -19,7 +19,7 @@ Sounds that come and go (`SoundKind.rhythm`, in Atmospherics/Rhythm.swift) play 
 | tentRain | https://freesound.org/s/251233/ | pulswelle | CC0 | 20 s |
 | tinRoof | https://freesound.org/s/521773/ | MrFossy | CC0 | 10 s |
 | whales | https://commons.wikimedia.org/wiki/File:Humpback_whale_wheezeblow.ogg | US National Park Service, Glacier Bay | Public domain | 1 s (55 s loop; takes cut by calls.swift) |
-| lake | https://freesound.org/s/614299/ | TheFlyFishingFilmmaker | CC0 | 20 s |
+| lake | https://freesound.org/s/376795/ | amholma | CC0 | 2 s (95 s loop; small waves on a quiet shore, replacing 614299, which splashed) |
 | cafe | https://freesound.org/s/46310/ | moxobna | CC0 | 30 s |
 | library | https://freesound.org/s/620683/ | xkeril | CC0 | 30 s |
 | cabin | https://freesound.org/s/447825/ | courter | CC0 | 30 s |
@@ -63,6 +63,7 @@ Freesound files were taken from their public HQ previews (about 128 kbps MP3).
 | highway | https://freesound.org/s/448092/ | courter | CC0 | 175 s (120 s loop) |
 | planes | https://freesound.org/s/383068/ | Kinoton | CC0 | 0 s (105 s, one flyover, plays once) |
 | lapping | https://freesound.org/s/520246/ | blaukreuz | CC0 | 2 s (130 s loop) |
+| shore | https://freesound.org/s/352356/ | Alex_hears_things | CC0 | 2 s (155 s loop; waves lapping on sand, close) |
 | palms | https://freesound.org/s/423800/ | klangfabrik | CC0 | 2 s (120 s loop; low-passed at 15 kHz to drop preview artifacts) |
 | rocks | https://freesound.org/s/411509/ | felix.blume | CC0 | 3 s (150 s loop) |
 | buoy | https://freesound.org/s/675693/ | craigsmith | CC0 | 1 s (85 s loop) |

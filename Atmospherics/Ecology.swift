@@ -370,7 +370,7 @@ enum Ecology {
         case _ where steady:
             (depth, rests) = (0.15, false)
         case .ocean, .rain, .lightRain, .heavyRain, .tinRoof, .tentRain, .rainyStreet, .cityHum, .stream, .waterfall,
-             .lake, .lapping, .rocks, .fountain, .wind, .treeWind, .gusts, .howl, .breeze, .highway, .cityNight, .cabin, .fan, .caveDrips, .drone, .brown, .pink, .white, .green, .grey, .blue, .violet:
+             .lake, .lapping, .shore, .rocks, .fountain, .wind, .treeWind, .gusts, .howl, .breeze, .highway, .cityNight, .cabin, .fan, .caveDrips, .drone, .brown, .pink, .white, .green, .grey, .blue, .violet:
             (depth, rests) = (0.15, false)
         default:
             (depth, rests) = (0.5, true)
@@ -461,7 +461,7 @@ enum Ecology {
         case .whales:
             return heavy ? 0.6 : 1
         // Calm water laps; wind turns it into surf. Swell pounds the rocks harder in wind.
-        case .lapping:
+        case .lapping, .shore:
             return c.windKMH < 20 ? 1 : c.windKMH < 35 ? 0.85 : 0.6
         case .rocks:
             return c.windKMH < 10 ? 0.85 : c.windKMH > 30 ? 1.25 : 1

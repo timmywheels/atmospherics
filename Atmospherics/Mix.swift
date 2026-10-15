@@ -55,7 +55,7 @@ extension SoundKind {
         case .tentRain, .tinRoof, .wind, .treeWind, .gusts: -3
         case .howl: -5
         case .breeze: -6
-        case .cafe, .train, .fire, .white, .blue, .lapping: -4
+        case .cafe, .train, .fire, .white, .blue, .lapping, .shore: -4
         case .violet, .traffic, .bazaar: -5
         case .highway: -6
         case .lightRain: -6

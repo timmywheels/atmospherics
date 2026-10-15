@@ -487,7 +487,7 @@ extension SoundKind {
         switch self {
         case .rain, .lightRain, .heavyRain, .thunder, .lightning, .tentRain, .tinRoof,
              .wind, .breeze, .treeWind, .gusts, .howl: .weather
-        case .ocean, .stream, .waterfall, .caveDrips, .lake, .lapping, .rocks, .buoy, .halyards,
+        case .ocean, .stream, .waterfall, .caveDrips, .lake, .lapping, .shore, .rocks, .buoy, .halyards,
              .gulls, .foghorn, .whales: .water
         case .birds, .crickets, .cicadas, .frogs, .winterBirds, .geese, .peepers, .palms,
              .howlers, .jungleBirds, .parrots, .canopy, .treeFrogs: .nature

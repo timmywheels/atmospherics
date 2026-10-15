@@ -11,7 +11,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
     case cafe, library, cabin, bells, typing, clock, rainyStreet, lightRain, heavyRain
     case winterBirds, gulls, foghorn, peepers, geese
     case traffic, highway, planes
-    case lapping, palms, rocks, buoy, halyards
+    case lapping, palms, rocks, buoy, halyards, shore
     case tram, motorbikes, fountain, templeBell, bazaar
     // Wind of different kinds: a breeze in the leaves, wind in the trees, winter gusts, a howl at the window
     case breeze, treeWind, gusts, howl
@@ -28,7 +28,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
              .cafe, .library, .cabin, .bells, .typing, .clock, .cityHum, .rainyStreet,
              .rain, .lightRain, .heavyRain, .thunder, .lightning, .fire, .crickets, .ocean, .birds, .stream, .train, .wind, .cicadas, .frogs,
              .winterBirds, .gulls, .foghorn, .peepers, .geese, .traffic, .highway, .planes,
-             .lapping, .palms, .rocks, .buoy, .halyards, .tram, .motorbikes, .fountain, .templeBell, .bazaar,
+             .lapping, .shore, .palms, .rocks, .buoy, .halyards, .tram, .motorbikes, .fountain, .templeBell, .bazaar,
              .breeze, .treeWind, .gusts, .howl, .cityNight, .chimes, .fan: true
         default: false
         }
@@ -43,7 +43,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .canopy: return .cicadas
         case .tentRain, .tinRoof, .lightRain, .heavyRain: return .rain
         case .waterfall, .caveDrips: return .stream
-        case .lake, .whales, .lapping, .rocks: return .ocean
+        case .lake, .whales, .lapping, .shore, .rocks: return .ocean
         case .leaves: return .wind
         case .palms: return .leaves
         case .cafe, .rainyStreet, .traffic, .highway, .bazaar: return .cityHum
@@ -85,7 +85,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .winterBirds, .geese, .peepers: .nature
         case .gulls, .foghorn: .water
         case .traffic, .highway, .planes: .city
-        case .lapping, .rocks, .buoy, .halyards: .water
+        case .lapping, .shore, .rocks, .buoy, .halyards: .water
         case .palms: .nature
         case .tram, .motorbikes, .bazaar: .city
         case .fountain: .water
@@ -113,6 +113,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .winterBirds: "Winter birds"
         case .peepers: "Spring peepers"
         case .lapping: "Lapping water"
+        case .shore: "Waves on the sand"
         case .palms: "Palm fronds"
         case .rocks: "Surf on rocks"
         case .buoy: "Bell buoy"
@@ -143,6 +144,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .heavyRain: "Downpour"
         case .winterBirds: "Winter birds"
         case .lapping: "Lapping"
+        case .shore: "Shore"
         case .halyards: "Rigging"
         case .templeBell: "Temple bell"
         case .treeWind: "Tree wind"
@@ -160,7 +162,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .wind, .breeze, .treeWind, .gusts, .howl: .wind
         case .rain, .lightRain, .heavyRain, .tentRain, .tinRoof, .rainyStreet: .rain
         case .thunder, .lightning: .thunder
-        case .ocean, .lapping, .rocks: .waves
+        case .ocean, .lapping, .shore, .rocks: .waves
         case .stream, .waterfall, .fountain, .lake, .caveDrips: .water
         case .fire: .fire
         case .leaves, .palms: .leaves
@@ -221,7 +223,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .green: ["green noise"]
         case .rain, .ocean, .wind, .thunder, .fire, .birds, .grey, .blue, .violet, .frogs, .cityHum, .train, .drone,
              .canopy, .leaves, .caveDrips, .tentRain, .tinRoof, .lake, .cafe, .library, .cabin, .rainyStreet, .lightRain,
-             .heavyRain, .lapping, .rocks, .bazaar, .breeze, .treeWind, .gusts, .cityNight, .traffic, .betaBeats, .gammaBeats,
+             .heavyRain, .lapping, .shore, .rocks, .bazaar, .breeze, .treeWind, .gusts, .cityNight, .traffic, .betaBeats, .gammaBeats,
              .betaPulse: []
         }
     }
@@ -239,7 +241,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .chimes, .halyards, .buoy, .howl, .tentRain, .tinRoof, .cicadas: 0.4
         case .clock, .library, .cafe, .typing, .fan, .cabin, .train, .tram, .bazaar, .foghorn, .whales: 0.25
         case .fire, .crickets, .cityHum, .cityNight, .traffic, .highway, .motorbikes, .rainyStreet, .waterfall, .fountain: 0.15
-        case .frogs, .treeFrogs, .peepers, .loons, .stream, .lake, .ocean, .lapping, .rocks, .caveDrips: 0.05
+        case .frogs, .treeFrogs, .peepers, .loons, .stream, .lake, .ocean, .lapping, .shore, .rocks, .caveDrips: 0.05
         default: 0.3
         }
     }
@@ -292,6 +294,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .highway: 335
         case .planes: 185
         case .lapping: 182
+        case .shore: 75
         case .palms: 122
         case .rocks: 212
         case .buoy: 28
