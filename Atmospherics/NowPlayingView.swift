@@ -439,10 +439,8 @@ private struct MorphView: View, Animatable {
             HStack(alignment: .top, spacing: 8) {
                 crossfade
                 Spacer(minLength: 0)
-                if still, let favorite {
-                    FavoriteToggle(key: favorite, size: 21)
-                        .padding(.top, 14)
-                }
+                bookmark(size: 21)
+                    .padding(.top, 14)
             }
             .opacity(room == nil ? 1 : 0)
             .allowsHitTesting(room == nil)
@@ -450,14 +448,24 @@ private struct MorphView: View, Animatable {
             #else
             HStack(alignment: .lastTextBaseline, spacing: 8) {
                 crossfade
-                if still, let favorite {
-                    FavoriteToggle(key: favorite, size: 19)
-                        .alignmentGuide(.lastTextBaseline) { $0[VerticalAlignment.center] + 7 }
-                }
+                bookmark(size: 19)
+                    .alignmentGuide(.lastTextBaseline) { $0[VerticalAlignment.center] + 7 }
                 Spacer(minLength: 0)
             }
             #endif
         }
+    }
+
+    /// The bookmark, keeping its place whether or not it shows (mid-swipe, or for where you are),
+    /// so the names never shift as one place turns into the next.
+    private func bookmark(size: CGFloat) -> some View {
+        ZStack {
+            Color.clear.frame(width: 40, height: 40)
+            if let favorite { FavoriteToggle(key: favorite, size: size) }
+        }
+        .opacity(still && favorite != nil ? 1 : 0)
+        .allowsHitTesting(still && favorite != nil)
+        .animation(.smooth(duration: 0.2), value: still)
     }
 
     /// The names going and coming, each drifting a little the way it goes.
