@@ -112,7 +112,7 @@ struct PlayButton: View {
     let size: CGFloat
 
     var body: some View {
-        Button(intent: PlayPauseIntent()) {
+        Button(intent: PlayPauseIntent(play: !isPlaying)) {
             Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                 .font(.system(size: size * 0.38, weight: .semibold))
                 .foregroundStyle(Color(hex: 0x0c0e13))

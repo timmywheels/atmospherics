@@ -198,7 +198,17 @@ final class Mixer {
         if mode == .atmosphere { applyWeather(to: .atmosphere, animated: false) }
         setUpSystemAudio()
         startClock()
-        PlayPauseIntent.handler = { [weak self] in self?.togglePlayback() }
+        PlayPauseIntent.handler = { [weak self] play in
+            guard let self else { return }
+            switch play {
+            case true?: if !self.isPlaying { self.play() }
+            case false?: if self.isPlaying { self.stop() }
+            case nil: self.togglePlayback()
+            }
+        }
+        #if os(iOS)
+        adoptWidgetsAtLaunch()
+        #endif
         if imagined {
             Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .seconds(2))
@@ -281,22 +291,53 @@ final class Mixer {
             activity = try? Activity.request(attributes: SoundscapeActivity(),
                                              content: .init(state: state, staleDate: nil))
         } else if let activity, changedForWidget {
-            Task { await activity.update(.init(state: state, staleDate: nil)) }
+            whileSending { await activity.update(.init(state: state, staleDate: nil)) }
         }
         #endif
     }
 
     #if os(iOS)
-    /// Ends any Live Activity left from an earlier version.
-    private func endAllActivities() {
-        guard !Activity<SoundscapeActivity>.activities.isEmpty else { return }
-        Task { for a in Activity<SoundscapeActivity>.activities { await a.end(nil, dismissalPolicy: .immediate) } }
+    /// Just launched, so nothing is playing: whatever the widget and the lock screen were left
+    /// showing (the app closed while playing, say) is put right. The Live Activity left from
+    /// before is taken up again, rather than another started beside it; any more are ended.
+    private func adoptWidgetsAtLaunch() {
+        let left = Activity<SoundscapeActivity>.activities
+        activity = left.first
+        let extras = left.dropFirst()
+        let stale = NowPlayingSnapshot.load()
+        if stale.isPlaying {
+            var paused = stale
+            paused.isPlaying = false
+            paused.save()
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+        guard let activity = activity else { return }
+        let state = SoundscapeActivity.ContentState(title: stale.title, place: stale.temperature.isEmpty ? stale.place : "\(stale.place) \(stale.temperature)",
+                                                    isPlaying: false, hues: stale.lights.map(\.hue))
+        whileSending {
+            for extra in extras { await extra.end(nil, dismissalPolicy: .immediate) }
+            await activity.update(.init(state: state, staleDate: nil))
+        }
+        endActivitySoon()
+    }
+
+    /// Runs `work` with time asked for to finish it, should the app be put away meanwhile (just
+    /// paused from the lock screen, nothing playing to keep it awake), so the widget and the
+    /// lock screen don't stop halfway, showing the wrong thing.
+    private func whileSending(_ work: @escaping () async -> Void) {
+        let app = UIApplication.shared
+        var id = UIBackgroundTaskIdentifier.invalid
+        id = app.beginBackgroundTask(withName: "Now playing") { app.endBackgroundTask(id) }
+        Task { @MainActor in
+            await work()
+            app.endBackgroundTask(id)
+        }
     }
 
     /// Ends the Live Activity a little after pausing, so a quick pause/play doesn't flicker it.
     private func endActivitySoon() {
         let current = activity
-        Task { [weak self] in
+        whileSending { [weak self] in
             try? await Task.sleep(for: .seconds(30))
             guard let self, !self.isPlaying, self.activity === current else { return }
             await current?.end(nil, dismissalPolicy: .immediate)
