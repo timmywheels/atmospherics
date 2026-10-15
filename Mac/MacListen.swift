@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// Listening: the halo and the scene's name, with the ones before and after beside it. Swipe
-/// with two fingers or press ← → to travel, click the light for its layers or drag it to turn it,
-/// click the name to teleport. Along the bottom, what's playing (click it for its layers),
-/// Teleport and Surprise me, the sleep timer and play.
+/// Listening: the wheel, the halo and the scene's name, with the ones before and after beside it.
+/// Swipe with two fingers or press ← → to travel, ↑ ↓ to turn the wheel, click the light for its
+/// layers or drag it to turn it, click the name to teleport. Along the bottom, what's playing
+/// (click it for its layers), the sleep timer and play.
 struct MacListen: View {
     @Environment(Mixer.self) private var mixer
     @Environment(MacNavigation.self) private var navigation
@@ -18,6 +18,7 @@ struct MacListen: View {
         "Click the light to see its layers",
         "Click the name to teleport",
         "Drag the light to turn it",
+        "↑ ↓ turn the wheel",
     ]
 
     var body: some View {
@@ -25,8 +26,7 @@ struct MacListen: View {
             // What swiping goes through, as on the phone. (Outside on it, or ⇧⌘H, is your own weather.)
             ModeWheel()
 
-            Carousel(dragX: $dragX, openMixer: { navigation.tab = .layers }, teleport: { navigation.tab = .teleport },
-                     openLibrary: { navigation.tab = .library })
+            Carousel(dragX: $dragX, openMixer: { navigation.tab = .layers }, teleport: { navigation.tab = .teleport })
                 .frame(minHeight: 340, maxHeight: .infinity)
                 .overlay { TravelArrows() }
 
@@ -37,13 +37,6 @@ struct MacListen: View {
             HStack(spacing: 14) {
                 LayersLink(orbs: mixer.byVolume) { navigation.tab = .layers }
                 ResetTuning()
-                BarButton(symbol: Theme.Symbol.teleport, label: "Teleport", help: "Teleport  ⌘K") {
-                    navigation.tab = .teleport
-                }
-                // On to somewhere new, as → and a swipe do.
-                BarButton(symbol: Theme.Symbol.surprise, label: "Surprise me", help: "Surprise me  →") {
-                    mixer.requestTravel(forward: true)
-                }
                 TimerMenu()
                 MacPlayButton()
             }
@@ -57,6 +50,8 @@ struct MacListen: View {
         .focused($focused)
         .onKeyPress(.leftArrow) { mixer.requestTravel(forward: false); return .handled }
         .onKeyPress(.rightArrow) { mixer.requestTravel(forward: true); return .handled }
+        .onKeyPress(.upArrow) { mixer.turnWheel(forward: false); return .handled }
+        .onKeyPress(.downArrow) { mixer.turnWheel(forward: true); return .handled }
         .onAppear { focused = true }
         .overlay(alignment: .bottom) {
             ZStack {
@@ -136,29 +131,6 @@ private struct LayersLink: View {
         .onHover { hovering = $0 }
         .help("Layers  ⌘3")
         .accessibilityHint("Opens Layers")
-    }
-}
-
-/// A quiet symbol along the bottom that lights up under the pointer.
-private struct BarButton: View {
-    let symbol: String
-    let label: String
-    let help: String
-    let action: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(hovering ? Theme.text : Theme.muted)
-                .padding(6)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .help(help)
-        .accessibilityLabel(label)
     }
 }
 

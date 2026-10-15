@@ -224,7 +224,7 @@ final class Mixer {
         }
         titles = [
             .match: defaults.string(forKey: "title.match") ?? "Attic Rain",
-            .escape: defaults.string(forKey: "title.escape") ?? "Warm Night",
+            .escape: defaults.string(forKey: "title.escape") ?? "",
             .atmosphere: defaults.string(forKey: "title.atmosphere") ?? "",
         ]
         following = [
@@ -258,6 +258,7 @@ final class Mixer {
         }
         if mode == .atmosphere && atmosphere == nil { mode = .match }
         lens = activePreset?.tag.map(Lens.init) ?? (mode == .atmosphere ? .scenes : .outside)
+        lastPlace = mode == .escape ? pinnedPlace : nil
         refreshUpcoming()
         apply()
         if mode == .atmosphere { applyWeather(to: .atmosphere, animated: false) }
@@ -449,9 +450,9 @@ final class Mixer {
             guard let escape else {
                 if let pinned = pinnedPlace {
                     return WeatherSummary(place: pinned.title, temp: "", line: "Checking the weather in \(pinned.name)…",
-                                          head: "Escaping to \(pinned.name)")
+                                          head: "Live in \(pinned.name)")
                 }
-                return WeatherSummary(place: "", temp: "", line: "Finding somewhere else…", head: "Escaping outside")
+                return WeatherSummary(place: "", temp: "", line: "Finding somewhere else…", head: "Places")
             }
             let c = escape.conditions
             let line: String
@@ -464,7 +465,7 @@ final class Mixer {
                 line = Self.escapeLine(c)
             }
             return WeatherSummary(place: escape.place.title, temp: c.temperature, line: line,
-                                  head: "Escaping to \(escape.place.name)")
+                                  head: "Live in \(escape.place.name)")
         case .atmosphere:
             guard let a = atmosphere else { return WeatherSummary(place: "", temp: "", line: "", head: "Atmosphere") }
             let line = following[.atmosphere] != true ? "Your own mix, made from \(a.setting.info.name.lowercased())"
@@ -743,20 +744,25 @@ final class Mixer {
 
     nonisolated static func favoriteKey(_ preset: Preset) -> String { "mix:\(preset.id)" }
     nonisolated static func favoriteKey(_ atmosphere: Atmosphere) -> String { "scene:\(atmosphere.id)" }
+    /// The same as a visit to it is kept (`Visit`).
+    nonisolated static func favoriteKey(_ place: Place) -> String { "place:\(place.name)" }
 
-    /// What's playing, as something to favorite: a Library mix or a scene (not your own weather).
+    /// What's playing, as something to favorite: a Library mix, a scene or a real place (not
+    /// your own weather, always first among places).
     var favoriteKey: String? {
         if let p = activePreset { return Self.favoriteKey(p) }
         if mode == .atmosphere, let a = atmosphere { return Self.favoriteKey(a) }
+        if mode == .escape, let p = escape?.place { return Self.favoriteKey(p) }
         return nil
     }
 
     enum Favorite: Identifiable {
-        case scene(Atmosphere), mix(Preset)
+        case scene(Atmosphere), mix(Preset), place(Place)
         var id: String {
             switch self {
             case .scene(let a): Mixer.favoriteKey(a)
             case .mix(let p): Mixer.favoriteKey(p)
+            case .place(let p): Mixer.favoriteKey(p)
             }
         }
     }
@@ -767,6 +773,7 @@ final class Mixer {
         return favorites.compactMap { key in
             if key.hasPrefix("scene:"), let a = Atmosphere(id: String(key.dropFirst(6))) { return .scene(a) }
             if key.hasPrefix("mix:"), let p = mixes.first(where: { Self.favoriteKey($0) == key }) { return .mix(p) }
+            if key.hasPrefix("place:"), let p = allPlaces.first(where: { Self.favoriteKey($0) == key }) { return .place(p) }
             return nil
         }
     }
@@ -882,19 +889,23 @@ final class Mixer {
     /// A symbol for the weather outside, beside it.
     var outsideSymbol: String { liveHome?.symbol ?? "location" }
 
-    /// Where "Back to …" returns from a Library mix: the place you were in, or home.
-    var presetReturnName: String {
-        if mode == .escape, let p = escape?.place { return p.name }
-        if mode == .atmosphere, let a = atmosphere { return a.setting.info.name.lowercased() }
-        return homeName
+    /// The real place you were last in, nil for where you are: where Back to … goes from a mix or
+    /// a scene.
+    private(set) var lastPlace: Place?
+    /// Whether there's a place to go back to: something other than a place is playing.
+    var awayFromPlaces: Bool { activePreset != nil || mode == .atmosphere }
+    var lastPlaceName: String { lastPlace?.name ?? homeName }
+
+    /// Back to the last real place, from a mix or a scene, playing it: a choice, not a browse.
+    func backToPlace() {
+        if let p = lastPlace { select(p) } else { goHome(); if !isPlaying { play() } }
     }
 
-    /// Leaves a Library mix and follows the weather where you were.
-    func leavePreset() {
-        setActivePreset(nil)
-        traveling = true
-        followWeatherAgain()
-        lensFollows(mode == .atmosphere ? .scenes : .outside)
+    /// Turns the wheel a stop on or back, as ↑ ↓ do on a Mac.
+    func turnWheel(forward: Bool) {
+        let all = Lens.allCases
+        let i = all.firstIndex(of: lens) ?? 0
+        choose(all[(i + (forward ? 1 : -1) + all.count) % all.count])
     }
 
     func load(_ preset: Preset, play shouldPlay: Bool = true) {
@@ -1172,6 +1183,7 @@ final class Mixer {
         updateNowPlaying()
         if shouldPlay && !isPlaying { play() }
         arrived()
+        lastPlace = place
         lensFollows(.outside)
     }
 
@@ -1188,6 +1200,7 @@ final class Mixer {
         setFollowing(true, for: .match)
         applyWeather(to: .match, animated: true)
         updateNowPlaying()
+        lastPlace = nil
         lensFollows(.outside)
     }
 

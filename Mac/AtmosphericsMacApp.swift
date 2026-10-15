@@ -117,10 +117,19 @@ final class MacNavigation {
     static let mainWindow = "main"
 
     enum Tab: String, CaseIterable, Identifiable {
-        case listen = "Listen", teleport = "Teleport", layers = "Layers", library = "Library"
+        case listen = "Listen", library = "Library", layers = "Layers", teleport = "Teleport"
 
         var id: Self { self }
-        var key: KeyEquivalent { KeyEquivalent(Character("\(Self.allCases.firstIndex(of: self)! + 1)")) }
+        /// ⌘ and this: Listen and the Library first, Layers as ⌘E (it's an edit), and Teleport as ⌘K,
+        /// from the Playback menu.
+        var key: KeyEquivalent {
+            switch self {
+            case .listen: "1"
+            case .library: "2"
+            case .layers: "e"
+            case .teleport: "k"
+            }
+        }
     }
 
     var tab: Tab = .listen

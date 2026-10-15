@@ -108,7 +108,7 @@ private struct TabPills: View {
                 }
                 .buttonStyle(.plain)
                 .onHover { hovered = $0 ? tab : (hovered == tab ? nil : hovered) }
-                .help("\(tab.rawValue)  ⌘\(String(tab.key.character))")
+                .help("\(tab.rawValue)  ⌘\(String(tab.key.character).uppercased())")
                 .accessibilityAddTraits(selection == tab ? .isSelected : [])
             }
         }
@@ -120,35 +120,31 @@ private struct TabPills: View {
     }
 }
 
-/// From Teleport, Layers or the Library, back to listening; while listening, back to the place
-/// before this one (as swiping right does). Always there, so the tabs never shift; dimmed when
-/// there's nowhere to go back to.
+/// From Teleport, Layers or the Library, back to listening. One job: while listening it's out of
+/// sight (traveling back is ←, ⌘← and the arrow over the halo), but keeps its place, so the tabs
+/// never shift.
 private struct BackButton: View {
-    @Environment(Mixer.self) private var mixer
     @Binding var selection: MacNavigation.Tab
     @State private var hovering = false
 
     var body: some View {
-        let last = selection == .listen ? mixer.previous : nil
-        let enabled = selection != .listen || last != nil
-        let label = selection != .listen ? "Back to Listen" : last.map { "Back to \(mixer.page(for: $0).title)  ←" } ?? "Back"
-        Button {
-            if selection != .listen { selection = .listen } else { mixer.requestTravel(forward: false) }
-        } label: {
+        let enabled = selection != .listen
+        Button { selection = .listen } label: {
             Image(systemName: "chevron.left")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(hovering && enabled ? Theme.text : Theme.secondary)
+                .foregroundStyle(hovering ? Theme.text : Theme.secondary)
                 .frame(width: 28, height: 28)
-                .background(Circle().fill(.white.opacity(hovering && enabled ? 0.12 : 0.05)))
+                .background(Circle().fill(.white.opacity(hovering ? 0.12 : 0.05)))
                 .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
-        .opacity(enabled ? 1 : 0.35)
+        .opacity(enabled ? 1 : 0)
         .onHover { hovering = $0 }
-        .help(label)
-        .accessibilityLabel(label)
+        .help("Back to Listen")
+        .accessibilityLabel("Back to Listen")
+        .accessibilityHidden(!enabled)
         .animation(.smooth(duration: 0.2), value: enabled)
     }
 }

@@ -89,8 +89,7 @@ struct NowPlayingView: View {
             ModeWheel()
                 .padding(.horizontal, -28)
 
-            Carousel(dragX: $dragX, openMixer: toggleLayers, teleport: { openTeleport(typing: false) },
-                     openLibrary: { showLibrary = true }, drawerTop: layersTop)
+            Carousel(dragX: $dragX, openMixer: toggleLayers, teleport: { openTeleport(typing: false) }, drawerTop: layersTop)
                 .animation(.smooth(duration: 0.5), value: layersTop)
                 .frame(minHeight: 400, maxHeight: .infinity)
 
@@ -107,7 +106,8 @@ struct NowPlayingView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityHint("Opens Layers")
-                    if mixer.timer != .off {
+                    // The sleep timer, when it's other than the usual 8 hours.
+                    if mixer.timer != .off && mixer.timer != .eightHours {
                         Text(mixer.timer.label)
                             .font(Theme.label(11))
                             .foregroundStyle(Theme.muted)
@@ -125,7 +125,7 @@ struct NowPlayingView: View {
 
                 // Where to go next, and play, in reach of a thumb.
                 HStack(spacing: 12) {
-                    DescribeBar { openTeleport(typing: true) }
+                    WhereToBar { openTeleport(typing: true) }
                     PlayButton()
                 }
                 .padding(.top, 10)
@@ -208,15 +208,11 @@ struct Carousel: View {
     let openMixer: () -> Void
     /// Tapping the name: Teleport.
     let teleport: () -> Void
-    let openLibrary: () -> Void
     /// Where on the screen the top of a drawer over the place is, while there's one up.
     var drawerTop: CGFloat? = nil
-    /// The place's buttons, sprung up out of ⋯.
-    @State private var actionsOpen = false
     @State private var pastThreshold = false
     /// How far the form has turned under the finger, in notches of about 15°: a soft tick each.
     @State private var turnNotch = 0
-    @State private var saving = false
     /// Two places being blended, while a swipe or a trip is under way, and how far (`blend`, 0 to 1).
     @State private var pair: Pair?
     @State private var blend: Double = 0
@@ -231,7 +227,7 @@ struct Carousel: View {
     @State private var held = false
     /// How far the held form has been pulled from its place; it springs back when let go.
     @State private var lift: CGSize = .zero
-    /// A hold let go without a drag isn't a tap on the form.
+    /// The form was carried, so letting go of it isn't a tap. (A hold let go without moving is.)
     @State private var skipTap = false
 
     private struct Pair {
@@ -244,10 +240,10 @@ struct Carousel: View {
         Mixer.Page(title: mixer.title, line: mixer.weather.line, orbs: mixer.byVolume, lines: mixer.titleLines)
     }
 
-    /// Tapping the form: tucks the buttons away if they're out, or else it's Layers.
+    /// Tapping the form: Layers.
     private func tapForm() {
         if skipTap { skipTap = false; return }
-        if actionsOpen { actionsOpen = false } else { openMixer() }
+        openMixer()
     }
 
     /// Holding the form picks it up, with a tap you can feel and the form rising a little.
@@ -258,7 +254,6 @@ struct Carousel: View {
                 guard !held, !landing, pair == nil, case .second(true, let drag?) = value,
                       SoundForm.touches(drag.startLocation, orbs: mixer.byVolume, size: formSize) else { return }
                 withAnimation(.spring(duration: 0.25, bounce: 0.3)) { held = true }
-                skipTap = true
                 Haptics.play(.tap)
             }
             .onEnded { _ in letGo() }
@@ -286,8 +281,7 @@ struct Carousel: View {
             MorphView(from: pair?.from ?? live, to: pair?.to ?? live, forward: pair?.forward ?? true, t: pair == nil ? 0 : blend,
                       still: pair == nil, nudge: pair == nil ? dragX * 0.4 : 0, room: room, favorite: mixer.favoriteKey,
                       lift: lift, held: held,
-                      formSize: $formSize, openMixer: tapForm, teleport: { actionsOpen = false; teleport() },
-                      save: { saving = true }, library: { actionsOpen = false; openLibrary() })
+                      formSize: $formSize, openMixer: tapForm, teleport: teleport)
                 .frame(width: w, height: proxy.size.height, alignment: .topLeading)
                 .contentShape(Rectangle())
                 .gesture(drag(width: w))
@@ -303,20 +297,6 @@ struct Carousel: View {
                     arrive(forward: request.forward, duration: 0.55)
                 }
         }
-        #if os(iOS)
-        // Down the right of the name, staying put as one place turns into the next.
-        .overlay(alignment: .bottomTrailing) {
-            PageActions(open: $actionsOpen, favorite: mixer.favoriteKey, save: { saving = true }, edit: openMixer,
-                        library: openLibrary, teleport: teleport, surprise: { mixer.requestTravel(forward: true) })
-                .padding(.bottom, 4)
-                .opacity(drawerTop == nil ? 1 : 0)
-                .allowsHitTesting(drawerTop == nil)
-        }
-        .onChange(of: drawerTop == nil) { _, clear in
-            if !clear { actionsOpen = false }
-        }
-        #endif
-        .saveMixPrompt(isPresented: $saving)
         .onAppear { mixer.carouselShowing = true }
         .onDisappear { mixer.carouselShowing = false }
         .haptic(.tick, trigger: pastThreshold) { _, now in now }
@@ -331,6 +311,7 @@ struct Carousel: View {
                     SculptureSpin.home.drag(g.translation)
                     // Held, it comes with the finger a way, pulling harder the further it goes.
                     if held {
+                        skipTap = true
                         lift = CGSize(width: 70 * tanh(g.translation.width / 180), height: 70 * tanh(g.translation.height / 180))
                     }
                     let notch = Int((abs(g.translation.width) + abs(g.translation.height)) / 26)
@@ -449,8 +430,6 @@ private struct MorphView: View, Animatable {
     @Binding var formSize: CGSize
     let openMixer: () -> Void
     let teleport: () -> Void
-    let save: () -> Void
-    let library: () -> Void
 
     var animatableData: Double {
         get { t }
@@ -470,12 +449,14 @@ private struct MorphView: View, Animatable {
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel(room == nil ? "Open layers" : "Close layers")
             #if os(iOS)
-            // The names, leaving room down the right for what you can do with the place
-            // (`PageActions`, which stays put above).
-            HStack(alignment: .bottom, spacing: 12) {
+            // The names, with the bookmark that saves what's playing up by the name.
+            HStack(alignment: .top, spacing: 8) {
                 crossfade
                 Spacer(minLength: 0)
-                Color.clear.frame(width: PageActions.width, height: 1)
+                if still, let favorite {
+                    FavoriteToggle(key: favorite, size: 21)
+                        .padding(.top, 14)
+                }
             }
             .opacity(room == nil ? 1 : 0)
             .allowsHitTesting(room == nil)
@@ -514,11 +495,6 @@ private struct MorphView: View, Animatable {
             }
             .buttonStyle(.plain)
             .accessibilityHint("Teleport somewhere")
-            .contextMenu {
-                Button("Teleport…", systemImage: Theme.Symbol.teleport) { teleport() }
-                Button("Save this mix", systemImage: Theme.Symbol.save) { save() }
-                Button("Library", systemImage: Theme.Symbol.library) { library() }
-            }
             PageLines(line: page.line)
         }
         .allowsHitTesting(live)
@@ -807,16 +783,16 @@ private struct ConfirmReset: ViewModifier {
     }
 }
 
-/// Where to go in your own words: "Describe the vibe…", which opens Teleport ready to type.
-private struct DescribeBar: View {
+/// Where to? Somewhere new in your own words: opens Teleport ready to type.
+private struct WhereToBar: View {
     let describe: () -> Void
 
     var body: some View {
         Button(action: describe) {
             HStack(spacing: 10) {
-                Image(systemName: "text.bubble")
+                Image(systemName: "magnifyingglass")
                     .font(.system(size: 15))
-                Text("Describe the vibe…")
+                Text("Where to?")
                     .font(Theme.label(15))
                 Spacer(minLength: 0)
             }
@@ -828,128 +804,8 @@ private struct DescribeBar: View {
         .foregroundStyle(Theme.secondary)
         .background(Capsule().fill(Color.white.opacity(0.06)))
         .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
-        .accessibilityHint("Say where to go in your own words")
-    }
-}
-
-/// What you can do with the place you're in, tucked behind one glass button down the right of its
-/// name, ⋯. Tap it and the rest spring up out of it one after another, nearest first: keep it (the
-/// bookmark: a favorite, or for the weather outside or a real place, a mix of your own), change its
-/// sounds, the sleep timer (each tap the next one, and off after the longest), the Library,
-/// Teleport, and Surprise me, which slides on to somewhere new as a swipe does. Tap × or the form
-/// to tuck them away; the ones that open something tuck them away as they do. It stays put while
-/// places slide past beneath it.
-private struct PageActions: View {
-    static let width: CGFloat = 42
-    private static let gap: CGFloat = 8
-    @Environment(Mixer.self) private var mixer
-    @Binding var open: Bool
-    let favorite: String?
-    let save: () -> Void
-    let edit: () -> Void
-    let library: () -> Void
-    let teleport: () -> Void
-    let surprise: () -> Void
-
-    /// Top to bottom: what's about this place, then the ways somewhere else, nearest the thumb.
-    private enum Action: Int, CaseIterable { case keep, edit, timer, library, teleport, surprise }
-
-    var body: some View {
-        let count = Action.allCases.count
-        VStack(spacing: Self.gap) {
-            ForEach(Action.allCases, id: \.self) { action in
-                // How many places up from ⋯ it sits.
-                let steps = count - action.rawValue
-                face(action)
-                    .scaleEffect(open ? 1 : 0.4)
-                    .opacity(open ? 1 : 0)
-                    .offset(y: open ? 0 : CGFloat(steps) * (Self.width + Self.gap))
-                    // Up out of ⋯ nearest first, with a little spring; back in farthest first, quicker.
-                    .animation(open ? .spring(duration: 0.42, bounce: 0.28).delay(Double(steps - 1) * 0.035)
-                                    : .smooth(duration: 0.26).delay(Double(count - steps) * 0.018),
-                               value: open)
-                    .allowsHitTesting(open)
-                    .accessibilityHidden(!open)
-            }
-            more
-        }
-    }
-
-    /// ⋯, turning into × while the rest are out.
-    private var more: some View {
-        Button {
-            Haptics.play(open ? .tick : .tap)
-            open.toggle()
-        } label: {
-            Image(systemName: open ? "xmark" : Theme.Symbol.more)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Theme.text)
-                .contentTransition(.symbolEffect(.replace))
-                .glassCircle()
-        }
-        .buttonStyle(.plain)
-        .animation(.smooth(duration: 0.3), value: open)
-        .accessibilityLabel(open ? "Close" : "More")
-    }
-
-    @ViewBuilder private func face(_ action: Action) -> some View {
-        switch action {
-        case .keep:
-            if let favorite {
-                FavoriteToggle(key: favorite, size: 16, glass: true)
-            } else {
-                button(Theme.Symbol.keep, "Save this mix", tucks: true, action: save)
-            }
-        case .edit: button(Theme.Symbol.edit, "Edit sounds", tucks: true, action: edit)
-        case .timer: timer
-        case .library: button(Theme.Symbol.library, "Library", tucks: true, action: library)
-        case .teleport: button(Theme.Symbol.teleport, "Teleport", tucks: true, action: teleport)
-        // Out it stays, to go on again.
-        case .surprise: button(Theme.Symbol.surprise, "Surprise me", tucks: false, action: surprise)
-        }
-    }
-
-    /// The sleep timer, showing how long it's set for: each tap the next one, off after the longest.
-    /// (Its tick comes from the play button, which feels every change to the timer.)
-    private var timer: some View {
-        Button { mixer.cycleTimer() } label: {
-            ZStack {
-                if mixer.timer == .off {
-                    Image(systemName: Theme.Symbol.timer)
-                        .font(.system(size: 15, weight: .medium))
-                        .transition(.blurReplace)
-                } else {
-                    Text(mixer.timer.label)
-                        .font(Theme.label(13, .semibold))
-                        .contentTransition(.numericText())
-                        .transition(.blurReplace)
-                }
-            }
-            .foregroundStyle(Theme.text)
-            .glassCircle()
-            .animation(.smooth(duration: 0.3), value: mixer.timer)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Sleep timer")
-        .accessibilityValue(mixer.timer.seconds.map {
-            "Stops after " + Duration.seconds($0).formatted(.units(allowed: [.hours, .minutes], width: .wide))
-        } ?? "Off")
-        .accessibilityHint("Tap for the next one")
-    }
-
-    private func button(_ symbol: String, _ label: String, tucks: Bool, action: @escaping () -> Void) -> some View {
-        Button {
-            Haptics.play(.tap)
-            if tucks { open = false }
-            action()
-        } label: {
-            Image(systemName: symbol)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Theme.text)
-                .glassCircle()
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
+        .accessibilityLabel("Search")
+        .accessibilityHint("Say where you'd like to go")
     }
 }
 

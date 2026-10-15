@@ -104,10 +104,11 @@ struct LibraryView: View {
                             switch favorite {
                             case .scene(let a): scene(a)
                             case .mix(let p): item(p)
+                            case .place(let p): place(p)
                             }
                         }
                         if mixer.favorites.isEmpty {
-                            note("Tap the bookmark on a scene or a mix to keep it here.")
+                            note("Tap the bookmark by a name to keep it here.")
                         }
                     }
                     ForEach(yours) { mix in
@@ -209,7 +210,7 @@ struct LibraryView: View {
     }
 
     /// A real place you've been: tap to go back, to its weather now.
-    private func place(_ p: Place, when: Date) -> some View {
+    private func place(_ p: Place, when: Date? = nil) -> some View {
         let page = mixer.page(for: .place(p))
         let current = mixer.mode == .escape && mixer.activePreset == nil && mixer.escape?.place.name == p.name
         return Button {
@@ -219,9 +220,11 @@ struct LibraryView: View {
         } label: {
             ColorCard(hues: page.orbs.sorted { $0.volume > $1.volume }.prefix(3).map(\.kind.hue),
                       top: Self.top(p.country, when), title: p.title, sounds: page.orbs,
-                      badge: current ? (mixer.isPlaying ? "Playing" : "Here") : nil, outlined: current)
+                      badge: current ? (mixer.isPlaying ? "Playing" : "Here") : nil, outlined: current,
+                      trailingRoom: 30)
         }
         .buttonStyle(.plain)
+        .overlay(alignment: .bottomTrailing) { FavoriteToggle(key: Mixer.favoriteKey(p)).padding(6) }
         .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)

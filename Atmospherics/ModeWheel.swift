@@ -2,8 +2,9 @@ import SwiftUI
 
 /// What swiping goes through, as a wheel of words that never ends: the lens you're in at the
 /// center, its neighbours peeking in at the edges. Drag it and you feel each word go by, like a
-/// date picker; let go and it settles on one and plays it. Tap a word at the edge to turn
-/// to it. Turned some other way (the Library, Teleport), it rolls round to match, quietly.
+/// date picker; let go and it settles on one, there to swipe through (playing or paused, as it
+/// was). Tap a word at the edge to turn to it. Turned some other way (the Library, Teleport),
+/// it rolls round to match, quietly.
 struct ModeWheel: View {
     @Environment(Mixer.self) private var mixer
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -107,7 +108,7 @@ struct ModeWheel: View {
             }
     }
 
-    /// Rolls to `word`, a detent for each on the way, then plays what it stopped on.
+    /// Rolls to `word`, a detent for each on the way, then turns the lens to what it stopped on.
     private func turn(to word: Int) {
         settling?.cancel()
         let start = position

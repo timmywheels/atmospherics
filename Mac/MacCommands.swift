@@ -36,7 +36,8 @@ private struct TabCommands: View {
                 navigation.tab = tab
                 openWindow(id: MacNavigation.mainWindow)
             }
-            .keyboardShortcut(tab.key, modifiers: .command)
+            // Teleport's ⌘K is in the Playback menu.
+            .keyboardShortcut(tab == .teleport ? nil : KeyboardShortcut(tab.key, modifiers: .command))
         }
         Divider()
     }
@@ -63,11 +64,19 @@ private struct PlaybackCommands: View {
         Button("Go Back") { mixer.requestTravel(forward: false) }
             .keyboardShortcut(.leftArrow, modifiers: .command)
             .disabled(mixer.previous == nil)
-        Button(mixer.activePreset != nil ? "Back to \(mixer.presetReturnName)" : "Go Home") {
-            mixer.activePreset != nil ? mixer.leavePreset() : mixer.goHome()
+        Menu("Go To") {
+            ForEach(Array(Mixer.Lens.allCases.enumerated()), id: \.element) { i, lens in
+                Button(lens.rawValue) { mixer.choose(lens) }
+                    .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: [.command, .option])
+            }
         }
-        .keyboardShortcut("h", modifiers: [.command, .shift])
-        .disabled(mixer.activePreset == nil && mixer.mode == .match)
+        Button("Where You Are") { withAnimation(.smooth(duration: 0.35)) { mixer.goHome() } }
+            .keyboardShortcut("h", modifiers: [.command, .shift])
+            .disabled(!mixer.awayFromPlaces && mixer.mode == .match)
+        if mixer.awayFromPlaces {
+            Button("Back to \(mixer.lastPlaceName)") { mixer.backToPlace() }
+                .keyboardShortcut("b", modifiers: [.command, .shift])
+        }
         Button("Teleport…") {
             navigation.tab = .teleport
             openWindow(id: MacNavigation.mainWindow)
