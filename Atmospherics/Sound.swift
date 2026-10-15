@@ -152,6 +152,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .betaBeats: "Beta beats"
         case .gammaBeats: "Gamma beats"
         case .betaPulse: "Beta pulse"
+        case .bazaar: "Crowd"
         default: rawValue.capitalized
         }
     }
@@ -192,6 +193,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .parrots: ["parrot", "macaw"]
         case .jungleBirds: ["jungle bird", "tropical bird"]
         case .winterBirds: ["winter bird"]
+        case .bazaar: ["crowd", "market", "bazaar", "marketplace", "busy street"]
         case .busyCafe: ["busy café", "busy cafe", "busy coffee shop", "coffee counter", "espresso machine"]
         // Each wind by its own words, so "a light breeze" is the breeze and "a howling gale" the howl.
         case .breeze: ["breeze", "breezy", "light wind", "gentle wind", "soft wind", "light air"]
