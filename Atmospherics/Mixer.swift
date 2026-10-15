@@ -175,8 +175,7 @@ final class Mixer {
         if mode == .atmosphere && atmosphere == nil { mode = .match }
         migrateToOwnSlots()
         if mode == .mix && activePreset == nil { mode = .match }
-        lens = activePreset?.tag.map(Lens.init) ?? (mode == .atmosphere || activePreset != nil ? nil : .outside)
-        offShelf = mode == .atmosphere ? .scenes : .yours
+        lens = activePreset.map { $0.tag.map(Lens.init) } ?? (mode == .atmosphere ? .imagine : .outside)
         refreshUpcoming()
         apply()
         if mode == .atmosphere { applyWeather(to: .atmosphere, animated: false) }
@@ -186,7 +185,7 @@ final class Mixer {
         if imagined {
             Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .seconds(2))
-                self?.announce("Places now always play their real weather. For imagined weather, try a scene.", for: 6)
+                self?.announce("Travel always plays a place's real weather now. For weather of your own, try Imagine.", for: 6)
             }
         }
     }
@@ -434,7 +433,7 @@ final class Mixer {
         updateNowPlaying()
         if shouldPlay && !isPlaying { play() }
         arrived()
-        lensFollows(nil, shelf: .scenes)
+        lensFollows(.imagine)
     }
 
     /// Goes to a scene described in words, its sounds changed as asked. The changes are kept as
@@ -939,7 +938,7 @@ final class Mixer {
             defaults.set(preset.id, forKey: "lens.\(Lens(tag).rawValue)")
             lensFollows(Lens(tag))
         } else {
-            lensFollows(nil, shelf: .yours)
+            lensFollows(nil)
         }
     }
 
@@ -1339,11 +1338,12 @@ final class Mixer {
         return .home
     }
 
-    /// What the wheel at the top is turned to: what swiping goes through. Places goes round where
-    /// you are and the real places, westward; the rest through the Library's mixes for focus,
-    /// relaxing, sleep and meditating.
+    /// What the wheel at the top is turned to: what swiping goes through. Travel goes round where
+    /// you are and the real places, westward, in their weather now; Imagine through the scenes,
+    /// in weather of their own; the rest through the Library's mixes for focus, relaxing, sleep
+    /// and meditating.
     enum Lens: String, CaseIterable {
-        case outside = "Places", focus = "Focus", relax = "Relax", sleep = "Sleep", meditate = "Meditate"
+        case outside = "Travel", imagine = "Imagine", focus = "Focus", relax = "Relax", sleep = "Sleep", meditate = "Meditate"
 
         var tag: Preset.Tag? {
             switch self {
@@ -1351,7 +1351,7 @@ final class Mixer {
             case .relax: .relax
             case .sleep: .sleep
             case .meditate: .meditate
-            case .outside: nil
+            case .outside, .imagine: nil
             }
         }
 
@@ -1365,25 +1365,15 @@ final class Mixer {
         }
     }
 
-    /// Where swiping goes when what's playing isn't on the wheel: the Library shelf it came from.
-    enum Shelf { case scenes, yours }
-
-    /// Nil when what's playing isn't on the wheel (a scene, one of yours): the wheel goes quiet,
-    /// and swiping goes through `offShelf`.
+    /// Nil when what's playing isn't on the wheel (one of yours): the wheel goes quiet, and
+    /// swiping goes through Yours.
     private(set) var lens: Lens? = .outside
-    private(set) var offShelf: Shelf = .scenes
 
     /// The wheel following what's playing, when it was started some other way (the Library,
-    /// Where to?, the menus): turned to its stop, or quiet, going through its shelf.
-    private func lensFollows(_ new: Lens?, shelf: Shelf = .scenes) {
-        if let new {
-            guard new != lens else { return }
-            lens = new
-        } else {
-            guard lens != nil || offShelf != shelf else { return }
-            lens = nil
-            offShelf = shelf
-        }
+    /// Where to?, the menus): turned to its stop, or quiet, going through Yours.
+    private func lensFollows(_ new: Lens?) {
+        guard new != lens else { return }
+        lens = new
         refreshUpcoming()
     }
 
@@ -1395,6 +1385,8 @@ final class Mixer {
         switch new {
         case .outside:
             if let p = pinnedPlace { select(p, play: false) } else { goHome() }
+        case .imagine:
+            go(to: atmosphere ?? Atmosphere.curated[0], play: false)
         default:
             let mixes = ring(new)
             let last = defaults.string(forKey: "lens.\(new.rawValue)")
@@ -1434,22 +1426,21 @@ final class Mixer {
         switch lens {
         case .outside?:
             around([.home] + placesWestward.map { .place($0) })
+        case .imagine?:
+            // The scenes, and the one you're in if it isn't one of them (imagined, or another sky).
+            let scenes = Atmosphere.curated
+            around(scenes.map { .atmosphere($0) } + (atmosphere.map { scenes.contains($0) ? [] : [.atmosphere($0)] } ?? []))
         case let lens?:
             around(ring(lens).map { .preset($0) })
         case nil:
-            switch offShelf {
-            case .scenes:
-                around(Atmosphere.curated.map { .atmosphere($0) })
-            case .yours:
-                around(yoursItems.map { item in
-                    switch item {
-                    case .saved(let m): .preset(m.preset)
-                    case .kept(.scene(let a)): .atmosphere(a)
-                    case .kept(.mix(let p)): .preset(p)
-                    case .kept(.place(let p)): .place(p)
-                    }
-                })
-            }
+            around(yoursItems.map { item in
+                switch item {
+                case .saved(let m): .preset(m.preset)
+                case .kept(.scene(let a)): .atmosphere(a)
+                case .kept(.mix(let p)): .preset(p)
+                case .kept(.place(let p)): .place(p)
+                }
+            })
         }
     }
 

@@ -37,8 +37,9 @@ struct TuneDrawer: View {
         MacLayers()
             .frame(width: shown)
             .frame(maxHeight: .infinity)
-            .background(.ultraThinMaterial)
-            .background(Theme.background.opacity(0.55))
+            // Below the toolbar, not under it: the tabs stay over Listen's own top.
+            .background(.ultraThinMaterial, ignoresSafeAreaEdges: [])
+            .background(Theme.background.opacity(0.55), ignoresSafeAreaEdges: [])
             .overlay(alignment: .leading) {
                 Rectangle().fill(Theme.hairline).frame(width: 1)
             }

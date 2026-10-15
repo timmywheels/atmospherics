@@ -547,6 +547,8 @@ Each stage ships on its own. Order: 1 → 2 → 3 → 4 → 5 → 6, with 7 opti
 
 **Decided 2026-10-14:** the owner took every recommended answer below (1–8).
 
+**Changed 2026-10-15:** Scenes are back on the wheel, as **Imagine**, and Places is called **Travel**: wheel and Library shelves read Travel · Imagine · Focus · Relax · Sleep · Meditate (question 2 reversed).
+
 1. **Places are live only, so Tokyo in the rain is a Scene. OK?** *Recommended: yes.* It is the plainest reading of "real places with live weather", and it removes the Sky-versus-Scene overlap. The cost is that existing users lose weather overrides on places, which the one-time notice explains.
 2. **Scenes: Library only, or their own wheel stop?** *Recommended: Library only, as directed.* Swiping inside a Scene moves through the Scenes shelf, with the wheel quiet. If testing shows that people want to browse Scenes from Listen, add a sixth stop, "Scenes", rather than mixing them into the mood rings.
 3. **Fold Favorites into Yours (one saved list)?** *Recommended: yes.* Two saved lists is the kind of overlap the owner wants gone. The alternative is keeping a separate Favorites shelf.

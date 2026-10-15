@@ -149,12 +149,8 @@ struct TuneHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text("TUNE")
-                        .font(Theme.caps(11))
-                        .tracking(1.3)
-                        .foregroundStyle(Theme.muted)
-                    Spacer()
+                HStack(spacing: 10) {
+                    // First, at the top left: where a Mac puts a way out.
                     if let close {
                         Button(action: close) {
                             Image(systemName: "xmark")
@@ -168,6 +164,11 @@ struct TuneHeader: View {
                         .help("Close  ⌘E")
                         .accessibilityLabel("Close Tune")
                     }
+                    Text("TUNE")
+                        .font(Theme.caps(11))
+                        .tracking(1.3)
+                        .foregroundStyle(Theme.muted)
+                    Spacer()
                 }
                 // The name on a line of its own, so it's never cut short by the buttons.
                 HStack(alignment: .firstTextBaseline, spacing: 2) {

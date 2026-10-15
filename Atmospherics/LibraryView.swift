@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Everything the app can play, on shelves: Places (where you are first, then the real places,
-/// in their live weather), Mixes by mood, Scenes by mood, every Sound, Yours (all you've kept, in
+/// Everything the app can play, on shelves: Travel (where you are first, then the real places,
+/// in their live weather), Imagine (the scenes, in weather of their own, by mood), Mixes by mood, every Sound, Yours (all you've kept, in
 /// your order) and Recent. The field at the top, Where to?, finds anything on any shelf, best match
 /// first, and its last answer is always to imagine what you typed: a scene made from your words.
 /// A card plays and closes the Library; a sound's pill adds it to what's playing and stays. It
@@ -29,7 +29,7 @@ struct LibraryView: View {
     private let focus: Bool
 
     private enum Shelf: String, CaseIterable, Hashable {
-        case places = "Places", mixes = "Mixes", scenes = "Scenes", sounds = "Sounds", yours = "Yours", recent = "Recent"
+        case places = "Travel", scenes = "Imagine", mixes = "Mixes", sounds = "Sounds", yours = "Yours", recent = "Recent"
     }
 
     init(current: Preset? = nil, focus: Bool = false, done: (() -> Void)? = nil) {
@@ -309,13 +309,13 @@ struct LibraryView: View {
         let f = find(q)
         let groups: [(Int, AnyView)] = [
             (f.places.first?.1 ?? 0, AnyView(Group {
-                header("Places")
+                header("Travel")
                 ForEach(f.places, id: \.0.name) { place($0.0) }
                 // A real place with more asked of it ("Tokyo in the rain"): it, live, then imagined so.
                 if let top = f.places.first, top.1 < 5, q.lowercased() != top.0.name.lowercased() { imagine(q) }
             })),
             (f.mixes.first?.1 ?? 0, AnyView(Group { header("Mixes"); ForEach(f.mixes, id: \.0.id) { item($0.0) } })),
-            (f.scenes.first?.1 ?? 0, AnyView(Group { header("Scenes"); ForEach(f.scenes, id: \.0) { scene($0.0) } })),
+            (f.scenes.first?.1 ?? 0, AnyView(Group { header("Imagine"); ForEach(f.scenes, id: \.0) { scene($0.0) } })),
             (f.sounds.first?.1 ?? 0, AnyView(Group {
                 header("Sounds · tap to add to what's playing")
                 SoundPills(kinds: f.sounds.map(\.0))
