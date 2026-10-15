@@ -16,6 +16,9 @@ struct LibraryView: View {
     @State private var mood: Preset.Tag?
     @State private var query = ""
     @FocusState private var searching: Bool
+    /// Searching: from the moment the field is asked for (or opened ready) until Cancel. Not the
+    /// keyboard's focus, which a tap on a suggestion takes away before the tap lands.
+    @State private var searchActive: Bool
     @State private var renaming: SavedMix?
     @State private var newName = ""
     @State private var deletes = 0
@@ -36,6 +39,7 @@ struct LibraryView: View {
         self.current = current
         self.focus = focus
         self.done = done
+        _searchActive = State(initialValue: focus)
         _shelf = State(initialValue: current?.isSaved == true ? .yours : current != nil ? .mixes : .places)
         _mood = State(initialValue: current?.tag)
     }
@@ -51,7 +55,7 @@ struct LibraryView: View {
             searchField
                 .padding(.top, 14)
 
-            if !finding {
+            if !searchActive {
                 chips(Shelf.allCases.filter { shelfShows($0) }.map { s in (s.rawValue, s == shelf, { shelf = s }) })
                     .padding(.top, 14)
                 if shelf == .mixes || shelf == .scenes {
@@ -61,7 +65,17 @@ struct LibraryView: View {
                 }
             }
 
-            if shelf == .sounds && !finding {
+            if searchActive && !finding {
+                // What you've asked for before, a few to try: laid out plainly, there at once.
+                ScrollView {
+                    startingPoints
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 18)
+                        .padding(.bottom, 24)
+                }
+                .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.immediately)
+            } else if shelf == .sounds && !searchActive {
                 fromScratch
                     .padding(.top, 10)
                 SoundSections(height: nil)
@@ -70,7 +84,7 @@ struct LibraryView: View {
             } else {
                 ScrollViewReader { proxy in
                     List {
-                        if finding { results } else if searching { startingPoints } else { shelfContent }
+                        if finding { results } else { shelfContent }
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
@@ -118,6 +132,10 @@ struct LibraryView: View {
         }
         .onDisappear { imagining?.cancel() }
         .onChange(of: query) { _, _ in notUnderstood = false }
+        .onChange(of: searching) { _, now in
+            if now { withAnimation(.smooth(duration: 0.25)) { searchActive = true } }
+        }
+        .animation(.smooth(duration: 0.25), value: searchActive)
         .onAppear {
             // Open where what's playing is: a scene among the scenes.
             if current == nil, mixer.mode == .atmosphere, let a = mixer.atmosphere {
@@ -141,6 +159,23 @@ struct LibraryView: View {
     // MARK: The field
 
     private var searchField: some View {
+        HStack(spacing: 12) {
+            field
+            if searchActive {
+                Button("Cancel") {
+                    query = ""
+                    searching = false
+                    searchActive = false
+                }
+                .font(Theme.label(15))
+                .foregroundStyle(Theme.text)
+                .buttonStyle(.plain)
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+    }
+
+    private var field: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 15))
@@ -407,43 +442,49 @@ struct LibraryView: View {
     }
 
     /// With the field empty and ready: what you've asked for before, a few to try, and a surprise.
-    @ViewBuilder private var startingPoints: some View {
-        if !recentPhrases.isEmpty {
-            HStack {
-                header("Recent")
-                Spacer()
-                Button {
-                    Haptics.play(.tap)
-                    Vibe.forgetRecent()
-                    withAnimation(.smooth(duration: 0.25)) { recentPhrases = [] }
-                } label: {
-                    Text("CLEAR").font(Theme.caps(10)).tracking(1.2).foregroundStyle(Theme.muted)
-                        .padding(.top, 14)
+    private var startingPoints: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if !recentPhrases.isEmpty {
+                HStack {
+                    caps("Recent")
+                    Spacer()
+                    Button {
+                        Haptics.play(.tap)
+                        Vibe.forgetRecent()
+                        withAnimation(.smooth(duration: 0.25)) { recentPhrases = [] }
+                    } label: {
+                        caps("Clear").contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear recent searches")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear recent searches")
+                phrases(Array(recentPhrases.prefix(4)), yours: true)
+                    .padding(.bottom, 14)
             }
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-            phrases(Array(recentPhrases.prefix(4)), yours: true)
+            caps("Try")
+            phrases(Array(suggestions.prefix(recentPhrases.isEmpty ? 4 : 3)), yours: false)
+            Button {
+                Haptics.play(.thud)
+                surprise()
+            } label: {
+                Label("Surprise me", systemImage: Theme.Symbol.surprise)
+                    .font(Theme.body(14, .medium))
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 16)
+                    .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 14)
         }
-        header("Try")
-        phrases(Array(suggestions.prefix(recentPhrases.isEmpty ? 4 : 3)), yours: false)
-        Button {
-            Haptics.play(.thud)
-            surprise()
-        } label: {
-            Label("Surprise me", systemImage: Theme.Symbol.surprise)
-                .font(Theme.body(14, .medium))
-                .padding(.vertical, 10)
-                .padding(.horizontal, 16)
-                .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .padding(.top, 10)
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
+        .padding(.horizontal, 4)
+    }
+
+    private func caps(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(Theme.caps(10))
+            .tracking(1.2)
+            .foregroundStyle(Theme.muted)
     }
 
     /// Phrases to tap, yours brighter than ours: one tap imagines it.
@@ -468,8 +509,6 @@ struct LibraryView: View {
                 .buttonStyle(.plain)
             }
         }
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
     }
 
     /// A scene or a real place, chosen for you, and straight there.
