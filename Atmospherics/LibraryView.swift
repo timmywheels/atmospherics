@@ -55,45 +55,52 @@ struct LibraryView: View {
             searchField
                 .padding(.top, 14)
 
-            if !searchActive {
-                chips(Shelf.allCases.filter { shelfShows($0) }.map { s in (s.rawValue, s == shelf, { shelf = s }) })
-                    .padding(.top, 14)
-                if shelf == .mixes || shelf == .scenes {
-                    chips([("All", mood == nil, { mood = nil })]
-                          + Preset.Tag.allCases.map { tag in (tag.rawValue, mood == tag, { mood = tag }) }, small: true)
+            // The shelves stay while a dropdown of suggestions is open over them; typing turns
+            // them into what was found.
+            ZStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 0) {
+                    if !finding {
+                        chips(Shelf.allCases.filter { shelfShows($0) }.map { s in (s.rawValue, s == shelf, { shelf = s }) })
+                            .padding(.top, 14)
+                        if shelf == .mixes || shelf == .scenes {
+                            chips([("All", mood == nil, { mood = nil })]
+                                  + Preset.Tag.allCases.map { tag in (tag.rawValue, mood == tag, { mood = tag }) }, small: true)
+                                .padding(.top, 8)
+                        }
+                    }
+                    if shelf == .sounds && !finding {
+                        fromScratch
+                            .padding(.top, 10)
+                        SoundSections(height: nil)
+                            .padding(.horizontal, -24)
+                            .padding(.top, 8)
+                    } else {
+                        ScrollViewReader { proxy in
+                            List {
+                                if finding { results } else { shelfContent }
+                            }
+                            .listStyle(.plain)
+                            .scrollContentBackground(.hidden)
+                            .scrollIndicators(.hidden)
+                            .scrollDismissesKeyboard(.immediately)
+                            .padding(.top, 6)
+                            .onAppear {
+                                if let id = current?.id { proxy.scrollTo(id, anchor: .center) }
+                            }
+                        }
+                    }
+                }
+                if searchActive && !finding {
+                    // Everything behind, dimmed: a tap there puts the suggestions away.
+                    Color.black.opacity(0.45)
+                        .padding(.horizontal, -24)
+                        .ignoresSafeArea(edges: .bottom)
+                        .contentShape(Rectangle())
+                        .onTapGesture { cancelSearch() }
+                        .transition(.opacity)
+                    dropdown
                         .padding(.top, 8)
-                }
-            }
-
-            if searchActive && !finding {
-                // What you've asked for before, a few to try: laid out plainly, there at once.
-                ScrollView {
-                    startingPoints
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 18)
-                        .padding(.bottom, 24)
-                }
-                .scrollIndicators(.hidden)
-                .scrollDismissesKeyboard(.immediately)
-            } else if shelf == .sounds && !searchActive {
-                fromScratch
-                    .padding(.top, 10)
-                SoundSections(height: nil)
-                    .padding(.horizontal, -24)
-                    .padding(.top, 8)
-            } else {
-                ScrollViewReader { proxy in
-                    List {
-                        if finding { results } else { shelfContent }
-                    }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
-                    .scrollIndicators(.hidden)
-                    .scrollDismissesKeyboard(.immediately)
-                    .padding(.top, 6)
-                    .onAppear {
-                        if let id = current?.id { proxy.scrollTo(id, anchor: .center) }
-                    }
+                        .transition(.opacity.combined(with: .offset(y: -6)))
                 }
             }
         }
@@ -162,11 +169,7 @@ struct LibraryView: View {
         HStack(spacing: 12) {
             field
             if searchActive {
-                Button("Cancel") {
-                    query = ""
-                    searching = false
-                    searchActive = false
-                }
+                Button("Cancel", action: cancelSearch)
                 .font(Theme.label(15))
                 .foregroundStyle(Theme.text)
                 .buttonStyle(.plain)
@@ -441,43 +444,97 @@ struct LibraryView: View {
         imagineIt(q)
     }
 
-    /// With the field empty and ready: what you've asked for before, a few to try, and a surprise.
-    private var startingPoints: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if !recentPhrases.isEmpty {
-                HStack {
-                    caps("Recent")
-                    Spacer()
-                    Button {
-                        Haptics.play(.tap)
-                        Vibe.forgetRecent()
-                        withAnimation(.smooth(duration: 0.25)) { recentPhrases = [] }
-                    } label: {
-                        caps("Clear").contentShape(Rectangle())
+    private func cancelSearch() {
+        query = ""
+        searching = false
+        searchActive = false
+    }
+
+    /// With the field empty and ready, a dropdown under it: what you've asked for before and a few
+    /// to try, a tap each, and Surprise me pinned along its foot.
+    private var dropdown: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if !recentPhrases.isEmpty {
+                        HStack {
+                            caps("Recent")
+                            Spacer()
+                            Button {
+                                Haptics.play(.tap)
+                                Vibe.forgetRecent()
+                                withAnimation(.smooth(duration: 0.25)) { recentPhrases = [] }
+                            } label: {
+                                caps("Clear").contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Clear recent searches")
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 14)
+                        .padding(.bottom, 4)
+                        ForEach(Array(recentPhrases.prefix(4)), id: \.self) { suggestion($0, icon: "clock.arrow.circlepath") }
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Clear recent searches")
+                    caps("Try")
+                        .padding(.horizontal, 16)
+                        .padding(.top, 14)
+                        .padding(.bottom, 4)
+                    // Ideas you haven't asked for already.
+                    ForEach(Array(suggestions.filter { !recentPhrases.contains($0) }.prefix(recentPhrases.isEmpty ? 5 : 3)), id: \.self) {
+                        suggestion($0, icon: "sparkles")
+                    }
                 }
-                phrases(Array(recentPhrases.prefix(4)), yours: true)
-                    .padding(.bottom, 14)
+                .padding(.bottom, 8)
             }
-            caps("Try")
-            phrases(Array(suggestions.prefix(recentPhrases.isEmpty ? 4 : 3)), yours: false)
+            .scrollIndicators(.hidden)
+            .frame(maxHeight: 340)
+            .fixedSize(horizontal: false, vertical: true)
+
+            Rectangle().fill(Theme.hairline).frame(height: 1)
             Button {
                 Haptics.play(.thud)
                 surprise()
             } label: {
                 Label("Surprise me", systemImage: Theme.Symbol.surprise)
-                    .font(Theme.body(14, .medium))
-                    .padding(.vertical, 10)
-                    .padding(.horizontal, 16)
-                    .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
-                    .contentShape(Capsule())
+                    .font(Theme.body(15, .medium))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .padding(.top, 14)
         }
-        .padding(.horizontal, 4)
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.ultraThinMaterial))
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.background.opacity(0.6)))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: .black.opacity(0.4), radius: 20, y: 10)
+    }
+
+    /// One suggestion, a row to tap: it imagines it.
+    private func suggestion(_ phrase: String, icon: String) -> some View {
+        Button {
+            Haptics.play(.tick)
+            query = phrase
+            imagineIt(phrase)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.muted)
+                    .frame(width: 18)
+                Text(phrase)
+                    .font(Theme.label(15))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.up.left")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Theme.muted)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func caps(_ text: String) -> some View {
@@ -485,30 +542,6 @@ struct LibraryView: View {
             .font(Theme.caps(10))
             .tracking(1.2)
             .foregroundStyle(Theme.muted)
-    }
-
-    /// Phrases to tap, yours brighter than ours: one tap imagines it.
-    private func phrases(_ list: [String], yours: Bool) -> some View {
-        FlowLayout(spacing: 6) {
-            ForEach(list, id: \.self) { phrase in
-                Button {
-                    Haptics.play(.tick)
-                    query = phrase
-                    imagineIt(phrase)
-                } label: {
-                    Text(phrase)
-                        .font(Theme.body(13))
-                        .foregroundStyle(yours ? Theme.text : Theme.secondary)
-                        .lineLimit(1)
-                        .padding(.vertical, 7)
-                        .padding(.horizontal, 12)
-                        .background(Capsule().fill(.white.opacity(yours ? 0.06 : 0)))
-                        .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-            }
-        }
     }
 
     /// A scene or a real place, chosen for you, and straight there.
