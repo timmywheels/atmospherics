@@ -522,8 +522,9 @@ struct LibraryView: View {
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
                     .frame(width: 18)
+                // In the serif: somewhere to go, said as a place's name is.
                 Text(phrase)
-                    .font(Theme.label(15))
+                    .font(Theme.display(20))
                     .lineLimit(1)
                 Spacer(minLength: 0)
                 Image(systemName: "arrow.up.left")
