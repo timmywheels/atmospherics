@@ -93,7 +93,7 @@ struct SoundList: View {
                 .font(Theme.mono(11))
                 .foregroundStyle(Theme.muted)
                 .padding(.horizontal, 24)
-                .padding(.top, 8)
+                .padding(.top, 18)
                 .padding(.bottom, 16)
             if embedded {
                 rows(height: 64)
@@ -147,8 +147,8 @@ struct TuneHeader: View {
     var close: (() -> Void)? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 10) {
                     // First, at the top left: where a Mac puts a way out.
                     if let close {
@@ -171,14 +171,15 @@ struct TuneHeader: View {
                     Spacer()
                 }
                 // The name on a line of its own, so it's never cut short by the buttons.
-                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                // In the serif, as on the home screen.
+                HStack(alignment: .center, spacing: 6) {
                     Text(mixer.title)
-                        .font(Theme.label(17, .medium))
+                        .font(Theme.display(30))
                         .lineLimit(2)
                         .contentTransition(.opacity)
                     if let key = mixer.favoriteKey {
-                        FavoriteToggle(key: key, size: 14)
-                            .frame(width: 32, height: 24)
+                        FavoriteToggle(key: key, size: 15)
+                            .frame(width: 32, height: 32)
                     }
                 }
             }
