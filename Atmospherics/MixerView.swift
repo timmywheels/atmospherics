@@ -28,16 +28,32 @@ struct MixerView: View {
     private var above: CGFloat { halfway.isFinite ? max(0, height - halfway) : 0 }
 
     var body: some View {
-        // Laid out for halfway, with the sounds to pick from below, out of sight until it's pulled
-        // higher, and then coming up into view under the finger rather than squeezing the layers.
-        VStack(spacing: 0) {
-            VStack(spacing: 0) {
-                header
-                SoundList()
-            }
-            .frame(height: halves && halfway.isFinite ? halfway : nil)
-            if !halves || halfway.isFinite {
-                SoundSections(height: max(SoundSections.height, above))
+        Group {
+            if SoundList.scrolls {
+                // One piece that scrolls, as on the Mac: what it is, every layer at a fingertip's
+                // height, then every sound to add, wrapping. Nothing squeezed into a box of its own.
+                ScrollView {
+                    VStack(spacing: 0) {
+                        header
+                        SoundList(embedded: true)
+                        SoundSections(embedded: true)
+                            .padding(.bottom, 32)
+                    }
+                }
+                .scrollIndicators(.hidden)
+            } else {
+                // Before iOS 18 a drag across a layer holds a scroll view still: laid out for the
+                // whole screen, the sounds to pick from below.
+                VStack(spacing: 0) {
+                    VStack(spacing: 0) {
+                        header
+                        SoundList()
+                    }
+                    .frame(height: halves && halfway.isFinite ? halfway : nil)
+                    if !halves || halfway.isFinite {
+                        SoundSections(height: max(SoundSections.height, above))
+                    }
+                }
             }
         }
         // As tall as the drawer, not the sounds out of sight below.
@@ -96,7 +112,7 @@ struct SoundList: View {
                 .padding(.top, 18)
                 .padding(.bottom, 16)
             if embedded {
-                rows(height: 64)
+                rows(height: Self.fingertip)
             } else if Self.scrolls {
                 // A fingertip's height and then some, however many are playing.
                 ScrollView { rows(height: 72) }
@@ -124,6 +140,15 @@ struct SoundList: View {
             AddLayer(height: height)
             Rectangle().fill(Theme.hairline).frame(height: 1)
         }
+    }
+
+    /// A layer's height laid out whole: a fingertip and then some on the phone.
+    static var fingertip: CGFloat {
+        #if os(iOS)
+        72
+        #else
+        64
+        #endif
     }
 
     static var scrolls: Bool {
