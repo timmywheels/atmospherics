@@ -175,8 +175,8 @@ final class Mixer {
         if mode == .atmosphere && atmosphere == nil { mode = .match }
         migrateToOwnSlots()
         if mode == .mix && activePreset == nil { mode = .match }
-        lens = activePreset?.tag.map(Lens.init) ?? (mode == .atmosphere ? .scenes : .outside)
-        lastPlace = mode == .escape ? pinnedPlace : nil
+        lens = activePreset?.tag.map(Lens.init) ?? (mode == .atmosphere || activePreset != nil ? nil : .outside)
+        offShelf = mode == .atmosphere ? .scenes : .yours
         refreshUpcoming()
         apply()
         if mode == .atmosphere { applyWeather(to: .atmosphere, animated: false) }
@@ -434,7 +434,7 @@ final class Mixer {
         updateNowPlaying()
         if shouldPlay && !isPlaying { play() }
         arrived()
-        lensFollows(.scenes)
+        lensFollows(nil, shelf: .scenes)
     }
 
     /// Goes to a scene described in words, its sounds changed as asked. The changes are kept as
@@ -663,7 +663,7 @@ final class Mixer {
 
     /// Out of a mix, back to the last real place, playing or paused as it was.
     private func leaveMix() {
-        if let p = lastPlace { select(p, play: false) } else { goHome() }
+        if let p = pinnedPlace { select(p, play: false) } else { goHome() }
     }
 
     // MARK: Favorites
@@ -909,21 +909,21 @@ final class Mixer {
     /// A symbol for the weather outside, beside it.
     var outsideSymbol: String { liveHome?.symbol ?? "location" }
 
-    /// The real place you were last in, nil for where you are: where Back to … goes from a mix or
-    /// a scene.
-    private(set) var lastPlace: Place?
     /// Whether there's a place to go back to: something other than a place is playing.
     var awayFromPlaces: Bool { activePreset != nil || mode == .atmosphere }
-    var lastPlaceName: String { lastPlace?.name ?? homeName }
+    /// The real place you were last in (`pinnedPlace`, nil for where you are): where Back to … and
+    /// the wheel's Places go.
+    var lastPlaceName: String { pinnedPlace?.name ?? homeName }
 
     /// Back to the last real place, from a mix or a scene, playing it: a choice, not a browse.
     func backToPlace() {
-        if let p = lastPlace { select(p) } else { goHome(); if !isPlaying { play() } }
+        if let p = pinnedPlace { select(p) } else { goHome(); if !isPlaying { play() } }
     }
 
     /// Turns the wheel a stop on or back, as ↑ ↓ do on a Mac.
     func turnWheel(forward: Bool) {
         let all = Lens.allCases
+        guard let lens else { return choose(forward ? all[0] : all[all.count - 1]) }
         let i = all.firstIndex(of: lens) ?? 0
         choose(all[(i + (forward ? 1 : -1) + all.count) % all.count])
     }
@@ -938,6 +938,8 @@ final class Mixer {
         if let tag = preset.tag {
             defaults.set(preset.id, forKey: "lens.\(Lens(tag).rawValue)")
             lensFollows(Lens(tag))
+        } else {
+            lensFollows(nil, shelf: .yours)
         }
     }
 
@@ -1264,7 +1266,6 @@ final class Mixer {
         updateNowPlaying()
         if shouldPlay && !isPlaying { play() }
         arrived()
-        lastPlace = place
         lensFollows(.outside)
     }
 
@@ -1281,7 +1282,9 @@ final class Mixer {
         setFollowing(true, for: .match)
         applyWeather(to: .match, animated: true)
         updateNowPlaying()
-        lastPlace = nil
+        // Where you are is the place you were last in now.
+        pinnedPlace = nil
+        defaults.removeObject(forKey: "pinnedPlace")
         lensFollows(.outside)
     }
 
@@ -1336,11 +1339,11 @@ final class Mixer {
         return .home
     }
 
-    /// What the wheel at the top is turned to: what swiping goes through. Outside goes round home
-    /// and the real places, Scenes through the atmospheres, and the rest through the Library's
-    /// mixes for sleep, focus, relaxing and meditating.
+    /// What the wheel at the top is turned to: what swiping goes through. Places goes round where
+    /// you are and the real places, westward; the rest through the Library's mixes for focus,
+    /// relaxing, sleep and meditating.
     enum Lens: String, CaseIterable {
-        case outside = "Outside", scenes = "Scenes", focus = "Focus", relax = "Relax", sleep = "Sleep", meditate = "Meditate"
+        case outside = "Places", focus = "Focus", relax = "Relax", sleep = "Sleep", meditate = "Meditate"
 
         var tag: Preset.Tag? {
             switch self {
@@ -1348,7 +1351,7 @@ final class Mixer {
             case .relax: .relax
             case .sleep: .sleep
             case .meditate: .meditate
-            case .outside, .scenes: nil
+            case .outside: nil
             }
         }
 
@@ -1362,28 +1365,36 @@ final class Mixer {
         }
     }
 
-    private(set) var lens: Lens = .outside
+    /// Where swiping goes when what's playing isn't on the wheel: the Library shelf it came from.
+    enum Shelf { case scenes, yours }
 
-    /// The lens that fits what's playing, when it was started some other way (the Library,
-    /// Teleport, the weather button). A mix of your own leaves the wheel where it is.
-    private func lensFollows(_ new: Lens?) {
-        guard let new, new != lens else { return }
-        lens = new
-        backStack = []
+    /// Nil when what's playing isn't on the wheel (a scene, one of yours): the wheel goes quiet,
+    /// and swiping goes through `offShelf`.
+    private(set) var lens: Lens? = .outside
+    private(set) var offShelf: Shelf = .scenes
+
+    /// The wheel following what's playing, when it was started some other way (the Library,
+    /// Where to?, the menus): turned to its stop, or quiet, going through its shelf.
+    private func lensFollows(_ new: Lens?, shelf: Shelf = .scenes) {
+        if let new {
+            guard new != lens else { return }
+            lens = new
+        } else {
+            guard lens != nil || offShelf != shelf else { return }
+            lens = nil
+            offShelf = shelf
+        }
         refreshUpcoming()
     }
 
-    /// Turns the wheel to where that lens was left, or its first. Turning it, like swiping,
-    /// only changes what's there: paused stays paused.
+    /// Turns the wheel to where that stop was left (Places, to the last place you were), or its
+    /// first. Turning it, like swiping, only changes what's there: paused stays paused.
     func choose(_ new: Lens) {
         guard new != lens else { return }
         lens = new
-        backStack = []
         switch new {
         case .outside:
-            goHome()
-        case .scenes:
-            go(to: atmosphere ?? draw(excluding: []), play: false)
+            if let p = pinnedPlace { select(p, play: false) } else { goHome() }
         default:
             let mixes = ring(new)
             let last = defaults.string(forKey: "lens.\(new.rawValue)")
@@ -1398,22 +1409,20 @@ final class Mixer {
         return Preset.all.filter { $0.tag == tag }
     }
 
-    /// Swiping travels through the lens, the next ones picked ahead of time so the carousel can
-    /// show them peeking in before you arrive. In Scenes, back goes through where you've been.
+    /// The real places, going west from where you are, so swiping feels like turning a globe.
+    private var placesWestward: [Place] {
+        let home = homeCoordinate?.longitude ?? 0
+        func west(_ p: Place) -> Double { (home - p.longitude).truncatingRemainder(dividingBy: 360) + (home < p.longitude ? 360 : 0) }
+        return allPlaces.filter { !isNearHome($0) }.sorted { west($0) < west($1) }
+    }
+
+    /// Swiping travels round what the wheel is on, the next ones worked out ahead of time so the
+    /// carousel can show them peeking in before you arrive.
     private(set) var upcoming: Destination?
     private(set) var upcomingBack: Destination?
-    private(set) var backStack: [Destination] = []
-    /// The hand-picked atmospheres, shuffled, so you hear them all before any comes round again.
-    @ObservationIgnored private var deck: [Atmosphere] = []
 
     var next: Destination? { upcoming }
-    var previous: Destination? { lens == .scenes ? backStack.last ?? upcomingBack : upcomingBack }
-
-    private func draw(excluding: [Atmosphere?]) -> Atmosphere {
-        if deck.isEmpty { deck = Atmosphere.curated.shuffled() }
-        let i = deck.firstIndex { a in !excluding.contains(a) } ?? 0
-        return deck.remove(at: i)
-    }
+    var previous: Destination? { upcomingBack }
 
     private func refreshUpcoming() {
         func around(_ all: [Destination]) {
@@ -1423,14 +1432,24 @@ final class Mixer {
             upcomingBack = all[(i - 1 + all.count) % all.count]
         }
         switch lens {
-        case .scenes:
-            let ahead = draw(excluding: [atmosphere])
-            upcoming = .atmosphere(ahead)
-            upcomingBack = .atmosphere(draw(excluding: [atmosphere, ahead]))
-        case .outside:
-            around([.home] + allPlaces.filter { !isNearHome($0) }.map { .place($0) })
-        default:
+        case .outside?:
+            around([.home] + placesWestward.map { .place($0) })
+        case let lens?:
             around(ring(lens).map { .preset($0) })
+        case nil:
+            switch offShelf {
+            case .scenes:
+                around(Atmosphere.curated.map { .atmosphere($0) })
+            case .yours:
+                around(yoursItems.map { item in
+                    switch item {
+                    case .saved(let m): .preset(m.preset)
+                    case .kept(.scene(let a)): .atmosphere(a)
+                    case .kept(.mix(let p)): .preset(p)
+                    case .kept(.place(let p)): .place(p)
+                    }
+                })
+            }
         }
     }
 
@@ -1450,16 +1469,9 @@ final class Mixer {
         if carouselShowing { travelRequest = TravelRequest(forward: forward) } else { travel(forward: forward) }
     }
 
-    /// Swipe left (forward) to the next in the lens, or right (back). Paused stays paused.
+    /// Swipe left (forward) to the next, or right (back). Paused stays paused.
     func travel(forward: Bool) {
         guard let dest = forward ? next : previous else { return }
-        if lens == .scenes {
-            if forward {
-                backStack.append(here)
-            } else if !backStack.isEmpty {
-                backStack.removeLast()
-            }
-        }
         shuffleCount += 1
         switch dest {
         case .home: goHome()

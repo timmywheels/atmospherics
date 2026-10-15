@@ -47,19 +47,7 @@ struct ModeWheel: View {
             let center = Int(position.rounded())
             ZStack {
                 ForEach(center - 3...center + 3, id: \.self) { i in
-                    let offset = Double(i) - position
-                    let lens = Self.lenses[Self.index(i)]
-                    let near = max(0, 1 - abs(offset))
-                    Text(lens.rawValue.uppercased())
-                        .font(Theme.caps(12))
-                        .tracking(1.6)
-                        .foregroundStyle(near > 0.5 ? Theme.text : Theme.muted)
-                        .opacity(0.35 + 0.65 * near)
-                        .scaleEffect(0.9 + 0.1 * near)
-                        .fixedSize()
-                        .position(x: mid + CGFloat(offset) * Self.slot, y: proxy.size.height / 2)
-                        .onTapGesture { turn(to: i) }
-                        .accessibilityHidden(true)
+                    word(i, at: CGPoint(x: mid + CGFloat(Double(i) - position) * Self.slot, y: proxy.size.height / 2))
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
@@ -72,11 +60,12 @@ struct ModeWheel: View {
         }
         .frame(height: 30)
         .onAppear {
-            position = Double(Self.lenses.firstIndex(of: mixer.lens) ?? 0)
+            position = Double(mixer.lens.flatMap { Self.lenses.firstIndex(of: $0) } ?? 0)
             clicked = Int(position)
         }
         .onChange(of: mixer.lens) { _, lens in
-            guard settling == nil, dragFrom == nil else { return }
+            // Off the wheel, it stays where it was, quiet.
+            guard let lens, settling == nil, dragFrom == nil else { return }
             let target = nearest(lens)
             guard target != Int(position.rounded()) else { return }
             clicked = target
@@ -84,10 +73,27 @@ struct ModeWheel: View {
         }
         .accessibilityElement()
         .accessibilityLabel("Listening to")
-        .accessibilityValue(mixer.lens.rawValue)
+        .accessibilityValue(mixer.lens?.rawValue ?? "\(mixer.title), from the Library")
         .accessibilityAdjustableAction { direction in
             turn(to: Int(position.rounded()) + (direction == .increment ? 1 : -1))
         }
+    }
+
+    /// One word: lit at the center, fading and shrinking toward the edges. With what's playing off
+    /// the wheel (a scene, one of yours), every word is quiet.
+    private func word(_ i: Int, at point: CGPoint) -> some View {
+        let near = max(0, 1 - abs(Double(i) - position))
+        let quiet = mixer.lens == nil
+        return Text(Self.lenses[Self.index(i)].rawValue.uppercased())
+            .font(Theme.caps(12))
+            .tracking(1.6)
+            .foregroundStyle(near > 0.5 && !quiet ? Theme.text : Theme.muted)
+            .opacity(quiet ? 0.4 * (0.35 + 0.65 * near) : 0.35 + 0.65 * near)
+            .scaleEffect(0.9 + 0.1 * near)
+            .fixedSize()
+            .position(point)
+            .onTapGesture { turn(to: i) }
+            .accessibilityHidden(true)
     }
 
     private var drag: some Gesture {
