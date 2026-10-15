@@ -362,7 +362,7 @@ final class Mixer {
                 return WeatherSummary(place: "Location off", temp: "",
                                       line: "Allow location in Settings to match outside", head: "Here")
             case .failed where home == nil:
-                return WeatherSummary(place: "Offline", temp: "", line: "Couldn't reach the weather", head: head)
+                return WeatherSummary(place: "Offline", temp: "", line: "Couldn't reach the weather · a quiet mix till then", head: head)
             default:
                 guard let home else { return WeatherSummary(place: "", temp: "", line: "", head: head) }
                 let line = following[.match] == true
@@ -573,11 +573,22 @@ final class Mixer {
         apply()
     }
 
-    /// Drops a new sound in near the bottom of the field, quiet, ready to drag in.
-    func add(_ kind: SoundKind) {
-        fields[mode, default: []].append(Orb(kind: kind, x: 0.5 + (Double.random(in: -0.15...0.15)), y: 0.86))
+    /// Brings in a sound at `level`, somewhere around the field, and says so.
+    func add(_ kind: SoundKind, level: Double = 0.5) {
+        let angle = Double.random(in: 0..<(2 * .pi))
+        let r = (1 - level) * 0.5
+        fields[mode, default: []].append(Orb(kind: kind, x: 0.5 + cos(angle) * r, y: 0.5 + sin(angle) * r))
         markCustom()
         apply()
+        announce("\(kind.short) joins \(currentPlaceName)", for: 1.6)
+    }
+
+    /// Takes every layer of a sound away, and says so.
+    func removeAll(_ kind: SoundKind) {
+        fields[mode]?.removeAll { $0.kind == kind }
+        markCustom()
+        apply()
+        announce("\(kind.short) leaves \(currentPlaceName)", for: 1.6)
     }
 
     /// A Library mix that's playing. It stands on its own, apart from any place's weather.
@@ -932,7 +943,7 @@ final class Mixer {
         switch mode {
         case .escape: escape?.place.name ?? "this place"
         case .atmosphere: "this scene"
-        case .match: "home"
+        case .match: home?.place ?? "home"
         case .mix: activePreset?.name ?? "this mix"
         }
     }
@@ -1064,6 +1075,7 @@ final class Mixer {
             weatherState = .ready
         } catch {
             weatherState = location.isDenied ? .locationOff : .failed
+            if liveHome == nil { hereWithoutWeather() }
         }
 
         if let options = await placeWeather {
@@ -1081,6 +1093,16 @@ final class Mixer {
         applyWeather(to: .match, animated: true)
         applyWeather(to: .escape, animated: true)
         applyWeather(to: .atmosphere, animated: true)
+    }
+
+    /// Where you are with no weather to go on (no location, or offline): named as Here, never a
+    /// name left over from before, and never silent: a quiet mix till the weather comes.
+    private func hereWithoutWeather() {
+        setTitle("Here", for: .match)
+        if (fields[.match] ?? []).isEmpty {
+            fields[.match] = Preset.layout([(.breeze, 0.45), (.birds, 0.25), (.pink, 0.3)])
+            if mode == .match { apply() }
+        }
     }
 
     // MARK: Home's character

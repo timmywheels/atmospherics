@@ -413,17 +413,15 @@ struct SoundSections: View {
     static let height: CGFloat = 252
     var height: CGFloat = Self.height
 
-    private static let order: [SoundKind.Category] = [.water, .nature, .night, .jungle, .city, .calm, .tones, .noise]
-
     var body: some View {
         let playing = Set(mixer.orbs.map(\.kind))
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 if let place = mixer.currentCastPlace, !mixer.currentCast.isEmpty {
-                    section(place, kinds: mixer.currentCast, playing: playing)
+                    section("Belongs in \(place)", kinds: mixer.currentCast, playing: playing)
                 }
-                ForEach(Self.order, id: \.self) { category in
-                    section(category.rawValue, kinds: SoundKind.available.filter { $0.category == category }, playing: playing)
+                ForEach(SoundKind.Shelf.allCases, id: \.self) { shelf in
+                    section(shelf.rawValue, kinds: SoundKind.available.filter { $0.shelf == shelf }, playing: playing)
                 }
             }
             .padding(.vertical, 12)
@@ -455,16 +453,11 @@ struct SoundSections: View {
         }
     }
 
+    /// Lit while it's playing: tap to bring it in (at half its level) or take it away.
     private func pill(_ kind: SoundKind, on: Bool) -> some View {
         Button {
-            Haptics.play(.tap)
-            withAnimation(.snappy) {
-                if on {
-                    for orb in mixer.orbs where orb.kind == kind { mixer.remove(orb.id) }
-                } else {
-                    mixer.add(kind)
-                }
-            }
+            Haptics.play(.soft)
+            withAnimation(.snappy) { on ? mixer.removeAll(kind) : mixer.add(kind) }
         } label: {
             HStack(spacing: 7) {
                 Circle().fill(kind.orb).frame(width: 7, height: 7)
@@ -479,6 +472,32 @@ struct SoundSections: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(on ? "Remove \(kind.name)" : "Add \(kind.name)")
+    }
+}
+
+extension SoundKind {
+    /// Where a sound is filed for browsing: weather apart from water, the jungle with the rest of
+    /// nature, the fire with the calm.
+    enum Shelf: String, CaseIterable {
+        case weather = "Weather", water = "Water", nature = "Nature", night = "Night", city = "City & home",
+             calm = "Calm", tones = "Focus tones", noise = "Noise"
+    }
+
+    var shelf: Shelf {
+        switch self {
+        case .rain, .lightRain, .heavyRain, .thunder, .lightning, .tentRain, .tinRoof,
+             .wind, .breeze, .treeWind, .gusts, .howl: .weather
+        case .ocean, .stream, .waterfall, .caveDrips, .lake, .lapping, .rocks, .buoy, .halyards,
+             .gulls, .foghorn, .whales: .water
+        case .birds, .crickets, .cicadas, .frogs, .winterBirds, .geese, .peepers, .palms,
+             .howlers, .jungleBirds, .parrots, .canopy, .treeFrogs: .nature
+        case .owls, .loons, .wolves, .leaves: .night
+        case .cityHum, .cityNight, .train, .fan, .cafe, .library, .cabin, .typing, .clock, .rainyStreet,
+             .traffic, .highway, .planes, .tram, .motorbikes, .bazaar, .fountain: .city
+        case .chimes, .drone, .bells, .templeBell, .fire: .calm
+        case .betaBeats, .gammaBeats, .betaPulse: .tones
+        case .brown, .pink, .white, .green, .grey, .blue, .violet: .noise
+        }
     }
 }
 
