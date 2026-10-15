@@ -10,15 +10,17 @@ struct MacLayers: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                // × and TUNE up in the title bar, level with the window's own buttons.
                 TuneHeader(reset: { navigation.resetting = true }, save: { navigation.saving = true },
                            close: { navigation.tuning = false })
-                    .padding(.top, 18)
+                    .padding(.top, 12)
                 SoundList(embedded: true)
                 SoundSections(embedded: true)
                     .padding(.bottom, 12)
             }
         }
         .scrollIndicators(.automatic)
+        .ignoresSafeArea(edges: .top)
     }
 }
 
