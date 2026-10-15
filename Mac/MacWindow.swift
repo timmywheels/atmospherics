@@ -14,19 +14,17 @@ struct MacWindow: View {
         Group {
             switch navigation.tab {
             case .listen:
-                // Tune beside what's playing, never over it: the window grows to make room for it.
-                HStack(spacing: 0) {
-                    MacListen()
-                    if navigation.tuning {
-                        Rectangle().fill(Theme.hairline).frame(width: 1).ignoresSafeArea()
-                        MacLayers()
-                            .frame(width: TuneSide.width)
-                            .background(Color.black.opacity(0.18).ignoresSafeArea())
-                            .transition(.opacity)
+                // Tune as a drawer over the right of Listen, as on the phone.
+                GeometryReader { proxy in
+                    ZStack(alignment: .trailing) {
+                        MacListen()
+                        if navigation.tuning {
+                            TuneDrawer(room: proxy.size.width)
+                                .transition(.move(edge: .trailing))
+                        }
                     }
                 }
-                .animation(.easeOut(duration: 0.18), value: navigation.tuning)
-                .onChange(of: navigation.tuning) { _, open in TuneSide.make(room: open) }
+                .animation(.smooth(duration: 0.28), value: navigation.tuning)
             case .teleport:
                 TeleportView(start: mixer.mode == .atmosphere ? mixer.atmosphere : nil) { navigation.tab = .listen }
             case .library: LibraryView(current: mixer.activePreset) { navigation.tab = .listen }
@@ -161,22 +159,3 @@ private struct BackButton: View {
     }
 }
 
-/// Room for Tune beside Listen: the window widens by Tune's width when it opens (moving left if
-/// it would run off the screen) and gives it back when it closes, so the form keeps its size.
-/// At once, not animated: a window growing over a few frames squeezes the form and lets it go.
-enum TuneSide {
-    static let width: CGFloat = 340
-
-    @MainActor static func make(room open: Bool) {
-        guard let window = NSApp.keyWindow ?? NSApp.mainWindow, !window.styleMask.contains(.fullScreen),
-              let screen = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
-        var frame = window.frame
-        if open {
-            frame.size.width = min(screen.width, frame.width + width + 1)
-            if frame.maxX > screen.maxX { frame.origin.x = max(screen.minX, screen.maxX - frame.width) }
-        } else {
-            frame.size.width = max(window.minSize.width, frame.width - width - 1)
-        }
-        window.setFrame(frame, display: true, animate: false)
-    }
-}

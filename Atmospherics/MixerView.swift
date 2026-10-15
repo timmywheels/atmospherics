@@ -83,6 +83,8 @@ private struct DrawerFace: ViewModifier {
 /// sounds to pick from are below, in `SoundSections`.)
 struct SoundList: View {
     @Environment(Mixer.self) private var mixer
+    /// Inside something that scrolls already (the Mac's Tune drawer): every layer, laid out whole.
+    var embedded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -93,7 +95,9 @@ struct SoundList: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 8)
                 .padding(.bottom, 16)
-            if Self.scrolls {
+            if embedded {
+                rows(height: 64)
+            } else if Self.scrolls {
                 // A fingertip's height and then some, however many are playing.
                 ScrollView { rows(height: 72) }
                     .scrollIndicators(.hidden)
@@ -139,36 +143,43 @@ struct TuneHeader: View {
     @Environment(Mixer.self) private var mixer
     let reset: () -> Void
     let save: () -> Void
+    /// A way to put it away, where there's no other (the Mac's drawer).
+    var close: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 10) {
-                VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
                     Text("TUNE")
                         .font(Theme.caps(11))
                         .tracking(1.3)
                         .foregroundStyle(Theme.muted)
-                    HStack(spacing: 2) {
-                        Text(mixer.title)
-                            .font(Theme.label(15, .medium))
-                            .lineLimit(1)
-                            .contentTransition(.opacity)
-                        if let key = mixer.favoriteKey {
-                            FavoriteToggle(key: key, size: 14)
-                                .frame(width: 32, height: 28)
-                                .clipped()
+                    Spacer()
+                    if let close {
+                        Button(action: close) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(Theme.secondary)
+                                .frame(width: 26, height: 26)
+                                .background(Circle().fill(.white.opacity(0.06)))
+                                .contentShape(Circle())
                         }
+                        .buttonStyle(.plain)
+                        .help("Close  ⌘E")
+                        .accessibilityLabel("Close Tune")
                     }
                 }
-                Spacer(minLength: 8)
-                if mixer.currentPlaceIsTweaked {
-                    pill("Reset", action: reset)
-                        .accessibilityLabel("Reset \(mixer.currentPlaceName) to default")
-                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                // The name on a line of its own, so it's never cut short by the buttons.
+                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                    Text(mixer.title)
+                        .font(Theme.label(17, .medium))
+                        .lineLimit(2)
+                        .contentTransition(.opacity)
+                    if let key = mixer.favoriteKey {
+                        FavoriteToggle(key: key, size: 14)
+                            .frame(width: 32, height: 24)
+                    }
                 }
-                pill("Save as new…", action: save)
-                    .disabled(mixer.orbs.isEmpty)
-                    .opacity(mixer.orbs.isEmpty ? 0.4 : 1)
             }
             if let live = mixer.liveLine {
                 Text(live)
@@ -177,6 +188,16 @@ struct TuneHeader: View {
                     .contentTransition(.opacity)
             } else if mixer.mode == .atmosphere, mixer.activePreset == nil, let a = mixer.atmosphere {
                 OtherSkies(scene: a)
+            }
+            HStack(spacing: 8) {
+                if mixer.currentPlaceIsTweaked {
+                    pill("Reset", action: reset)
+                        .accessibilityLabel("Reset \(mixer.currentPlaceName) to default")
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                }
+                pill("Save as new…", action: save)
+                    .disabled(mixer.orbs.isEmpty)
+                    .opacity(mixer.orbs.isEmpty ? 0.4 : 1)
             }
         }
         .padding(.horizontal, 24)
@@ -213,31 +234,28 @@ private struct OtherSkies: View {
                 .font(Theme.caps(10))
                 .tracking(1.2)
                 .foregroundStyle(Theme.muted)
-                .lineLimit(1)
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    ForEach(scene.setting.info.skies, id: \.self) { sky in
-                        let here = sky == scene.sky
-                        Button {
-                            guard !here else { return }
-                            Haptics.play(.thud)
-                            withAnimation(.smooth) { mixer.setAtmosphereSky(sky) }
-                        } label: {
-                            Text(sky.name)
-                                .font(Theme.body(13, .medium))
-                                .foregroundStyle(here ? Theme.background : Theme.text)
-                                .padding(.vertical, 7)
-                                .padding(.horizontal, 13)
-                                .background(Capsule().fill(here ? Theme.text : .clear))
-                                .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
-                                .contentShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(here ? .isSelected : [])
+            // Wrapping, so every sky shows (a mouse can't scroll sideways).
+            FlowLayout(spacing: 8) {
+                ForEach(scene.setting.info.skies, id: \.self) { sky in
+                    let here = sky == scene.sky
+                    Button {
+                        guard !here else { return }
+                        Haptics.play(.thud)
+                        withAnimation(.smooth) { mixer.setAtmosphereSky(sky) }
+                    } label: {
+                        Text(sky.name)
+                            .font(Theme.body(13, .medium))
+                            .foregroundStyle(here ? Theme.background : Theme.text)
+                            .padding(.vertical, 7)
+                            .padding(.horizontal, 13)
+                            .background(Capsule().fill(here ? Theme.text : .clear))
+                            .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                            .contentShape(Capsule())
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(here ? .isSelected : [])
                 }
             }
-            .scrollIndicators(.hidden)
         }
     }
 }
@@ -412,26 +430,35 @@ struct SoundSections: View {
     /// How much of them shows at least (nil: as tall as there's room for, as in the Library).
     static let height: CGFloat = 252
     var height: CGFloat? = Self.height
+    /// Inside something that scrolls already, its pills wrapping rather than scrolling sideways
+    /// (for a mouse, on the Mac).
+    var embedded = false
 
     var body: some View {
-        let playing = Set(mixer.orbs.map(\.kind))
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                if let place = mixer.currentCastPlace, !mixer.currentCast.isEmpty {
-                    section("Belongs in \(place)", kinds: mixer.currentCast, playing: playing)
-                }
-                ForEach(SoundKind.Shelf.allCases, id: \.self) { shelf in
-                    section(shelf.rawValue, kinds: SoundKind.available.filter { $0.shelf == shelf }, playing: playing)
-                }
-            }
-            .padding(.vertical, 12)
+        if embedded {
+            sections
+        } else {
+            ScrollView { sections }
+                .scrollIndicators(.hidden)
+                .frame(height: height)
+                // Fade at the top and bottom edges, so it reads as a list that keeps going.
+                .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.06),
+                                             .init(color: .black, location: 0.88), .init(color: .clear, location: 1)],
+                                     startPoint: .top, endPoint: .bottom))
         }
-        .scrollIndicators(.hidden)
-        .frame(height: height)
-        // Fade at the top and bottom edges, so it reads as a list that keeps going.
-        .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.06),
-                                     .init(color: .black, location: 0.88), .init(color: .clear, location: 1)],
-                             startPoint: .top, endPoint: .bottom))
+    }
+
+    private var sections: some View {
+        let playing = Set(mixer.orbs.map(\.kind))
+        return VStack(alignment: .leading, spacing: 18) {
+            if let place = mixer.currentCastPlace, !mixer.currentCast.isEmpty {
+                section("Belongs in \(place)", kinds: mixer.currentCast, playing: playing)
+            }
+            ForEach(SoundKind.Shelf.allCases, id: \.self) { shelf in
+                section(shelf.rawValue, kinds: SoundKind.available.filter { $0.shelf == shelf }, playing: playing)
+            }
+        }
+        .padding(.vertical, 12)
     }
 
     private func section(_ title: String, kinds: [SoundKind], playing: Set<SoundKind>) -> some View {
@@ -441,15 +468,22 @@ struct SoundSections: View {
                 .tracking(1.2)
                 .foregroundStyle(Theme.muted)
                 .padding(.horizontal, 24)
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    ForEach(kinds) { kind in
-                        pill(kind, on: playing.contains(kind))
-                    }
+            if embedded {
+                FlowLayout(spacing: 8) {
+                    ForEach(kinds) { kind in pill(kind, on: playing.contains(kind)) }
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 24)
+            } else {
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(kinds) { kind in
+                            pill(kind, on: playing.contains(kind))
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                }
+                .scrollIndicators(.hidden)
             }
-            .scrollIndicators(.hidden)
         }
     }
 
