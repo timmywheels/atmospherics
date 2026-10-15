@@ -129,7 +129,7 @@ private struct BackButton: View {
     @State private var hovering = false
 
     var body: some View {
-        let last = selection == .listen ? mixer.backStack.last : nil
+        let last = selection == .listen ? mixer.previous : nil
         let enabled = selection != .listen || last != nil
         let label = selection != .listen ? "Back to Listen" : last.map { "Back to \(mixer.page(for: $0).title)  ←" } ?? "Back"
         Button {

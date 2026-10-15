@@ -26,7 +26,7 @@ struct NowPlayingView: View {
         "Swipe down to change the weather",
         "Hold play for a sleep timer",
         "Tap the name to teleport",
-        "Drag the light to turn it",
+        "Hold the light, then drag to move it",
     ]
 
     @State private var weatherToastTask: Task<Void, Never>?
@@ -85,30 +85,9 @@ struct NowPlayingView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("ATMOSPHERICS")
-                    .padding(.vertical, 6)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer()
-                // Your own weather, one tap back to it.
-                Button {
-                    Haptics.play(.tap)
-                    withAnimation(.smooth(duration: 0.35)) { mixer.goHome() }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: mixer.outsideSymbol)
-                        Text(mixer.outsideLabel)
-                    }
-                    .padding(.vertical, 6)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Outside. \(mixer.outsideLabel)")
-                .accessibilityHint("Plays the weather outside your window")
-            }
-            .font(Theme.caps(11))
-            .tracking(1.3)
-            .foregroundStyle(Theme.muted)
+            // What swiping goes through: Outside, Scenes, Focus, Relax, Sleep, Meditate, round and round.
+            ModeWheel()
+                .padding(.horizontal, -28)
 
             Carousel(dragX: $dragX, openMixer: toggleLayers, teleport: { openTeleport(typing: false) },
                      openLibrary: { showLibrary = true }, drawerTop: layersTop)
@@ -247,6 +226,13 @@ struct Carousel: View {
     @State private var formSize: CGSize = .zero
     /// Where the current drag started, and whether that was on the glass.
     @State private var grab: (at: CGPoint, onForm: Bool)?
+    /// The form, picked up by holding it: a drag then moves and turns it instead of traveling.
+    /// (On a Mac, where traveling is two fingers on the trackpad, a drag on it always does.)
+    @State private var held = false
+    /// How far the held form has been pulled from its place; it springs back when let go.
+    @State private var lift: CGSize = .zero
+    /// A hold let go without a drag isn't a tap on the form.
+    @State private var skipTap = false
 
     private struct Pair {
         let from: Mixer.Page
@@ -260,7 +246,35 @@ struct Carousel: View {
 
     /// Tapping the form: tucks the buttons away if they're out, or else it's Layers.
     private func tapForm() {
+        if skipTap { skipTap = false; return }
         if actionsOpen { actionsOpen = false } else { openMixer() }
+    }
+
+    /// Holding the form picks it up, with a tap you can feel and the form rising a little.
+    private var hold: some Gesture {
+        LongPressGesture(minimumDuration: 0.25)
+            .sequenced(before: DragGesture(minimumDistance: 0))
+            .onChanged { value in
+                guard !held, !landing, pair == nil, case .second(true, let drag?) = value,
+                      SoundForm.touches(drag.startLocation, orbs: mixer.byVolume, size: formSize) else { return }
+                withAnimation(.spring(duration: 0.25, bounce: 0.3)) { held = true }
+                skipTap = true
+                Haptics.play(.tap)
+            }
+            .onEnded { _ in letGo() }
+    }
+
+    private func letGo() {
+        guard held else { return }
+        withAnimation(.spring(duration: 0.5, bounce: 0.35)) {
+            held = false
+            lift = .zero
+        }
+        // Lets a tap that never came through stop waiting.
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(0.3))
+            skipTap = false
+        }
     }
 
     var body: some View {
@@ -271,11 +285,15 @@ struct Carousel: View {
             let room = drawerTop.map { max(160, $0 - proxy.frame(in: .global).minY - 10) }
             MorphView(from: pair?.from ?? live, to: pair?.to ?? live, forward: pair?.forward ?? true, t: pair == nil ? 0 : blend,
                       still: pair == nil, nudge: pair == nil ? dragX * 0.4 : 0, room: room, favorite: mixer.favoriteKey,
+                      lift: lift, held: held,
                       formSize: $formSize, openMixer: tapForm, teleport: { actionsOpen = false; teleport() },
                       save: { saving = true }, library: { actionsOpen = false; openLibrary() })
                 .frame(width: w, height: proxy.size.height, alignment: .topLeading)
                 .contentShape(Rectangle())
                 .gesture(drag(width: w))
+                #if os(iOS)
+                .simultaneousGesture(hold)
+                #endif
                 #if os(macOS)
                 .background(TrackpadSwipe(changed: { follow($0, width: w) },
                                           ended: { release(projected: $0, width: w) }))
@@ -311,6 +329,10 @@ struct Carousel: View {
             .onChanged { g in
                 if turnsForm(g) {
                     SculptureSpin.home.drag(g.translation)
+                    // Held, it comes with the finger a way, pulling harder the further it goes.
+                    if held {
+                        lift = CGSize(width: 70 * tanh(g.translation.width / 180), height: 70 * tanh(g.translation.height / 180))
+                    }
                     let notch = Int((abs(g.translation.width) + abs(g.translation.height)) / 26)
                     if notch != turnNotch {
                         turnNotch = notch
@@ -324,6 +346,7 @@ struct Carousel: View {
             .onEnded { g in
                 if turnsForm(g) {
                     turnNotch = 0
+                    letGo()
                     return SculptureSpin.home.release(g.velocity, coast: !reduceMotion)
                 }
                 release(projected: g.predictedEndTranslation.width, width: width)
@@ -333,7 +356,11 @@ struct Carousel: View {
     /// Whether this drag took hold of the glass: decided where it starts, and kept for the drag.
     private func turnsForm(_ g: DragGesture.Value) -> Bool {
         if let grab, grab.at == g.startLocation { return grab.onForm }
+        #if os(iOS)
+        let onForm = held
+        #else
         let onForm = !landing && pair == nil && SoundForm.touches(g.startLocation, orbs: mixer.byVolume, size: formSize)
+        #endif
         grab = (g.startLocation, onForm)
         return onForm
     }
@@ -416,6 +443,9 @@ private struct MorphView: View, Animatable {
     let nudge: CGFloat
     let room: CGFloat?
     let favorite: String?
+    /// Held: picked up, a little bigger, pulled `lift` from its place.
+    var lift: CGSize = .zero
+    var held = false
     @Binding var formSize: CGSize
     let openMixer: () -> Void
     let teleport: () -> Void
@@ -433,6 +463,8 @@ private struct MorphView: View, Animatable {
                 .frame(height: room)
                 .frame(maxHeight: room == nil ? .infinity : nil)
                 .onGeometryChange(for: CGSize.self) { $0.size } action: { formSize = $0 }
+                .scaleEffect(held ? 1.06 : 1)
+                .offset(lift)
                 .contentShape(Rectangle())
                 .onTapGesture { openMixer() }
                 .accessibilityAddTraits(.isButton)

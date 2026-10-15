@@ -1,7 +1,7 @@
 import Foundation
 
-struct Preset: Identifiable {
-    enum Tag: String, CaseIterable { case sleep = "Sleep", focus = "Focus", relax = "Relax" }
+struct Preset: Identifiable, Equatable {
+    enum Tag: String, CaseIterable { case sleep = "Sleep", focus = "Focus", relax = "Relax", meditate = "Meditate" }
 
     /// How well research backs a focus mix, in plain words (see FocusScienceView).
     enum Evidence: String {
@@ -19,6 +19,8 @@ struct Preset: Identifiable {
     var evidence: Evidence? = nil
 
     var id: String { savedID?.uuidString ?? name }
+
+    static func == (a: Preset, b: Preset) -> Bool { a.id == b.id }
     var isSaved: Bool { savedID != nil }
 
     static let all: [Preset] = [
@@ -99,6 +101,17 @@ struct Preset: Identifiable {
                mix: [(.violet, 0.4), (.pink, 0.45)]),
         Preset(name: "Rainforest", tag: .relax, length: "1 h", description: "Canopy, howler monkeys, a waterfall",
                mix: [(.canopy, 0.7), (.howlers, 0.3), (.waterfall, 0.3)]),
+        // To sit with: little that changes, nothing that asks for attention.
+        Preset(name: "Temple Morning", tag: .meditate, length: "20 min", description: "A bell now and then over a stream",
+               mix: [(.templeBell, 0.35), (.stream, 0.45), (.birds, 0.15)]),
+        Preset(name: "Still Water", tag: .meditate, length: "20 min", description: "Water lapping, a light breeze, a low drone",
+               mix: [(.lapping, 0.55), (.breeze, 0.3), (.drone, 0.2)]),
+        Preset(name: "Deep Cave", tag: .meditate, length: "30 min", description: "Slow drips in the dark, a low drone",
+               mix: [(.caveDrips, 0.5), (.drone, 0.45)]),
+        Preset(name: "Wind Chimes", tag: .meditate, length: "20 min", description: "Chimes in a breeze, leaves",
+               mix: [(.chimes, 0.45), (.breeze, 0.4), (.leaves, 0.2)]),
+        Preset(name: "Quiet Rain", tag: .meditate, length: "30 min", description: "Light rain over a warm hush",
+               mix: [(.lightRain, 0.5), (.drone, 0.25), (.brown, 0.2)]),
     ]
 
     /// Places each sound at the distance from center that gives its volume,

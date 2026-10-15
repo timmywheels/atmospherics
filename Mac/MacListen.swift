@@ -22,9 +22,11 @@ struct MacListen: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Your own weather, as on the phone; click to go back to it.
-            HStack {
-                Spacer()
+            // What swiping goes through, as on the phone, and your own weather; click it to go back to it.
+            ZStack(alignment: .trailing) {
+                ModeWheel()
+                    .frame(maxWidth: 420)
+                    .frame(maxWidth: .infinity)
                 Button { withAnimation(.smooth(duration: 0.35)) { mixer.goHome() } } label: {
                     HStack(spacing: 6) {
                         Image(systemName: mixer.outsideSymbol)
@@ -39,7 +41,7 @@ struct MacListen: View {
                 .help("The weather outside your window  ⇧⌘H")
                 .accessibilityLabel("Outside. \(mixer.outsideLabel)")
             }
-            .frame(height: 18)
+            .frame(height: 30)
 
             Carousel(dragX: $dragX, openMixer: { navigation.tab = .layers }, teleport: { navigation.tab = .teleport },
                      openLibrary: { navigation.tab = .library })

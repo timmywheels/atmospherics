@@ -253,6 +253,7 @@ final class Mixer {
             Preset.all.first { $0.id == id } ?? savedMixes.first { $0.id.uuidString == id }?.preset
         }
         if mode == .atmosphere && atmosphere == nil { mode = .match }
+        lens = activePreset?.tag.map(Lens.init) ?? (mode == .atmosphere ? .scenes : .outside)
         refreshUpcoming()
         apply()
         if mode == .atmosphere { applyWeather(to: .atmosphere, animated: false) }
@@ -501,6 +502,7 @@ final class Mixer {
         updateNowPlaying()
         if shouldPlay && !isPlaying { play() }
         arrived()
+        lensFollows(.scenes)
     }
 
     /// Goes to a scene described in words, its sounds changed as asked. The changes are kept as
@@ -858,6 +860,7 @@ final class Mixer {
         setActivePreset(nil)
         traveling = true
         followWeatherAgain()
+        lensFollows(mode == .atmosphere ? .scenes : .outside)
     }
 
     func load(_ preset: Preset) {
@@ -870,6 +873,10 @@ final class Mixer {
         apply()
         if !isPlaying { play() }
         arrived()
+        if let tag = preset.tag {
+            defaults.set(preset.id, forKey: "lens.\(Lens(tag).rawValue)")
+            lensFollows(Lens(tag))
+        }
     }
 
     private func update(_ id: Orb.ID, _ change: (inout Orb) -> Void) {
@@ -1131,6 +1138,7 @@ final class Mixer {
         updateNowPlaying()
         if !isPlaying { play() }
         arrived()
+        lensFollows(.outside)
     }
 
     /// Comes back from a place to the local weather.
@@ -1146,6 +1154,7 @@ final class Mixer {
         setFollowing(true, for: .match)
         applyWeather(to: .match, animated: true)
         updateNowPlaying()
+        lensFollows(.outside)
     }
 
     /// Hands an edited field back to the weather, without leaving the place.
@@ -1179,31 +1188,98 @@ final class Mixer {
         case home
         case place(Place)
         case atmosphere(Atmosphere)
+        case preset(Preset)
 
-        /// What marks it as a favorite, if it can be one: a scene can.
+        /// What marks it as a favorite, if it can be one: a scene or a mix can.
         var favoriteKey: String? {
-            if case .atmosphere(let a) = self { return Mixer.favoriteKey(a) }
-            return nil
+            switch self {
+            case .atmosphere(let a): Mixer.favoriteKey(a)
+            case .preset(let p): Mixer.favoriteKey(p)
+            default: nil
+            }
         }
     }
 
     /// Where the field is now.
     var here: Destination {
+        if let p = activePreset { return .preset(p) }
         if mode == .escape, let p = escape?.place { return .place(p) }
         if mode == .atmosphere, let a = atmosphere { return .atmosphere(a) }
         return .home
     }
 
-    /// Swiping travels through atmospheres, picked ahead of time so the carousel can show them
-    /// peeking in before you arrive. Back goes through where you've been.
-    private(set) var upcoming: Atmosphere?
-    private(set) var upcomingBack: Atmosphere?
+    /// What the wheel at the top is turned to: what swiping goes through. Outside goes round home
+    /// and the real places, Scenes through the atmospheres, and the rest through the Library's
+    /// mixes for sleep, focus, relaxing and meditating.
+    enum Lens: String, CaseIterable {
+        case outside = "Outside", scenes = "Scenes", focus = "Focus", relax = "Relax", sleep = "Sleep", meditate = "Meditate"
+
+        var tag: Preset.Tag? {
+            switch self {
+            case .focus: .focus
+            case .relax: .relax
+            case .sleep: .sleep
+            case .meditate: .meditate
+            case .outside, .scenes: nil
+            }
+        }
+
+        init(_ tag: Preset.Tag) {
+            self = switch tag {
+            case .focus: .focus
+            case .relax: .relax
+            case .sleep: .sleep
+            case .meditate: .meditate
+            }
+        }
+    }
+
+    private(set) var lens: Lens = .outside
+
+    /// The lens that fits what's playing, when it was started some other way (the Library,
+    /// Teleport, the weather button). A mix of your own leaves the wheel where it is.
+    private func lensFollows(_ new: Lens?) {
+        guard let new, new != lens else { return }
+        lens = new
+        backStack = []
+        refreshUpcoming()
+    }
+
+    /// Turns the wheel: plays where that lens was left, or its first.
+    func choose(_ new: Lens) {
+        guard new != lens else { return }
+        lens = new
+        backStack = []
+        switch new {
+        case .outside:
+            goHome()
+            if !isPlaying { play() }
+        case .scenes:
+            go(to: atmosphere ?? draw(excluding: []))
+        default:
+            let mixes = ring(new)
+            let last = defaults.string(forKey: "lens.\(new.rawValue)")
+            if let p = mixes.first(where: { $0.id == last }) ?? mixes.first { load(p) }
+        }
+        refreshUpcoming()
+    }
+
+    /// A lens's mixes, in order, going round.
+    private func ring(_ lens: Lens) -> [Preset] {
+        guard let tag = lens.tag else { return [] }
+        return Preset.all.filter { $0.tag == tag }
+    }
+
+    /// Swiping travels through the lens, the next ones picked ahead of time so the carousel can
+    /// show them peeking in before you arrive. In Scenes, back goes through where you've been.
+    private(set) var upcoming: Destination?
+    private(set) var upcomingBack: Destination?
     private(set) var backStack: [Destination] = []
     /// The hand-picked atmospheres, shuffled, so you hear them all before any comes round again.
     @ObservationIgnored private var deck: [Atmosphere] = []
 
-    var next: Destination? { upcoming.map { .atmosphere($0) } }
-    var previous: Destination? { backStack.last ?? upcomingBack.map { .atmosphere($0) } }
+    var next: Destination? { upcoming }
+    var previous: Destination? { lens == .scenes ? backStack.last ?? upcomingBack : upcomingBack }
 
     private func draw(excluding: [Atmosphere?]) -> Atmosphere {
         if deck.isEmpty { deck = Atmosphere.curated.shuffled() }
@@ -1212,8 +1288,22 @@ final class Mixer {
     }
 
     private func refreshUpcoming() {
-        upcoming = draw(excluding: [atmosphere])
-        upcomingBack = draw(excluding: [atmosphere, upcoming])
+        func around(_ all: [Destination]) {
+            guard all.count > 1 else { upcoming = nil; upcomingBack = nil; return }
+            let i = all.firstIndex(of: here) ?? -1
+            upcoming = all[(i + 1) % all.count]
+            upcomingBack = all[(i - 1 + all.count) % all.count]
+        }
+        switch lens {
+        case .scenes:
+            let ahead = draw(excluding: [atmosphere])
+            upcoming = .atmosphere(ahead)
+            upcomingBack = .atmosphere(draw(excluding: [atmosphere, ahead]))
+        case .outside:
+            around([.home] + allPlaces.filter { !isNearHome($0) }.map { .place($0) })
+        default:
+            around(ring(lens).map { .preset($0) })
+        }
     }
 
     /// A slide for the carousel to make, asked for from outside it (the keyboard, the menus,
@@ -1232,19 +1322,22 @@ final class Mixer {
         if carouselShowing { travelRequest = TravelRequest(forward: forward) } else { travel(forward: forward) }
     }
 
-    /// Swipe left (forward) to a new place, or right (back) through where you've been.
+    /// Swipe left (forward) to the next in the lens, or right (back).
     func travel(forward: Bool) {
         guard let dest = forward ? next : previous else { return }
-        if forward {
-            backStack.append(here)
-        } else if !backStack.isEmpty {
-            backStack.removeLast()
+        if lens == .scenes {
+            if forward {
+                backStack.append(here)
+            } else if !backStack.isEmpty {
+                backStack.removeLast()
+            }
         }
         shuffleCount += 1
         switch dest {
-        case .home: goHome()
+        case .home: goHome(); if !isPlaying { play() }
         case .place(let p): select(p)
         case .atmosphere(let a): go(to: a)
+        case .preset(let p): load(p)
         }
         refreshUpcoming()
     }
@@ -1276,6 +1369,8 @@ final class Mixer {
                 line = p.country
             }
             return Page(title: p.title, line: line, orbs: o)
+        case .preset(let p):
+            return Page(title: p.name, line: p.description, orbs: p.orbs)
         case .atmosphere(let a):
             let c = a.imagined()
             return Page(title: a.title(in: c), line: a.setting.info.line,
