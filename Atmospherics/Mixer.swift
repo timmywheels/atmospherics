@@ -62,7 +62,8 @@ final class Mixer {
     var errorMessage: String?
 
     // Weather
-    enum WeatherState { case loading, ready, locationOff, failed }
+    /// `notAsked`: where you are hasn't been asked for yet, so it hasn't been looked up.
+    enum WeatherState { case loading, ready, locationOff, failed, notAsked }
     private(set) var weatherState: WeatherState = .loading
     /// Live weather as fetched. A place is always its real weather now; imagined weather is what
     /// a scene is for.
@@ -120,6 +121,22 @@ final class Mixer {
     }
 
     init() {
+        #if DEBUG
+        // `-freshInstall`: as if for the first time (a simulator keeps its preferences through an
+        // uninstall), to see the welcome.
+        if ProcessInfo.processInfo.arguments.contains("-freshInstall"), let id = Bundle.main.bundleIdentifier {
+            UserDefaults.standard.removePersistentDomain(forName: id)
+        }
+        #endif
+        // Before the first welcome there was none: anyone who's used the app has had theirs, and
+        // has been asked where they are already.
+        if defaults.object(forKey: "onboarded") == nil {
+            let before = defaults.object(forKey: "mode") != nil || defaults.integer(forKey: "hintStep") > 0
+                || defaults.integer(forKey: "macHintStep") > 0 || defaults.data(forKey: "savedMixes") != nil
+                || defaults.data(forKey: "recent") != nil
+            defaults.set(before, forKey: "onboarded")
+            if before { defaults.set(true, forKey: "hereWanted") }
+        }
         let savedVolume = defaults.object(forKey: "volume") as? Double ?? 1
         volume = savedVolume
         engine.setVolume(Float(savedVolume * savedVolume))
@@ -362,6 +379,8 @@ final class Mixer {
                                       line: "Allow location in Settings to match outside", head: "Here")
             case .failed where home == nil:
                 return WeatherSummary(place: "Offline", temp: "", line: "Couldn't reach the weather · a quiet mix till then", head: head)
+            case .notAsked:
+                return WeatherSummary(place: "", temp: "", line: "Your weather, once you allow your location", head: head)
             default:
                 guard let home else { return WeatherSummary(place: "", temp: "", line: "", head: head) }
                 let line = following[.match] == true
@@ -626,6 +645,22 @@ final class Mixer {
         persistSaved()
         setActivePreset(mix.preset)
         enterMix(mix.preset.orbs, title: mix.name)
+    }
+
+    // MARK: Welcome
+
+    /// The welcome's harbor, put together a sound at a time: an empty field of its own, playing.
+    func beginWelcome() {
+        setActivePreset(nil)
+        enterMix([], title: "A harbor, at dusk")
+        if !isPlaying { play() }
+    }
+
+    /// One more of the welcome's sounds, come in from `angle` (no word about it, as Tune would).
+    func welcome(_ kind: SoundKind, level: Double, angle: Double) {
+        let r = (1 - level) * 0.5
+        fields[.mix, default: []].append(Orb(kind: kind, x: 0.5 + cos(angle) * r, y: 0.5 + sin(angle) * r))
+        apply()
     }
 
     /// Asked to show Tune (a new mix from scratch wants its sounds): the screens watch this.
@@ -1136,13 +1171,16 @@ final class Mixer {
         async let placeWeather = try? weatherService.conditions(for: places)
 
         do {
+            // Where you are only once you've asked for it (or allowed it already): never a
+            // question about your location at launch.
+            guard location.isAllowed || defaults.bool(forKey: "hereWanted") else { throw CancellationError() }
             let (coordinate, place) = try await location.current()
             homeCoordinate = coordinate
             liveHome = try await weatherService.conditions(at: coordinate, place: place)
             await resolveHomePlace(coordinate, name: place)
             weatherState = .ready
         } catch {
-            weatherState = location.isDenied ? .locationOff : .failed
+            weatherState = error is CancellationError ? .notAsked : location.isDenied ? .locationOff : .failed
             if liveHome == nil { hereWithoutWeather() }
         }
 
@@ -1285,6 +1323,11 @@ final class Mixer {
 
     /// Comes back from a place to the local weather.
     func goHome() {
+        // Asked for where you are: now's the time to ask where that is.
+        if !defaults.bool(forKey: "hereWanted") {
+            defaults.set(true, forKey: "hereWanted")
+            Task { await refreshWeather(force: true) }
+        }
         setActivePreset(nil)
         traveling = true
         if mode != .match {

@@ -66,6 +66,11 @@ struct MacListen: View {
 
     /// Shows each hint once, the first times the window opens.
     private func runHints() async {
+        // Not over the welcome: after it.
+        while !UserDefaults.standard.bool(forKey: "onboarded") {
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+        }
         while hintStep < Self.hints.count {
             try? await Task.sleep(for: .seconds(1.5))
             guard !Task.isCancelled else { return }

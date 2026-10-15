@@ -6,6 +6,7 @@ struct MacWindow: View {
     @Environment(Mixer.self) private var mixer
     @Environment(MacNavigation.self) private var navigation
     @Environment(\.openWindow) private var openWindow
+    @AppStorage("onboarded") private var onboarded = true
     /// Read so temperatures redraw when the unit changes in Settings.
     @AppStorage("tempUnit") private var tempUnit = "auto"
 
@@ -47,6 +48,16 @@ struct MacWindow: View {
         .tint(Theme.text)
         .preferredColorScheme(.dark)
         .animation(.smooth(duration: 0.3), value: navigation.tab)
+        // The first time: the welcome, over the window.
+        .overlay {
+            if !onboarded {
+                Onboarding {
+                    withAnimation(.smooth(duration: 0.6)) { onboarded = true }
+                    navigation.tab = .listen
+                }
+                .transition(.opacity)
+            }
+        }
         // A new mix from scratch: Listen, with Tune open beside it.
         .onChange(of: mixer.tuneRequests) { _, _ in
             navigation.tab = .listen
@@ -74,6 +85,7 @@ struct MacWindow: View {
 /// glass a toolbar item gets by default.
 private struct WindowBar: ViewModifier {
     @Environment(MacNavigation.self) private var navigation
+    @AppStorage("onboarded") private var onboarded = true
     @Binding var selection: MacNavigation.Tab
 
     func body(content: Content) -> some View {
@@ -92,7 +104,7 @@ private struct WindowBar: ViewModifier {
     /// Out of the way while Tune is up over Listen: the drawer runs to the top of the window, and
     /// its × (or ⌘E, or Esc) is the way back.
     private var bar: some View {
-        let tuning = navigation.tuning && selection == .listen
+        let tuning = (navigation.tuning && selection == .listen) || !onboarded
         return HStack(spacing: 8) {
             BackButton(selection: $selection)
             TabPills(selection: $selection)

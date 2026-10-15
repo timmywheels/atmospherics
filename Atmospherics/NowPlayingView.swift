@@ -20,7 +20,7 @@ struct NowPlayingView: View {
 
     private static let hints = [
         "Swipe left or right to travel",
-        "Tap the light to see its layers",
+        "Tap the light to tune it",
         "Swipe up for your library",
         "Hold play for a sleep timer",
         "Tap the name to search",
@@ -29,6 +29,11 @@ struct NowPlayingView: View {
 
     /// Shows each hint once, a few seconds apart, the first times you open the app.
     private func runHints() async {
+        // Not over the welcome: after it.
+        while !UserDefaults.standard.bool(forKey: "onboarded") {
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+        }
         while hintStep < Self.hints.count {
             try? await Task.sleep(for: .seconds(1.5))
             guard !Task.isCancelled else { return }
