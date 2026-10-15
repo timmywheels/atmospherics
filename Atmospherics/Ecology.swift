@@ -279,7 +279,7 @@ enum Ecology {
             case 20, 21: return 0.7
             default: return 0
             }
-        case .train:
+        case .train, .steamTrain, .electricTrain:
             switch t.hour {
             case 0: return 0.3
             case 1...4: return 0
@@ -441,7 +441,7 @@ enum Ecology {
             let breeze = c.windKMH < 5 ? 0.4 : c.windKMH < 15 ? 0.7 : c.windKMH > 30 ? 1.4 : 1
             return c.isSnow ? breeze * 0.5 : breeze
         // Snow muffles a city; rain empties café terraces; wet roads hiss.
-        case .cityHum, .cityNight, .rainyStreet, .train:
+        case .cityHum, .cityNight, .rainyStreet, .train, .steamTrain, .electricTrain:
             return snowCover ? 0.65 : 1
         case .traffic:
             return snowCover ? 0.6 : 1

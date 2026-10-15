@@ -528,7 +528,7 @@ extension SoundKind {
         case .birds, .crickets, .cicadas, .frogs, .winterBirds, .geese, .peepers, .palms,
              .howlers, .jungleBirds, .parrots, .canopy, .treeFrogs: .nature
         case .owls, .loons, .wolves, .leaves: .night
-        case .cityHum, .cityNight, .train, .fan, .cafe, .busyCafe, .library, .cabin, .typing, .clock, .rainyStreet,
+        case .cityHum, .cityNight, .train, .steamTrain, .electricTrain, .fan, .cafe, .busyCafe, .library, .cabin, .typing, .clock, .rainyStreet,
              .traffic, .highway, .planes, .tram, .motorbikes, .bazaar, .fountain: .city
         case .chimes, .drone, .bells, .templeBell, .fire: .calm
         case .betaBeats, .gammaBeats, .betaPulse: .tones

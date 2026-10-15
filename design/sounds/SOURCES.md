@@ -49,7 +49,9 @@ Freesound files were taken from their public HQ previews (about 128 kbps MP3).
 | ocean | https://freesound.org/s/623052/ | goochiano | CC0 | 20 s (90 s loop) |
 | birds | https://freesound.org/s/466242/ | richwise | CC0 | 20 s (100 s loop) |
 | stream | https://freesound.org/s/454155/ | kyles | CC0 | 3 s (60 s loop) |
-| train | https://freesound.org/s/150875/ | worldfire | CC0 | 30 s (100 s loop) |
+| train | https://freesound.org/s/852635/ | TILE_SFX | CC0 | 3 s (195 s loop; inside an outbound vintage Metra train, no voices) |
+| steamTrain | https://freesound.org/s/133099/ | allh | CC0 | 2 s (128 s loop; a wooden steam-train carriage) |
+| electricTrain | https://freesound.org/s/341208/ | Yoyodaman234 | CC0 | 1 s (44 s loop; on board an electric commuter train) |
 | wind | https://freesound.org/s/521736/ | Fission9 | CC0 | 2 s (55 s loop) |
 | cicadas | https://freesound.org/s/396810/ | Jedo | CC0 | 30 s (90 s loop) |
 | frogs | https://freesound.org/s/135561/ | felix.blume | CC0 | 2 s (55 s loop) |
