@@ -508,11 +508,25 @@ enum Soundscape {
             add(.thunder, 0.45)
             add(.lightning, 0.4)
         }
-        // A breeze is heard through what it moves (leaves, water); real wind past about 18 km/h, of
-        // the place's own kind (in the trees, at the window), and in gusts when it snows outdoors.
+        // A breeze is heard through what it moves (leaves, water); wind past about 18 km/h, of the
+        // place's own kind (in the trees, at the window), and in gusts when it snows outdoors. In the
+        // open it comes in levels: a steady breeze in a moderate wind, the rise and fall of real
+        // wind past about 30 km/h, and gusts on top past 45.
         if c.windKMH > 18 {
-            let kind: SoundKind = c.isSnow && windKind != .howl ? .gusts : windKind
-            add(kind, min(0.8, (c.windKMH - 15) / 35) * (c.isSnow ? 0.7 : 1))
+            let level = min(0.8, (c.windKMH - 15) / 35) * (c.isSnow ? 0.7 : 1)
+            if c.isSnow && windKind != .howl {
+                add(.gusts, level)
+            } else if windKind == .wind {
+                if c.windKMH < 30 {
+                    // The breeze sits further back than wind (`presenceDB`): brought up to meet it.
+                    add(.breeze, min(0.8, 0.25 + level * 1.6))
+                } else {
+                    add(.wind, level)
+                    if c.windKMH > 45 { add(.gusts, level * 0.6) }
+                }
+            } else {
+                add(windKind, level)
+            }
         }
 
         // The place itself, in season and at this hour.
