@@ -148,7 +148,7 @@ struct NowPlayingView: View {
         )
         .accessibilityAction(named: "Library") { showLibrary = true }
         .accessibilityAction(named: "Search") { openSearch() }
-        .accessibilityAction(named: "Other skies", otherSkies)
+        .accessibilityAction(named: "Other vibes", otherSkies)
         .accessibilityAction(named: "Layers") { openLayers() }
         .sheet(isPresented: $showMixer) {
             MixerView(detent: $layersDetent)

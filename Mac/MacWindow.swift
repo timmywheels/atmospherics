@@ -68,6 +68,7 @@ struct MacWindow: View {
 /// side by side and tuck one into an overflow menu when the window is narrow. Plain, without the
 /// glass a toolbar item gets by default.
 private struct WindowBar: ViewModifier {
+    @Environment(MacNavigation.self) private var navigation
     @Binding var selection: MacNavigation.Tab
 
     func body(content: Content) -> some View {
@@ -83,11 +84,17 @@ private struct WindowBar: ViewModifier {
         }
     }
 
+    /// Out of the way while Tune is up over Listen: the drawer runs to the top of the window, and
+    /// its × (or ⌘E, or Esc) is the way back.
     private var bar: some View {
-        HStack(spacing: 8) {
+        let tuning = navigation.tuning && selection == .listen
+        return HStack(spacing: 8) {
             BackButton(selection: $selection)
             TabPills(selection: $selection)
         }
+        .opacity(tuning ? 0 : 1)
+        .allowsHitTesting(!tuning)
+        .animation(.smooth(duration: 0.2), value: tuning)
         .fixedSize()
     }
 }

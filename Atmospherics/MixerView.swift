@@ -223,7 +223,7 @@ struct TuneHeader: View {
     }
 }
 
-/// A scene's other skies, as places to go: "Snow · Rain · Clear", the one you're in lit. Each is
+/// A scene's other vibes (its other skies), as places to go: "Snow · Rain · Clear", the one you're in lit. Each is
 /// another scene, with its own tuning and its own bookmark.
 private struct OtherSkies: View {
     @Environment(Mixer.self) private var mixer
@@ -231,11 +231,11 @@ private struct OtherSkies: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("OTHER SKIES FOR THIS \(scene.setting.info.name.uppercased())")
+            Text("OTHER VIBES FOR THIS \(scene.setting.info.name.uppercased())")
                 .font(Theme.caps(10))
                 .tracking(1.2)
                 .foregroundStyle(Theme.muted)
-            // Wrapping, so every sky shows (a mouse can't scroll sideways).
+            // Wrapping, so every one shows (a mouse can't scroll sideways).
             FlowLayout(spacing: 8) {
                 ForEach(scene.setting.info.skies, id: \.self) { sky in
                     let here = sky == scene.sky

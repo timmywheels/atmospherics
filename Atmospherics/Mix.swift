@@ -63,7 +63,9 @@ extension SoundKind {
         // Life, and the life of a place: in front of the air, but never on top of you.
         case .jungleBirds, .canopy: -2
         case .birds, .winterBirds: -3
-        case .parrots, .frogs: -4
+        case .parrots: -4
+        // A chorus that never draws breath: well back, like the crickets.
+        case .frogs: -10
         case .treeFrogs: -5
         // A wall of shrill, unbroken song that the ear never stops hearing: well back.
         case .crickets: -11
