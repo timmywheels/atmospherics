@@ -191,7 +191,12 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .parrots: ["parrot", "macaw"]
         case .jungleBirds: ["jungle bird", "tropical bird"]
         case .winterBirds: ["winter bird"]
-        case .howl: ["howling wind"]
+        // Each wind by its own words, so "a light breeze" is the breeze and "a howling gale" the howl.
+        case .breeze: ["breeze", "breezy", "light wind", "gentle wind", "soft wind", "light air"]
+        case .treeWind: ["wind in the trees", "wind through the trees", "wind in the pines", "wind through the pines",
+                         "tree wind", "rustling trees", "swaying trees", "pines"]
+        case .gusts: ["gust", "gusty", "gusting wind", "gusts of wind"]
+        case .howl: ["howling wind", "wind howling", "howl", "gale", "gale force", "blustery"]
         case .lightning: ["lightning"]
         case .stream: ["stream", "creek", "brook", "river"]
         case .waterfall: ["waterfall"]
@@ -223,7 +228,7 @@ enum SoundKind: String, CaseIterable, Identifiable, Codable {
         case .green: ["green noise"]
         case .rain, .ocean, .wind, .thunder, .fire, .birds, .grey, .blue, .violet, .frogs, .cityHum, .train, .drone,
              .canopy, .leaves, .caveDrips, .tentRain, .tinRoof, .lake, .cafe, .library, .cabin, .rainyStreet, .lightRain,
-             .heavyRain, .lapping, .shore, .rocks, .bazaar, .breeze, .treeWind, .gusts, .cityNight, .traffic, .betaBeats, .gammaBeats,
+             .heavyRain, .lapping, .shore, .rocks, .bazaar, .cityNight, .traffic, .betaBeats, .gammaBeats,
              .betaPulse: []
         }
     }
@@ -356,7 +361,7 @@ enum SoundFamily: String, CaseIterable {
     var words: [String] {
         switch self {
         case .birds: ["bird", "birdsong", "songbird", "birdcall"]
-        case .wind: ["wind", "breeze", "gust", "gale"]
+        case .wind: ["wind", "windy"]
         case .rain: ["rain", "raindrop", "rainfall", "drizzle"]
         case .thunder: ["thunder", "thunderclap", "thunderstorm"]
         case .waves: ["wave", "surf", "ocean", "sea", "breakers"]

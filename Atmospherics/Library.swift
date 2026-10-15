@@ -162,3 +162,21 @@ struct SavedMix: Codable, Identifiable, Equatable {
                savedOrbs: orbs, savedID: id)
     }
 }
+
+extension Atmosphere {
+    /// The mood a scene is for, to file it in the Library: a café or a library for focus, a
+    /// temple or a misty dawn for meditating, nights and storms and tents for sleep, the rest to
+    /// relax.
+    var mood: Preset.Tag {
+        switch setting {
+        case .cafe, .library: return .focus
+        case .temple: return .meditate
+        default: break
+        }
+        if time == .dawn && sky == .fog { return .meditate }
+        if time == .night || [.snowstorm, .downpour, .thunderstorm].contains(sky) || [.tent, .tinRoof, .flight].contains(setting) {
+            return .sleep
+        }
+        return .relax
+    }
+}
