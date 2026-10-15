@@ -8,20 +8,9 @@ struct MacLayers: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 18) {
-                Spacer()
-                if mixer.currentPlaceIsTweaked {
-                    Button { navigation.resetting = true } label: { Text("Reset") }
-                        .help("Put \(mixer.currentPlaceName) back to how it sounds by default")
-                }
-                Button { navigation.saving = true } label: { Text("Save") }
-                    .disabled(mixer.orbs.isEmpty)
-                    .help("Save this mix to your Library  ⌘S")
-            }
-            .font(Theme.label(12, .medium))
-            .buttonStyle(.plain)
-            .padding(.horizontal, 28)
-            .frame(height: 20)
+            TuneHeader(reset: { navigation.resetting = true }, save: { navigation.saving = true })
+                .frame(maxWidth: 560)
+                .padding(.top, 4)
 
             SoundList()
                 .frame(maxWidth: 560)

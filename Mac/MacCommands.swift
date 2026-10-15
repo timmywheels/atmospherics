@@ -99,11 +99,15 @@ private struct PlaybackCommands: View {
             }
         }
         Divider()
-        Button("Save This Mix…") {
+        if let key = mixer.favoriteKey {
+            Button(mixer.isFavorite(key) ? "Remove from Yours" : "Save") { mixer.toggleFavorite(key) }
+                .keyboardShortcut("d")
+        }
+        Button("Save as New…") {
             openWindow(id: MacNavigation.mainWindow)
             navigation.saving = true
         }
-        .keyboardShortcut("s")
+        .keyboardShortcut("s", modifiers: [.command, .shift])
         Button(mixer.mode == .atmosphere ? "Reset Scene to Default…" : "Reset \(mixer.currentPlaceName.capitalizedFirst) to Default…") {
             openWindow(id: MacNavigation.mainWindow)
             navigation.resetting = true

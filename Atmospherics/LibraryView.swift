@@ -289,7 +289,7 @@ struct SaveMixPrompt: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .alert("Save this mix", isPresented: $isPresented) {
+            .alert("Save as new", isPresented: $isPresented) {
                 TextField("Name", text: $name)
                 Button("Cancel", role: .cancel) {}
                 Button("Save") {

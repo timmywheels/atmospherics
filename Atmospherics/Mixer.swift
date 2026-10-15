@@ -589,10 +589,10 @@ final class Mixer {
 
     /// A name to start from when saving, e.g. "Waterford, light rain".
     var suggestedSaveName: String {
-        if let p = activePreset { return p.isSaved ? "\(p.name), again" : "\(p.name) (mine)" }
-        if mode == .escape, let e = escape { return "\(e.place.title), \(e.conditions.mixName.lowercased())" }
-        if mode == .atmosphere, atmosphere != nil { return title }
-        if let h = home { return "\(h.place), \(h.mixName.lowercased())" }
+        if let p = activePreset { return p.isSaved ? "\(p.name), again" : "\(p.name), my way" }
+        if mode == .escape, let e = escape { return "\(e.place.title), my way" }
+        if mode == .atmosphere, atmosphere != nil { return "\(title), my way" }
+        if let h = home { return "\(h.place), my way" }
         return title
     }
 
@@ -830,6 +830,17 @@ final class Mixer {
         case .failed: return "Offline"
         default: return "Outside"
         }
+    }
+
+    /// A real place's weather, as Tune shows it: "Live · A clear autumn night · 63°". Nil for a
+    /// scene or a mix.
+    var liveLine: String? {
+        let c: Conditions? = switch mode {
+        case .match: home
+        case .escape: escape?.conditions
+        case .atmosphere, .mix: nil
+        }
+        return c.map { "Live · \($0.sceneDescription.capitalizedFirst) · \($0.temperature)" }
     }
 
     /// A symbol for the weather outside, beside it.

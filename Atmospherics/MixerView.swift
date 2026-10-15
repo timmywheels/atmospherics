@@ -58,50 +58,10 @@ struct MixerView: View {
         .haptic(.tick, trigger: detent)
     }
 
-    /// What it is and where, and the ways to keep it or put it back.
     private var header: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("LAYERS")
-                    .font(Theme.caps(11))
-                    .tracking(1.3)
-                    .foregroundStyle(Theme.muted)
-                Text(mixer.title)
-                    .font(Theme.label(15, .medium))
-                    .lineLimit(1)
-                    .contentTransition(.opacity)
-            }
-            Spacer(minLength: 8)
-            if mixer.currentPlaceIsTweaked {
-                pill("Reset") { resetting = true }
-                    .accessibilityLabel("Reset \(mixer.currentPlaceName) to default")
-                    .confirmReset(isPresented: $resetting)
-                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
-            }
-            pill("Save") { saving = true }
-                .disabled(mixer.orbs.isEmpty)
-                .opacity(mixer.orbs.isEmpty ? 0.4 : 1)
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 28)
-        .padding(.bottom, 4)
-        .animation(.smooth, value: mixer.currentPlaceIsTweaked)
-    }
-
-    private func pill(_ title: String, action: @escaping () -> Void) -> some View {
-        Button {
-            Haptics.play(.tap)
-            action()
-        } label: {
-            Text(title)
-                .font(Theme.label(13, .medium))
-                .padding(.vertical, 7)
-                .padding(.horizontal, 14)
-                .background(Capsule().fill(Color.white.opacity(0.06)))
-                .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
+        TuneHeader(reset: { resetting = true }, save: { saving = true })
+            .confirmReset(isPresented: $resetting)
+            .padding(.top, 28)
     }
 }
 
@@ -126,7 +86,7 @@ struct SoundList: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(mixer.currentPlaceIsTweaked ? "Your changes to \(mixer.currentPlaceName) are kept"
+            Text(mixer.currentPlaceIsTweaked ? "Your changes to \(mixer.currentPlaceName) are kept. Reset to hear it as it was."
                  : "Slide a layer to set it; pull it past silent to remove it.")
                 .font(Theme.mono(11))
                 .foregroundStyle(Theme.muted)
@@ -169,6 +129,116 @@ struct SoundList: View {
         #else
         return true
         #endif
+    }
+}
+
+/// The top of Tune: what's playing, with the bookmark that saves it; for a real place its live
+/// weather, for a scene its other skies (each another scene, to go to); and Reset, once it's
+/// tuned, and Save as new.
+struct TuneHeader: View {
+    @Environment(Mixer.self) private var mixer
+    let reset: () -> Void
+    let save: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("TUNE")
+                        .font(Theme.caps(11))
+                        .tracking(1.3)
+                        .foregroundStyle(Theme.muted)
+                    HStack(spacing: 2) {
+                        Text(mixer.title)
+                            .font(Theme.label(15, .medium))
+                            .lineLimit(1)
+                            .contentTransition(.opacity)
+                        if let key = mixer.favoriteKey {
+                            FavoriteToggle(key: key, size: 14)
+                                .frame(width: 32, height: 28)
+                                .clipped()
+                        }
+                    }
+                }
+                Spacer(minLength: 8)
+                if mixer.currentPlaceIsTweaked {
+                    pill("Reset", action: reset)
+                        .accessibilityLabel("Reset \(mixer.currentPlaceName) to default")
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                }
+                pill("Save as new…", action: save)
+                    .disabled(mixer.orbs.isEmpty)
+                    .opacity(mixer.orbs.isEmpty ? 0.4 : 1)
+            }
+            if let live = mixer.liveLine {
+                Text(live)
+                    .font(Theme.mono(11))
+                    .foregroundStyle(Theme.secondary)
+                    .contentTransition(.opacity)
+            } else if mixer.mode == .atmosphere, mixer.activePreset == nil, let a = mixer.atmosphere {
+                OtherSkies(scene: a)
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.bottom, 4)
+        .animation(.smooth, value: mixer.currentPlaceIsTweaked)
+    }
+
+    private func pill(_ title: String, action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.play(.tap)
+            action()
+        } label: {
+            Text(title)
+                .font(Theme.label(13, .medium))
+                .padding(.vertical, 7)
+                .padding(.horizontal, 14)
+                .background(Capsule().fill(Color.white.opacity(0.06)))
+                .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// A scene's other skies, as places to go: "Snow · Rain · Clear", the one you're in lit. Each is
+/// another scene, with its own tuning and its own bookmark.
+private struct OtherSkies: View {
+    @Environment(Mixer.self) private var mixer
+    let scene: Atmosphere
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("OTHER SKIES FOR THIS \(scene.setting.info.name.uppercased())")
+                .font(Theme.caps(10))
+                .tracking(1.2)
+                .foregroundStyle(Theme.muted)
+                .lineLimit(1)
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(scene.setting.info.skies, id: \.self) { sky in
+                        let here = sky == scene.sky
+                        Button {
+                            guard !here else { return }
+                            Haptics.play(.thud)
+                            withAnimation(.smooth) { mixer.setAtmosphereSky(sky) }
+                        } label: {
+                            Text(sky.name)
+                                .font(Theme.body(13, .medium))
+                                .foregroundStyle(here ? Theme.background : Theme.text)
+                                .padding(.vertical, 7)
+                                .padding(.horizontal, 13)
+                                .background(Capsule().fill(here ? Theme.text : .clear))
+                                .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                                .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(here ? .isSelected : [])
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+        }
     }
 }
 
