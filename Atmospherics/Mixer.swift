@@ -897,7 +897,7 @@ final class Mixer {
         lensFollows(mode == .atmosphere ? .scenes : .outside)
     }
 
-    func load(_ preset: Preset) {
+    func load(_ preset: Preset, play shouldPlay: Bool = true) {
         transition?.cancel()
         setActivePreset(preset)
         setFollowing(false, for: mode)
@@ -905,7 +905,7 @@ final class Mixer {
         titles[mode] = preset.name
         defaults.set(preset.name, forKey: "title.\(mode.rawValue)")
         apply()
-        if !isPlaying { play() }
+        if shouldPlay && !isPlaying { play() }
         arrived()
         if let tag = preset.tag {
             defaults.set(preset.id, forKey: "lens.\(Lens(tag).rawValue)")
@@ -1148,14 +1148,14 @@ final class Mixer {
     }
 
     /// Goes to a place: pins it, switches to Escape, and glides the field to its sound.
-    func select(_ place: Place) {
+    func select(_ place: Place, play shouldPlay: Bool = true) {
         setActivePreset(nil)
         // Choosing the place you're already in is just going home.
         if isNearHome(place) {
             pinnedPlace = nil
             defaults.removeObject(forKey: "pinnedPlace")
             goHome()
-            if !isPlaying { play() }
+            if shouldPlay && !isPlaying { play() }
             return
         }
         pinnedPlace = place
@@ -1170,7 +1170,7 @@ final class Mixer {
         setFollowing(true, for: .escape)
         applyWeather(to: .escape, animated: true)
         updateNowPlaying()
-        if !isPlaying { play() }
+        if shouldPlay && !isPlaying { play() }
         arrived()
         lensFollows(.outside)
     }
@@ -1279,7 +1279,8 @@ final class Mixer {
         refreshUpcoming()
     }
 
-    /// Turns the wheel: plays where that lens was left, or its first.
+    /// Turns the wheel to where that lens was left, or its first. Turning it, like swiping,
+    /// only changes what's there: paused stays paused.
     func choose(_ new: Lens) {
         guard new != lens else { return }
         lens = new
@@ -1287,13 +1288,12 @@ final class Mixer {
         switch new {
         case .outside:
             goHome()
-            if !isPlaying { play() }
         case .scenes:
-            go(to: atmosphere ?? draw(excluding: []))
+            go(to: atmosphere ?? draw(excluding: []), play: false)
         default:
             let mixes = ring(new)
             let last = defaults.string(forKey: "lens.\(new.rawValue)")
-            if let p = mixes.first(where: { $0.id == last }) ?? mixes.first { load(p) }
+            if let p = mixes.first(where: { $0.id == last }) ?? mixes.first { load(p, play: false) }
         }
         refreshUpcoming()
     }
@@ -1356,7 +1356,7 @@ final class Mixer {
         if carouselShowing { travelRequest = TravelRequest(forward: forward) } else { travel(forward: forward) }
     }
 
-    /// Swipe left (forward) to the next in the lens, or right (back).
+    /// Swipe left (forward) to the next in the lens, or right (back). Paused stays paused.
     func travel(forward: Bool) {
         guard let dest = forward ? next : previous else { return }
         if lens == .scenes {
@@ -1368,10 +1368,10 @@ final class Mixer {
         }
         shuffleCount += 1
         switch dest {
-        case .home: goHome(); if !isPlaying { play() }
-        case .place(let p): select(p)
-        case .atmosphere(let a): go(to: a)
-        case .preset(let p): load(p)
+        case .home: goHome()
+        case .place(let p): select(p, play: false)
+        case .atmosphere(let a): go(to: a, play: false)
+        case .preset(let p): load(p, play: false)
         }
         refreshUpcoming()
     }
