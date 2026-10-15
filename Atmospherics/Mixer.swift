@@ -108,6 +108,13 @@ final class Mixer {
     @ObservationIgnored private let weatherService = WeatherService()
     @ObservationIgnored private lazy var location = LocationProvider()
     @ObservationIgnored private var lastWeatherFetch: Date?
+    /// The real places' weather is one request for all of them, but the weather service counts
+    /// each place as a call, so it's asked for at most every 20 minutes, kept across launches,
+    /// and after a failure tried again later and later rather than every few seconds.
+    @ObservationIgnored private var lastPlacesFetch: Date?
+    @ObservationIgnored private var placesRetry: Double = 15
+    @ObservationIgnored private var placesRetrying = false
+    private static let weatherFresh: TimeInterval = 20 * 60
     @ObservationIgnored private var transition: Task<Void, Never>?
 
     /// How loud Atmospherics plays, on its own scale apart from the system volume, so a soundscape
@@ -190,6 +197,7 @@ final class Mixer {
             Preset.all.first { $0.id == id } ?? savedMixes.first { $0.id.uuidString == id }?.preset
         }
         if mode == .atmosphere && atmosphere == nil { mode = .match }
+        restoreWeather()
         migrateToOwnSlots()
         if mode == .mix && activePreset == nil { mode = .match }
         lens = activePreset.map { $0.tag.map(Lens.init) } ?? (mode == .atmosphere ? .imagine : .outside)
@@ -1208,8 +1216,7 @@ final class Mixer {
         if home == nil { weatherState = .loading }
 
         // Places first: they don't depend on where you are.
-        let places = allPlaces
-        async let placeWeather = try? weatherService.conditions(for: places)
+        async let placesDone: Void = refreshPlaces()
 
         do {
             // Where you are only once you've asked for it (or allowed it already): never a
@@ -1225,21 +1232,60 @@ final class Mixer {
             if liveHome == nil { hereWithoutWeather() }
         }
 
-        if let options = await placeWeather {
-            livePlaceConditions = Dictionary(zip(places.map(\.name), options), uniquingKeysWith: { a, _ in a })
-            chooseEscape()
-        } else {
-            // Don't wait 20 minutes for the next try if places didn't load.
-            lastWeatherFetch = nil
-            Task { [weak self] in
-                try? await Task.sleep(for: .seconds(15))
-                await self?.refreshWeather()
-            }
-        }
+        await placesDone
 
         applyWeather(to: .match, animated: true)
         applyWeather(to: .escape, animated: true)
         applyWeather(to: .atmosphere, animated: true)
+    }
+
+    /// The real places' weather, unless it's fresh enough (from this run, or saved from the last).
+    /// A failure is tried again in 15 s, then 30, a minute and so on up to 20 minutes, or after
+    /// half an hour if the service says it's been asked too often.
+    private func refreshPlaces() async {
+        if let last = lastPlacesFetch, Date().timeIntervalSince(last) < Self.weatherFresh, !livePlaceConditions.isEmpty { return }
+        let places = allPlaces
+        do {
+            let options = try await weatherService.conditions(for: places)
+            livePlaceConditions = Dictionary(zip(places.map(\.name), options), uniquingKeysWith: { a, _ in a })
+            lastPlacesFetch = Date()
+            placesRetry = 15
+            chooseEscape()
+            saveWeather()
+        } catch {
+            guard !placesRetrying else { return }
+            placesRetrying = true
+            let wait = error as? WeatherError == .tooMany ? 30 * 60 : placesRetry
+            placesRetry = min(Self.weatherFresh, placesRetry * 2)
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(wait))
+                guard let self else { return }
+                self.placesRetrying = false
+                await self.refreshPlaces()
+                self.applyWeather(to: .escape, animated: true)
+            }
+        }
+    }
+
+    private struct SavedWeather: Codable {
+        var at: Date
+        var places: [String: Conditions]
+    }
+
+    private func saveWeather() {
+        guard let at = lastPlacesFetch,
+              let data = try? JSONEncoder().encode(SavedWeather(at: at, places: livePlaceConditions)) else { return }
+        defaults.set(data, forKey: "placesWeather")
+    }
+
+    /// The places' weather from the last run, if it's still fresh: no need to ask again yet.
+    private func restoreWeather() {
+        guard let data = defaults.data(forKey: "placesWeather"),
+              let saved = try? JSONDecoder().decode(SavedWeather.self, from: data),
+              Date().timeIntervalSince(saved.at) < Self.weatherFresh else { return }
+        livePlaceConditions = saved.places
+        lastPlacesFetch = saved.at
+        chooseEscape()
     }
 
     /// Where you are with no weather to go on (no location, or offline): named as Here, never a

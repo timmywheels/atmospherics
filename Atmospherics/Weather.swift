@@ -2,7 +2,7 @@ import CoreLocation
 import Foundation
 
 /// Current conditions at one place.
-struct Conditions: Equatable {
+struct Conditions: Equatable, Codable {
     var place: String
     var temperatureC: Double
     var precipitationMM: Double     // per hour
@@ -68,6 +68,8 @@ struct Conditions: Equatable {
 
 enum WeatherError: LocalizedError {
     case badResponse
+    /// Asked too often (Open-Meteo's free limits count each place as a call): wait a good while.
+    case tooMany
     var errorDescription: String? { "The weather service didn't answer." }
 }
 
@@ -132,7 +134,9 @@ struct WeatherService {
             URLQueryItem(name: "timezone", value: "auto"),
         ]
         let (data, response) = try await session.data(from: components.url!)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw WeatherError.badResponse }
+        let status = (response as? HTTPURLResponse)?.statusCode
+        if status == 429 { throw WeatherError.tooMany }
+        guard status == 200 else { throw WeatherError.badResponse }
         // One point returns an object; several return an array.
         let decoded: [OpenMeteoResponse] = points.count == 1
             ? [try JSONDecoder().decode(OpenMeteoResponse.self, from: data)]

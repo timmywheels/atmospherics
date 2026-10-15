@@ -30,7 +30,7 @@ enum Climate: String {
 
 enum Season: String { case spring, summer, autumn, winter }
 
-enum DayPhase: String { case dawn, day, dusk, night }
+enum DayPhase: String, Codable { case dawn, day, dusk, night }
 
 extension Conditions {
     /// The local calendar at the place, from its UTC offset. An imagined scene can fix its hour
