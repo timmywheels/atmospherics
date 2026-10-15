@@ -88,7 +88,7 @@ struct Preset: Identifiable, Equatable {
         Preset(name: "Reading Room", tag: .focus, length: "2 h", description: "A library's hush, rain on the windows",
                mix: [(.library, 0.7), (.rain, 0.3)]),
         Preset(name: "Coffee Shop", tag: .focus, length: "90 min", description: "A lively café's murmur, for creative work",
-               mix: [(.cafe, 0.75), (.rain, 0.25)], evidence: .some),
+               mix: [(.busyCafe, 0.75), (.rain, 0.25)], evidence: .some),
         Preset(name: "Late Draft", tag: .relax, length: "90 min", description: "Typing, a clock, pink noise",
                mix: [(.typing, 0.5), (.clock, 0.25), (.pink, 0.4)]),
         Preset(name: "Cave Retreat", tag: .relax, length: "1 h", description: "Cave drips, a warm drone",

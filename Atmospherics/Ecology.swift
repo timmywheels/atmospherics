@@ -272,7 +272,7 @@ enum Ecology {
             let curve: [Double] = [0.9, 0.95, 1, 1, 0.9, 0.6, 0.25, 0, 0, 0, 0, 0,
                                    0, 0, 0, 0, 0, 0, 0, 0.15, 0.35, 0.55, 0.75, 0.85]
             return curve[t.hour]
-        case .cafe:
+        case .cafe, .busyCafe:
             switch t.hour {
             case 7: return 0.6
             case 8...19: return 1
@@ -456,7 +456,7 @@ enum Ecology {
             return c.temperatureC < 1 ? 0 : 1
         case .bazaar:
             return heavy ? 0.6 : 1
-        case .cafe:
+        case .cafe, .busyCafe:
             return heavy ? 0.5 : snowCover ? 0.6 : 1
         case .whales:
             return heavy ? 0.6 : 1

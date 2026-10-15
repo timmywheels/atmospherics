@@ -20,7 +20,8 @@ Sounds that come and go (`SoundKind.rhythm`, in Atmospherics/Rhythm.swift) play 
 | tinRoof | https://freesound.org/s/521773/ | MrFossy | CC0 | 10 s |
 | whales | https://commons.wikimedia.org/wiki/File:Humpback_whale_wheezeblow.ogg | US National Park Service, Glacier Bay | Public domain | 1 s (55 s loop; takes cut by calls.swift) |
 | lake | https://freesound.org/s/376795/ | amholma | CC0 | 2 s (95 s loop; small waves on a quiet shore, replacing 614299, which splashed) |
-| cafe | https://freesound.org/s/46310/ | moxobna | CC0 | 30 s |
+| cafe | https://freesound.org/s/813868/ | CVLTIV8R | CC0 | 2 s (138 s loop; Northtown Coffee, Arcata, CA) |
+| busyCafe | https://freesound.org/s/260062/ | mhtaylor67 | CC0 | 3 s (228 s loop; a busy coffee-shop counter) |
 | library | https://freesound.org/s/620683/ | xkeril | CC0 | 30 s |
 | cabin | https://freesound.org/s/447825/ | courter | CC0 | 30 s |
 | bells | https://freesound.org/s/413157/ | lazymonk | CC0 | 30 s (takes cut by calls.swift) |
