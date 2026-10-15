@@ -35,7 +35,7 @@ struct MacListen: View {
                 .padding(.top, 6)
 
             HStack(spacing: 14) {
-                LayersLink(orbs: mixer.byVolume) { navigation.tuning = true }
+                LayersLink(orbs: mixer.byVolume) { navigation.tuning.toggle() }
                 ResetTuning()
                 TimerMenu()
                 MacPlayButton()

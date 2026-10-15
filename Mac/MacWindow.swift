@@ -22,10 +22,10 @@ struct MacWindow: View {
                         MacLayers()
                             .frame(width: TuneSide.width)
                             .background(Color.black.opacity(0.18).ignoresSafeArea())
-                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                            .transition(.opacity)
                     }
                 }
-                .animation(.smooth(duration: 0.3), value: navigation.tuning)
+                .animation(.easeOut(duration: 0.18), value: navigation.tuning)
                 .onChange(of: navigation.tuning) { _, open in TuneSide.make(room: open) }
             case .teleport:
                 TeleportView(start: mixer.mode == .atmosphere ? mixer.atmosphere : nil) { navigation.tab = .listen }
@@ -163,6 +163,7 @@ private struct BackButton: View {
 
 /// Room for Tune beside Listen: the window widens by Tune's width when it opens (moving left if
 /// it would run off the screen) and gives it back when it closes, so the form keeps its size.
+/// At once, not animated: a window growing over a few frames squeezes the form and lets it go.
 enum TuneSide {
     static let width: CGFloat = 340
 
@@ -176,6 +177,6 @@ enum TuneSide {
         } else {
             frame.size.width = max(window.minSize.width, frame.width - width - 1)
         }
-        window.setFrame(frame, display: true, animate: true)
+        window.setFrame(frame, display: true, animate: false)
     }
 }
