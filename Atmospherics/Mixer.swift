@@ -64,109 +64,15 @@ final class Mixer {
     // Weather
     enum WeatherState { case loading, ready, locationOff, failed }
     private(set) var weatherState: WeatherState = .loading
-    /// Live weather as fetched. Everything else reads the computed versions below, which apply
-    /// any weather or time-of-day override.
+    /// Live weather as fetched. A place is always its real weather now; imagined weather is what
+    /// a scene is for.
     private var liveHome: Conditions?
     private var liveEscape: (place: Place, conditions: Conditions)?
     private var livePlaceConditions: [String: Conditions] = [:]
 
-    var home: Conditions? { liveHome.map(overridden) }
-    var escape: (place: Place, conditions: Conditions)? { liveEscape.map { ($0.place, overridden($0.conditions)) } }
-    var placeConditions: [String: Conditions] { livePlaceConditions.mapValues(overridden) }
-
-    // MARK: Overrides
-
-    enum SkyOverride: String, CaseIterable {
-        case live = "Live", clear = "Clear", drizzle = "Drizzle", rain = "Rain", downpour = "Downpour"
-        case storm = "Storm", snow = "Snow", fog = "Fog", wind = "Windy"
-    }
-    enum TimeOverride: String, CaseIterable { case live = "Live", day = "Day", night = "Night" }
-
-    private(set) var skyOverride: SkyOverride = .live
-    private(set) var timeOverride: TimeOverride = .live
-    var isImagining: Bool { skyOverride != .live || timeOverride != .live }
-
-    func setSky(_ s: SkyOverride) {
-        skyOverride = s
-        defaults.set(s.rawValue, forKey: "skyOverride")
-        reapplyAfterOverride()
-    }
-
-    func setTime(_ t: TimeOverride) {
-        timeOverride = t
-        defaults.set(t.rawValue, forKey: "timeOverride")
-        reapplyAfterOverride()
-    }
-
-    /// Swipe down: the next weather in the list, wrapping back to Live.
-    func cycleSky() {
-        let all = SkyOverride.allCases
-        setSky(all[(all.firstIndex(of: skyOverride)! + 1) % all.count])
-    }
-
-    /// Clears both overrides at once.
-    func clearOverrides() {
-        skyOverride = .live
-        timeOverride = .live
-        defaults.set(SkyOverride.live.rawValue, forKey: "skyOverride")
-        defaults.set(TimeOverride.live.rawValue, forKey: "timeOverride")
-        reapplyAfterOverride()
-    }
-
-    private func reapplyAfterOverride() {
-        // An override is about a place's weather, so it takes you out of a mix, back to the place.
-        if mode == .mix { return leaveMix() }
-        setFollowing(true, for: mode)
-        traveling = true
-        applyWeather(to: mode, animated: true)
-        updateNowPlaying()
-    }
-
-    /// Live conditions with the chosen sky and time swapped in.
-    private func overridden(_ c: Conditions) -> Conditions {
-        var c = c
-        switch timeOverride {
-        case .live: break
-        case .day: c.isDay = true; c.forcedPhase = .day
-        case .night: c.isDay = false; c.forcedPhase = .night
-        }
-        switch skyOverride {
-        case .live: break
-        case .clear: c.code = 0; c.precipitationMM = 0; c.windKMH = min(c.windKMH, 10)
-        case .drizzle: c.code = 53; c.precipitationMM = 0.2
-        case .rain: c.code = 63; c.precipitationMM = 1.5
-        case .downpour: c.code = 65; c.precipitationMM = 8
-        case .storm: c.code = 95; c.precipitationMM = max(c.precipitationMM, 4); c.windKMH = max(c.windKMH, 35); c.pressureHPA = min(c.pressureHPA, 998)
-        case .snow: c.code = 73; c.precipitationMM = 0; c.temperatureC = min(c.temperatureC, -2)
-        case .fog: c.code = 45; c.precipitationMM = 0; c.windKMH = min(c.windKMH, 6)
-        case .wind: c.code = 3; c.precipitationMM = 0; c.windKMH = max(c.windKMH, 45)
-        }
-        return c
-    }
-
-    /// "Imagining a rainy night in Tokyo".
-    func imaginingLine(at place: String) -> String {
-        let sky: String? = {
-            switch skyOverride {
-            case .live: return nil
-            case .clear: return timeOverride == .live ? "clear skies" : "clear"
-            case .drizzle: return timeOverride == .live ? "drizzle" : "drizzly"
-            case .rain: return timeOverride == .live ? "rain" : "rainy"
-            case .downpour: return timeOverride == .live ? "a downpour" : "pouring"
-            case .storm: return timeOverride == .live ? "a storm" : "stormy"
-            case .snow: return timeOverride == .live ? "snow" : "snowy"
-            case .fog: return timeOverride == .live ? "fog" : "foggy"
-            case .wind: return timeOverride == .live ? "wind" : "windy"
-            }
-        }()
-        let time: String? = timeOverride == .live ? nil : timeOverride.rawValue.lowercased()
-        switch (sky, time) {
-        case let (s?, t?): return "Imagining a \(s) \(t) in \(place)"
-        case let (s?, nil): return "Imagining \(s) in \(place)"
-        case let (nil, t?): return "Imagining \(t) in \(place)"
-        default: return ""
-        }
-    }
+    var home: Conditions? { liveHome }
+    var escape: (place: Place, conditions: Conditions)? { liveEscape }
+    var placeConditions: [String: Conditions] { livePlaceConditions }
     /// A place the user chose. When nil, Escape picks the place least like home.
     private(set) var pinnedPlace: Place?
     /// Places found through search, newest first.
@@ -245,8 +151,9 @@ final class Mixer {
         if let raw = defaults.string(forKey: "mode"), let saved = Mode(rawValue: raw) { mode = saved }
         customPlaces = (defaults.array(forKey: "customPlaces") as? [[String: Any]] ?? []).compactMap(Place.init(dictionary:)).map(Self.refreshed)
         pinnedPlace = defaults.string(forKey: "pinnedPlace").flatMap { name in allPlaces.first { $0.name == name } }
-        skyOverride = defaults.string(forKey: "skyOverride").flatMap(SkyOverride.init(rawValue:)) ?? .live
-        timeOverride = defaults.string(forKey: "timeOverride").flatMap(TimeOverride.init(rawValue:)) ?? .live
+        // Places stopped taking an imagined sky or time: once, say so to anyone who'd set one.
+        let imagined = ["skyOverride", "timeOverride"].contains { (defaults.string(forKey: $0) ?? "Live") != "Live" }
+        ["skyOverride", "timeOverride"].forEach { defaults.removeObject(forKey: $0) }
         tweaks = defaults.dictionary(forKey: "placeTweaks") as? [String: [String: Double]] ?? [:]
         paces = (defaults.dictionary(forKey: "paces") as? [String: String] ?? [:]).reduce(into: [:]) { all, entry in
             if let kind = SoundKind(rawValue: entry.key), let pace = Pace(rawValue: entry.value) { all[kind] = pace }
@@ -276,6 +183,12 @@ final class Mixer {
         setUpSystemAudio()
         startClock()
         PlayPauseIntent.handler = { [weak self] in self?.togglePlayback() }
+        if imagined {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(2))
+                self?.announce("Places now always play their real weather. For imagined weather, try a scene.", for: 6)
+            }
+        }
     }
 
     // MARK: Lock screen, interruptions, route changes
@@ -453,7 +366,7 @@ final class Mixer {
             default:
                 guard let home else { return WeatherSummary(place: "", temp: "", line: "", head: head) }
                 let line = following[.match] == true
-                    ? (isImagining ? imaginingLine(at: home.place) : "\(home.sceneDescription.capitalizedFirst) outside") + (tweaks["home"] != nil ? " · tuned by you" : "")
+                    ? "\(home.sceneDescription.capitalizedFirst) outside" + (tweaks["home"] != nil ? " · tuned by you" : "")
                     : "Your own mix, made here"
                 return WeatherSummary(place: home.place, temp: home.temperature, line: line, head: head)
             }
@@ -470,7 +383,7 @@ final class Mixer {
             if following[.escape] != true {
                 line = "Your own mix, made in \(escape.place.name)"
             } else if pinnedPlace != nil {
-                line = (isImagining ? imaginingLine(at: escape.place.name) : "\(c.sceneDescription.capitalizedFirst) in \(escape.place.name)")
+                line = "\(c.sceneDescription.capitalizedFirst) in \(escape.place.name)"
                     + (tweaks[escape.place.name] != nil ? " · tuned by you" : "")
             } else {
                 line = Self.escapeLine(c)
@@ -1486,14 +1399,14 @@ final class Mixer {
         case .home:
             guard let h = home else { return Page(title: "Home", line: "", orbs: []) }
             let o = Preset.layout(Self.applying(tweaks["home"], to: WeatherMix.orbs(for: h, place: homePlace)))
-            return Page(title: h.mixName, line: isImagining ? imaginingLine(at: h.place) : "\(h.sceneDescription.capitalizedFirst) outside",
+            return Page(title: h.mixName, line: "\(h.sceneDescription.capitalizedFirst) outside",
                         orbs: o)
         case .place(let p):
             let o: [Orb]
             let line: String
             if let c = placeConditions[p.name] {
                 o = Preset.layout(Self.applying(tweaks[p.name], to: WeatherMix.orbs(for: c, place: p)))
-                line = isImagining ? imaginingLine(at: p.name) : "\(c.sceneDescription.capitalizedFirst) in \(p.name)"
+                line = "\(c.sceneDescription.capitalizedFirst) in \(p.name)"
             } else {
                 o = Preset.layout(p.signature.compactMap { k, v in k.playable.map { ($0, v) } })
                 line = p.country

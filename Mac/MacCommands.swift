@@ -89,22 +89,14 @@ private struct PlaybackCommands: View {
             }
         }
         if mixer.mode == .atmosphere, mixer.activePreset == nil, let a = mixer.atmosphere {
-            // An atmosphere's own weather and time, from those that suit it.
-            Picker("Weather", selection: Binding(get: { a.sky }, set: { mixer.setAtmosphereSky($0) })) {
+            // A scene's other skies and times: each another scene, to go to. (A real place is
+            // always its real weather.)
+            Picker("Other Skies", selection: Binding(get: { a.sky }, set: { mixer.setAtmosphereSky($0) })) {
                 ForEach(a.setting.info.skies, id: \.self) { Text($0.name).tag($0) }
             }
             Picker("Time of Day", selection: Binding(get: { a.time }, set: { mixer.setAtmosphereTime($0) })) {
                 ForEach(a.setting.info.times, id: \.self) { Text($0.name).tag($0) }
             }
-        } else {
-            Picker("Weather", selection: Binding(get: { mixer.skyOverride }, set: { mixer.setSky($0) })) {
-                ForEach(Mixer.SkyOverride.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-            }
-            Picker("Time of Day", selection: Binding(get: { mixer.timeOverride }, set: { mixer.setTime($0) })) {
-                ForEach(Mixer.TimeOverride.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-            }
-            Button("Back to Live Weather") { withAnimation(.smooth) { mixer.clearOverrides() } }
-                .disabled(!mixer.isImagining)
         }
         Divider()
         Button("Save This Mix…") {

@@ -65,6 +65,11 @@ struct NowPlayingView: View {
         return screenHeight / 2
     }
 
+    /// A scene in the next of its skies.
+    private func otherSkies() {
+        if inAtmosphere { mixer.cycleAtmosphereSky() }
+    }
+
     /// Playing an atmosphere (not a Library mix started from one): its own weather and time apply.
     private var inAtmosphere: Bool { mixer.mode == .atmosphere && mixer.activePreset == nil }
 
@@ -144,7 +149,7 @@ struct NowPlayingView: View {
         )
         .accessibilityAction(named: "Library") { showLibrary = true }
         .accessibilityAction(named: "Teleport") { openTeleport(typing: false) }
-        .accessibilityAction(named: "Change the weather") { inAtmosphere ? mixer.cycleAtmosphereSky() : mixer.cycleSky() }
+        .accessibilityAction(named: "Other skies", otherSkies)
         .accessibilityAction(named: "Layers") { openLayers() }
         .sheet(isPresented: $showMixer) {
             MixerView(detent: $layersDetent)
@@ -164,7 +169,6 @@ struct NowPlayingView: View {
             TeleportView(start: mixer.mode == .atmosphere ? mixer.atmosphere : nil, typing: teleportTyping)
         }
         .haptic(.thud, trigger: mixer.shuffleCount)
-        .haptic(.tap, trigger: mixer.skyOverride)
         .haptic(.tap, trigger: mixer.atmosphere?.sky)
         // A tap as Layers, Teleport or the Library opens, however it was asked for.
         .haptic(.tap, trigger: showMixer) { _, now in now }
