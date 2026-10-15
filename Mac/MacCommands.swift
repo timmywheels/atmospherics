@@ -13,7 +13,9 @@ struct MacCommands: Commands {
         }
 
         // One window, so no New Window.
-        CommandGroup(replacing: .newItem) {}
+        CommandGroup(replacing: .newItem) {
+            NewMixCommand(mixer: mixer)
+        }
 
         CommandGroup(before: .toolbar) {
             TabCommands(navigation: navigation)
@@ -141,5 +143,19 @@ struct MacSettings: View {
         .frame(width: 400)
         .fixedSize()
         .preferredColorScheme(.dark)
+    }
+}
+
+/// File › New Mix: an empty mix to build from any sounds, with Tune open.
+private struct NewMixCommand: View {
+    let mixer: Mixer
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button("New Mix") {
+            mixer.startFromScratch()
+            openWindow(id: MacNavigation.mainWindow)
+        }
+        .keyboardShortcut("n")
     }
 }

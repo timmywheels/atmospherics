@@ -161,6 +161,14 @@ struct NowPlayingView: View {
             .animation(.smooth(duration: 0.3), value: mixer.notice)
         }
         .task { await runHints() }
+        // A new mix from scratch: Tune, all the way up, once the Library has gone.
+        .onChange(of: mixer.tuneRequests) { _, _ in
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(550))
+                layersDetent = .large
+                showMixer = true
+            }
+        }
         .sheet(isPresented: $showLibrary) {
             LibraryView(current: mixer.activePreset, focus: searchFirst)
                 .onDisappear { searchFirst = false }

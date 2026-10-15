@@ -47,6 +47,11 @@ struct MacWindow: View {
         .tint(Theme.text)
         .preferredColorScheme(.dark)
         .animation(.smooth(duration: 0.3), value: navigation.tab)
+        // A new mix from scratch: Listen, with Tune open beside it.
+        .onChange(of: mixer.tuneRequests) { _, _ in
+            navigation.tab = .listen
+            navigation.tuning = true
+        }
         .saveMixPrompt(isPresented: $navigation.saving)
         .confirmReset(isPresented: $navigation.resetting)
         .alert("Audio error", isPresented: .constant(mixer.errorMessage != nil)) {

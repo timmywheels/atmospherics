@@ -62,6 +62,8 @@ struct LibraryView: View {
             }
 
             if shelf == .sounds && !finding {
+                fromScratch
+                    .padding(.top, 10)
                 SoundSections(height: nil)
                     .padding(.horizontal, -24)
                     .padding(.top, 8)
@@ -193,6 +195,7 @@ struct LibraryView: View {
         case .sounds:
             EmptyView()
         case .yours:
+            fromScratch
             ForEach(mixer.yoursItems) { entry in
                 yoursRow(entry)
             }
@@ -482,6 +485,40 @@ struct LibraryView: View {
     }
 
     // MARK: Cards
+
+    /// An empty mix to build from any sounds.
+    private var fromScratch: some View {
+        Button {
+            Haptics.play(.thud)
+            mixer.startFromScratch()
+            close()
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "plus")
+                    .font(.system(size: 17, weight: .medium))
+                    .frame(width: 40, height: 40)
+                    .background(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Start from scratch")
+                        .font(Theme.display(24))
+                    Text("An empty mix: bring in any sounds you like")
+                        .font(Theme.label(11))
+                        .foregroundStyle(Theme.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(16)
+            .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color.white.opacity(0.04)))
+            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(Theme.hairline, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("An empty mix, with Tune open to add sounds")
+        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+    }
 
     /// Played, and the Library closed (or, on the Mac, back to listening).
     private func close() {

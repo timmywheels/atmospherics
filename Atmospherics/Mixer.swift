@@ -395,8 +395,9 @@ final class Mixer {
                 : a.setting.info.line + (tweaks[a.tweakKey] != nil ? " · tuned by you" : "")
             return WeatherSummary(place: a.setting.info.name, temp: "", line: line, head: "Atmosphere")
         case .mix:
-            // A mix that's gone (its saved copy deleted): what's left of it.
-            return WeatherSummary(place: "", temp: "", line: "", head: "Yours")
+            // One made from scratch (or what's left of a saved one since deleted).
+            let line = orbs.isEmpty ? "Nothing yet: add sounds in Tune" : "Your own · Save as new to keep it"
+            return WeatherSummary(place: "", temp: "", line: line, head: "Yours")
         }
     }
 
@@ -600,6 +601,7 @@ final class Mixer {
     /// A name to start from when saving, e.g. "Waterford, light rain".
     var suggestedSaveName: String {
         if let p = activePreset { return p.isSaved ? "\(p.name), again" : "\(p.name), my way" }
+        if mode == .mix { return "My mix \(savedMixes.count + 1)" }
         if mode == .escape, let e = escape { return "\(e.place.title), my way" }
         if mode == .atmosphere, atmosphere != nil { return "\(title), my way" }
         if let h = home { return "\(h.place), my way" }
@@ -624,6 +626,19 @@ final class Mixer {
         persistSaved()
         setActivePreset(mix.preset)
         enterMix(mix.preset.orbs, title: mix.name)
+    }
+
+    /// Asked to show Tune (a new mix from scratch wants its sounds): the screens watch this.
+    private(set) var tuneRequests = 0
+
+    /// An empty mix of your own, to build from any sounds: playing, so each one is heard as it
+    /// comes in, with Tune up to add them. Save as new keeps it.
+    func startFromScratch() {
+        setActivePreset(nil)
+        enterMix([], title: "New mix")
+        lensFollows(nil)
+        if !isPlaying { play() }
+        tuneRequests += 1
     }
 
     /// Plays `orbs` in the mix's own field, leaving the place it came from as it was.
