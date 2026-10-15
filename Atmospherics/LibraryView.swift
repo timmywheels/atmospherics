@@ -371,8 +371,19 @@ struct LibraryView: View {
             group.1
         }
         if f.isEmpty {
-            note("Nothing by that name. Imagine it instead:")
-                .padding(.top, 8)
+            // Nothing by that name: said quietly, in the serif, and the way on beneath it.
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Nowhere by that name, yet.")
+                    .font(Theme.display(30))
+                Text("Imagine it, and it's yours to go to.")
+                    .font(Theme.label(13))
+                    .foregroundStyle(Theme.secondary)
+            }
+            .padding(.top, 24)
+            .padding(.bottom, 10)
+            .padding(.horizontal, 4)
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
         }
         // Under a place it's already offered, right beneath it.
         if !(f.places.first.map { $0.1 < 5 && q.lowercased() != $0.0.name.lowercased() } ?? false) {
@@ -383,31 +394,38 @@ struct LibraryView: View {
         }
     }
 
-    /// The last answer to any search: a scene made from the words.
+    /// The last answer to any search: a scene made from the words, as a row like Tune's layers,
+    /// the words large in the serif.
     private func imagine(_ q: String) -> some View {
         Button { imagineIt(q) } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 16))
-                    .frame(width: 22)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Imagine “\(q)”")
-                        .font(Theme.label(15, .medium))
-                        .lineLimit(2)
-                    Text("A scene made from your words")
-                        .font(Theme.label(11))
+            VStack(spacing: 0) {
+                Rectangle().fill(Theme.hairline).frame(height: 1)
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("IMAGINE")
+                            .font(Theme.caps(10))
+                            .tracking(1.2)
+                            .foregroundStyle(Theme.muted)
+                        Text("“\(q)”")
+                            .font(Theme.display(28))
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.7)
+                    }
+                    Spacer(minLength: 12)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 15))
                         .foregroundStyle(Theme.secondary)
                 }
-                Spacer(minLength: 0)
+                .padding(.vertical, 18)
+                .padding(.horizontal, 4)
+                Rectangle().fill(Theme.hairline).frame(height: 1)
             }
-            .padding(.vertical, 14)
-            .padding(.horizontal, 16)
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(0.06)))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(imagining != nil)
+        .accessibilityLabel("Imagine \(q)")
+        .accessibilityHint("A scene made from your words")
         .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
@@ -451,88 +469,76 @@ struct LibraryView: View {
     }
 
     /// With the field empty and ready, a dropdown under it: what you've asked for before and a few
-    /// to try, a tap each, and Surprise me pinned along its foot.
+    /// to try, each a row like Tune's layers (large in the serif, its kind small at the right),
+    /// and Surprise me along its foot, as Tune ends with "+ Add one that fits".
     private var dropdown: some View {
-        VStack(spacing: 0) {
+        let ideas = suggestions.filter { !recentPhrases.contains($0) }.prefix(recentPhrases.isEmpty ? 5 : 3)
+        return VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    if !recentPhrases.isEmpty {
-                        HStack {
-                            caps("Recent")
-                            Spacer()
-                            Button {
-                                Haptics.play(.tap)
-                                Vibe.forgetRecent()
-                                withAnimation(.smooth(duration: 0.25)) { recentPhrases = [] }
-                            } label: {
-                                caps("Clear").contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Clear recent searches")
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 14)
-                        .padding(.bottom, 4)
-                        ForEach(Array(recentPhrases.prefix(4)), id: \.self) { suggestion($0, icon: "clock.arrow.circlepath") }
-                    }
-                    caps("Try")
-                        .padding(.horizontal, 16)
-                        .padding(.top, 14)
-                        .padding(.bottom, 4)
-                    // Ideas you haven't asked for already.
-                    ForEach(Array(suggestions.filter { !recentPhrases.contains($0) }.prefix(recentPhrases.isEmpty ? 5 : 3)), id: \.self) {
-                        suggestion($0, icon: "sparkles")
-                    }
+                VStack(spacing: 0) {
+                    ForEach(Array(recentPhrases.prefix(4)), id: \.self) { suggestion($0, kind: "Recent") }
+                    ForEach(Array(ideas), id: \.self) { suggestion($0, kind: "Try") }
                 }
-                .padding(.bottom, 8)
             }
             .scrollIndicators(.hidden)
-            .frame(maxHeight: 340)
+            .frame(maxHeight: 360)
             .fixedSize(horizontal: false, vertical: true)
 
-            Rectangle().fill(Theme.hairline).frame(height: 1)
-            Button {
-                Haptics.play(.thud)
-                surprise()
-            } label: {
-                Label("Surprise me", systemImage: Theme.Symbol.surprise)
-                    .font(Theme.body(15, .medium))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .contentShape(Rectangle())
+            // Surprise me, and (apart from it) a way to forget what you've asked.
+            HStack {
+                Button {
+                    Haptics.play(.thud)
+                    surprise()
+                } label: {
+                    Text("+ Surprise me")
+                        .font(Theme.display(26))
+                        .foregroundStyle(Theme.muted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 16)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if !recentPhrases.isEmpty {
+                    Button {
+                        Haptics.play(.tap)
+                        Vibe.forgetRecent()
+                        withAnimation(.smooth(duration: 0.25)) { recentPhrases = [] }
+                    } label: {
+                        caps("Clear recent").padding(.vertical, 16).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear recent searches")
+                }
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 20)
         }
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.ultraThinMaterial))
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.background.opacity(0.6)))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: .black.opacity(0.4), radius: 20, y: 10)
+        .background(Theme.background.opacity(0.92))
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
+        .shadow(color: .black.opacity(0.45), radius: 24, y: 12)
     }
 
-    /// One suggestion, a row to tap: it imagines it.
-    private func suggestion(_ phrase: String, icon: String) -> some View {
+    /// One suggestion, a row like a layer: the words large, what it is small at the right.
+    private func suggestion(_ phrase: String, kind: String) -> some View {
         Button {
             Haptics.play(.tick)
             query = phrase
             imagineIt(phrase)
         } label: {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.muted)
-                    .frame(width: 18)
-                // In the serif: somewhere to go, said as a place's name is.
-                Text(phrase)
-                    .font(Theme.display(20))
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                Image(systemName: "arrow.up.left")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Theme.muted)
+            VStack(spacing: 0) {
+                HStack(alignment: .center, spacing: 12) {
+                    Text(phrase)
+                        .font(Theme.display(24))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    Spacer(minLength: 12)
+                    caps(kind)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 15)
+                Rectangle().fill(Theme.hairline).frame(height: 1)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 11)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
