@@ -127,7 +127,7 @@ struct SoundList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(mixer.currentPlaceIsTweaked ? "Your changes to \(mixer.currentPlaceName) are kept"
-                 : "Drag a layer to set it, or to the far left to remove it.")
+                 : "Slide a layer to set it; pull it past silent to remove it.")
                 .font(Theme.mono(11))
                 .foregroundStyle(Theme.muted)
                 .padding(.horizontal, 24)
@@ -173,16 +173,22 @@ struct SoundList: View {
 }
 
 /// One sound as a layer: filled in its color from the left as far as it's loud, its name large and
-/// its level small. Tap anywhere across it to set the level there (it glides over), or drag across
-/// to slide it; a drag that starts up or down scrolls the list instead.
+/// its level small. Slide across it to move the level from where it is (a tap does nothing, so a
+/// stray touch never changes it); keep pulling past silent and the layer comes away, to remove when
+/// let go. A drag that starts up or down scrolls the list instead.
 private struct LevelRow: View {
     @Environment(Mixer.self) private var mixer
     let orb: Orb
     let height: CGFloat
-    @State private var sliding = false
-    @State private var taps = 0
-    /// Dragged all the way to the left edge: let go there and the layer goes.
+    /// The level the slide started from: a drag moves it from there, by how far the finger goes,
+    /// so where the finger lands doesn't matter, and a tap does nothing.
+    @State private var from: Double?
+    /// How far the layer is pulled past silent, to the left: far enough and letting go removes it.
+    @State private var pull: CGFloat = 0
     @State private var removing = false
+    private static let removeAt: CGFloat = 80
+
+    private var sliding: Bool { from != nil }
 
     private var percent: Int { Int((orb.volume * 100).rounded()) }
 
@@ -190,19 +196,19 @@ private struct LevelRow: View {
         GeometryReader { proxy in
             let width = proxy.size.width
             let row = bar(width: width)
+                .offset(x: -pull)
                 .contentShape(Rectangle())
-                .onTapGesture { location in set(location.x, of: width, gliding: true) }
             #if os(iOS)
             if #available(iOS 18.0, *) {
-                row.gesture(SidewaysPan { x in slide(to: x, of: width) } ended: { done in endSlide(done) })
+                row.gesture(SidewaysPan { dx in slide(by: dx, of: width) } ended: { done in endSlide(done) })
             } else {
-                row.gesture(DragGesture(minimumDistance: 4)
-                    .onChanged { g in slide(to: g.location.x, of: width) }
+                row.gesture(DragGesture(minimumDistance: 6)
+                    .onChanged { g in slide(by: g.translation.width, of: width) }
                     .onEnded { _ in endSlide(true) })
             }
             #else
             row.gesture(DragGesture(minimumDistance: 4)
-                .onChanged { g in slide(to: g.location.x, of: width) }
+                .onChanged { g in slide(by: g.translation.width, of: width) }
                 .onEnded { _ in endSlide(true) })
             #endif
         }
@@ -213,9 +219,7 @@ private struct LevelRow: View {
                 withAnimation(.snappy) { mixer.remove(orb.id) }
             } label: { Label("Remove \(orb.kind.name)", systemImage: "xmark") }
         }
-        // A tap where you set it, a tick per 10% as it slides, and a landing at the edge where
-        // letting go removes it.
-        .haptic(.tap, trigger: taps)
+        // A tick per 10% as it slides, and a landing once it's pulled far enough to remove.
         .haptic(.thud, trigger: removing) { _, now in now }
         .haptic(.tick, trigger: percent / 10) { _, _ in sliding }
         .accessibilityElement(children: .ignore)
@@ -228,30 +232,29 @@ private struct LevelRow: View {
         .accessibilityAction(named: "More or less often") { mixer.cyclePace(of: orb.kind) }
     }
 
-    private func slide(to x: CGFloat, of width: CGFloat) {
-        sliding = true
-        removing = x <= width * 0.04
-        set(x, of: width, gliding: false)
+    /// The finger `dx` across from where it started: the level moves that much of the width. Past
+    /// silent, the layer itself comes away to the left, harder the further, until it's far enough
+    /// to remove.
+    private func slide(by dx: CGFloat, of width: CGFloat) {
+        let start = from ?? orb.volume
+        from = start
+        let level = start + Double(dx / max(1, width))
+        mixer.setVolume(orb.id, to: min(1, max(0, level)))
+        let over = level < 0 ? CGFloat(-level) * width : 0
+        pull = 120 * tanh(over / 160)
+        removing = over > Self.removeAt
     }
 
-    /// Let go (or, not `done`, called off): at the far left, the layer goes.
+    /// Let go (or, not `done`, called off): pulled far enough, the layer goes; otherwise it settles back.
     private func endSlide(_ done: Bool) {
-        sliding = false
-        guard removing else { return }
+        from = nil
+        let remove = removing && done
         removing = false
-        guard done else { return }
-        Haptics.play(.tap)
-        withAnimation(.snappy) { mixer.remove(orb.id) }
-    }
-
-    /// Sets the level to how far across `x` is: gliding there for a tap, straight there as you slide.
-    private func set(_ x: CGFloat, of width: CGFloat, gliding: Bool) {
-        let to = min(1, max(0, Double(x / max(1, width))))
-        if gliding {
-            taps += 1
-            withAnimation(.snappy(duration: 0.22)) { mixer.setVolume(orb.id, to: to) }
+        if remove {
+            Haptics.play(.tap)
+            withAnimation(.snappy) { mixer.remove(orb.id) }
         } else {
-            mixer.setVolume(orb.id, to: to)
+            withAnimation(.spring(duration: 0.35, bounce: 0.3)) { pull = 0 }
         }
     }
 
@@ -287,7 +290,7 @@ private struct LevelRow: View {
                     .accessibilityLabel("How often: \(mixer.pace(of: orb.kind).rawValue)")
                     .accessibilityHint("Tap for more or less often")
                 }
-                Text(removing ? "LET GO TO REMOVE" : "\(percent)%")
+                Text(removing ? "LET GO TO REMOVE" : pull > 4 ? "KEEP PULLING TO REMOVE" : "\(percent)%")
                     .font(Theme.caps(11))
                     .foregroundStyle(Theme.text.opacity(0.85))
             }
@@ -413,7 +416,7 @@ struct SoundSections: View {
 /// up or down is the list's to scroll. (SwiftUI's own drag holds the list still.)
 @available(iOS 18.0, *)
 private struct SidewaysPan: UIGestureRecognizerRepresentable {
-    /// Where across the layer the finger is.
+    /// How far across the finger has gone since it set off.
     let changed: (CGFloat) -> Void
     /// Let go (true) or called off (false).
     let ended: (Bool) -> Void
@@ -428,7 +431,7 @@ private struct SidewaysPan: UIGestureRecognizerRepresentable {
 
     func handleUIGestureRecognizerAction(_ pan: UIPanGestureRecognizer, context: Context) {
         switch pan.state {
-        case .began, .changed: changed(context.converter.localLocation.x)
+        case .began, .changed: changed(pan.translation(in: pan.view).x)
         case .ended: ended(true)
         case .cancelled, .failed: ended(false)
         default: break

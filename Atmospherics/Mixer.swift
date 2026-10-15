@@ -8,6 +8,13 @@ import MediaPlayer
 import SwiftUI
 import Observation
 
+/// Which field is playing, each kept apart so going from one to another and back finds it as it
+/// was: `match` your own weather, `escape` a real place's, `atmosphere` a scene by name ("a log
+/// cabin in a snowstorm"), and `mix` a Library mix or one of yours, apart from any place.
+enum Mode: String, Codable, CaseIterable {
+    case match, escape, atmosphere, mix
+}
+
 /// A sound placed on the field. Position is 0…1 in both axes; the center (0.5, 0.5) is full volume
 /// and the rim is silent.
 struct Orb: Identifiable, Codable, Equatable {
@@ -107,8 +114,8 @@ final class Mixer {
     }
 
     private func reapplyAfterOverride() {
-        // An override is about a place's weather, so it takes you out of a Library mix.
-        if activePreset != nil { setActivePreset(nil) }
+        // An override is about a place's weather, so it takes you out of a mix, back to the place.
+        if mode == .mix { return leaveMix() }
         setFollowing(true, for: mode)
         traveling = true
         applyWeather(to: mode, animated: true)
@@ -226,11 +233,13 @@ final class Mixer {
             .match: defaults.string(forKey: "title.match") ?? "Attic Rain",
             .escape: defaults.string(forKey: "title.escape") ?? "",
             .atmosphere: defaults.string(forKey: "title.atmosphere") ?? "",
+            .mix: defaults.string(forKey: "title.mix") ?? "",
         ]
         following = [
             .match: defaults.object(forKey: "following.match") as? Bool ?? true,
             .escape: defaults.object(forKey: "following.escape") as? Bool ?? true,
             .atmosphere: defaults.object(forKey: "following.atmosphere") as? Bool ?? true,
+            .mix: false,
         ]
         atmosphere = defaults.data(forKey: "atmosphere").flatMap { try? JSONDecoder().decode(Atmosphere.self, from: $0) }
         if let raw = defaults.string(forKey: "mode"), let saved = Mode(rawValue: raw) { mode = saved }
@@ -257,6 +266,8 @@ final class Mixer {
             Preset.all.first { $0.id == id } ?? savedMixes.first { $0.id.uuidString == id }?.preset
         }
         if mode == .atmosphere && atmosphere == nil { mode = .match }
+        migrateToOwnSlots()
+        if mode == .mix && activePreset == nil { mode = .match }
         lens = activePreset?.tag.map(Lens.init) ?? (mode == .atmosphere ? .scenes : .outside)
         lastPlace = mode == .escape ? pinnedPlace : nil
         refreshUpcoming()
@@ -425,18 +436,18 @@ final class Mixer {
     var title: String { titles[mode] ?? "" }
     var weather: WeatherSummary {
         if let preset = activePreset {
-            let line = title == preset.name ? preset.description : "Started from \(preset.name)"
-            return WeatherSummary(place: "Library", temp: "", line: line, head: "Library mix")
+            let line = preset.description + (currentPlaceIsTweaked ? " · tuned by you" : "")
+            return WeatherSummary(place: "Library", temp: "", line: line, head: preset.isSaved ? "Yours" : "Library mix")
         }
         switch mode {
         case .match:
-            let head = following[.match] == true ? "Matching outside" : "Your mix"
+            let head = "Here"
             switch weatherState {
             case .loading where home == nil:
                 return WeatherSummary(place: "", temp: "", line: "Checking the weather…", head: head)
             case .locationOff:
                 return WeatherSummary(place: "Location off", temp: "",
-                                      line: "Allow location in Settings to match outside", head: "Your mix")
+                                      line: "Allow location in Settings to match outside", head: "Here")
             case .failed where home == nil:
                 return WeatherSummary(place: "Offline", temp: "", line: "Couldn't reach the weather", head: head)
             default:
@@ -471,6 +482,9 @@ final class Mixer {
             let line = following[.atmosphere] != true ? "Your own mix, made from \(a.setting.info.name.lowercased())"
                 : a.setting.info.line + (tweaks[a.tweakKey] != nil ? " · tuned by you" : "")
             return WeatherSummary(place: a.setting.info.name, temp: "", line: line, head: "Atmosphere")
+        case .mix:
+            // A mix that's gone (its saved copy deleted): what's left of it.
+            return WeatherSummary(place: "", temp: "", line: "", head: "Yours")
         }
     }
 
@@ -662,8 +676,7 @@ final class Mixer {
 
     /// A name to start from when saving, e.g. "Waterford, light rain".
     var suggestedSaveName: String {
-        if let p = activePreset, title == p.name { return "\(p.name) (mine)" }
-        if title == "Your mix" { return "My mix \(savedMixes.count + 1)" }
+        if let p = activePreset { return p.isSaved ? "\(p.name), again" : "\(p.name) (mine)" }
         if mode == .escape, let e = escape { return "\(e.place.title), \(e.conditions.mixName.lowercased())" }
         if mode == .atmosphere, atmosphere != nil { return title }
         if let h = home { return "\(h.place), \(h.mixName.lowercased())" }
@@ -672,8 +685,7 @@ final class Mixer {
 
     private var saveOrigin: String {
         let date = Date().formatted(.dateTime.month(.abbreviated).day())
-        if let p = activePreset { return title == p.name ? "Copy of \(p.name), \(date)" : "Started from \(p.name), \(date)" }
-        if title == "Your mix" { return "Made in Layers, \(date)" }
+        if let p = activePreset { return "From \(p.name), \(date)" }
         if mode == .escape, let e = escape { return "Saved from \(e.place.name)'s \(e.conditions.mixName.lowercased()), \(date)" }
         if mode == .atmosphere, atmosphere != nil { return "Saved from \(title.prefix(1).lowercased() + title.dropFirst()), \(date)" }
         if let h = home { return "Saved from \(h.mixName.lowercased()) in \(h.place), \(date)" }
@@ -688,7 +700,21 @@ final class Mixer {
         savedMixes.insert(mix, at: 0)
         persistSaved()
         setActivePreset(mix.preset)
-        setTitle(mix.name, for: mode)
+        enterMix(mix.preset.orbs, title: mix.name)
+    }
+
+    /// Plays `orbs` in the mix's own field, leaving the place it came from as it was.
+    private func enterMix(_ orbs: [Orb], title: String) {
+        transition?.cancel()
+        visualTarget = nil
+        fields[.mix] = orbs
+        setTitle(title, for: .mix)
+        if mode != .mix {
+            mode = .mix
+            defaults.set(Mode.mix.rawValue, forKey: "mode")
+        }
+        apply()
+        updateNowPlaying()
     }
 
     func rename(_ mix: SavedMix, to name: String) {
@@ -698,7 +724,7 @@ final class Mixer {
         persistSaved()
         if activePreset?.savedID == mix.id {
             setActivePreset(savedMixes[i].preset)
-            setTitle(trimmed, for: mode)
+            setTitle(trimmed, for: .mix)
         }
     }
 
@@ -706,7 +732,14 @@ final class Mixer {
         savedMixes.removeAll { $0.id == mix.id }
         persistSaved()
         if isFavorite(Self.favoriteKey(mix.preset)) { toggleFavorite(Self.favoriteKey(mix.preset)) }
-        if activePreset?.savedID == mix.id { setActivePreset(nil) }
+        tweaks[Self.tweakKey(mix.preset)] = nil
+        persistTweaks()
+        if activePreset?.savedID == mix.id { leaveMix() }
+    }
+
+    /// Out of a mix, back to the last real place, playing or paused as it was.
+    private func leaveMix() {
+        if let p = lastPlace { select(p, play: false) } else { goHome() }
     }
 
     // MARK: Favorites
@@ -908,14 +941,11 @@ final class Mixer {
         choose(all[(i + (forward ? 1 : -1) + all.count) % all.count])
     }
 
+    /// Plays a mix in its own field, as you last tuned it, leaving the place you were in as it was.
     func load(_ preset: Preset, play shouldPlay: Bool = true) {
-        transition?.cancel()
         setActivePreset(preset)
-        setFollowing(false, for: mode)
-        fields[mode] = preset.orbs
-        titles[mode] = preset.name
-        defaults.set(preset.name, forKey: "title.\(mode.rawValue)")
-        apply()
+        let tuned = tweaks[Self.tweakKey(preset)]
+        enterMix(tuned == nil ? preset.orbs : Preset.layout(Self.applying(tuned, to: preset.mix)), title: preset.name)
         if shouldPlay && !isPlaying { play() }
         arrived()
         if let tag = preset.tag {
@@ -931,16 +961,10 @@ final class Mixer {
         apply()
     }
 
+    /// An edit stays with what was edited, a place, a scene or a mix, as a lasting tweak to it
+    /// that Reset takes back. Nothing breaks away into a mix of its own unless saved as new.
     private func markCustom() {
-        // At a place (or home) that's following the weather, an edit becomes a lasting tweak to
-        // that place instead of breaking away from it.
-        if activePreset == nil, following[mode] == true, let key = tweakKey {
-            recordTweaks(for: key)
-            return
-        }
-        setFollowing(false, for: mode)
-        guard titles[mode] != "Your mix" else { return }
-        setTitle("Your mix", for: mode)
+        if let key = tweakKey { recordTweaks(for: key) }
     }
 
     // MARK: Per-place tweaks
@@ -948,12 +972,20 @@ final class Mixer {
     /// Volume changes you've made to a place, by sound: added on top of what the weather gives.
     private(set) var tweaks: [String: [String: Double]] = [:]
 
-    /// The place the field belongs to right now ("home" for home), if it's following the weather.
+    /// What the field belongs to right now, for its tweaks: "home", a place's name, a scene's key,
+    /// or a mix's ("mix:" and its ID; "saved:" and its UUID for one of yours, so renaming keeps them).
     private var tweakKey: String? {
-        guard activePreset == nil else { return nil }
-        if mode == .escape { return escape?.place.name }
-        if mode == .atmosphere { return atmosphere?.tweakKey }
-        return "home"
+        if let p = activePreset { return Self.tweakKey(p) }
+        switch mode {
+        case .escape: return escape?.place.name
+        case .atmosphere: return atmosphere?.tweakKey
+        case .match: return "home"
+        case .mix: return nil
+        }
+    }
+
+    nonisolated static func tweakKey(_ preset: Preset) -> String {
+        preset.savedID.map { "saved:\($0.uuidString)" } ?? favoriteKey(preset)
     }
 
     var currentPlaceIsTweaked: Bool { tweakKey.map { !(tweaks[$0] ?? [:]).isEmpty } ?? false }
@@ -977,12 +1009,14 @@ final class Mixer {
         case .escape: escape?.place.name ?? "this place"
         case .atmosphere: "this scene"
         case .match: "home"
+        case .mix: activePreset?.name ?? "this mix"
         }
     }
 
-    /// What the weather alone gives this mode, before tweaks.
+    /// What the weather alone gives this mode, before tweaks (for a mix, the mix as made).
     private func baseMix(for mode: Mode) -> [(SoundKind, Double)]? {
         switch mode {
+        case .mix: return activePreset?.mix
         case .match: return home.map { WeatherMix.orbs(for: $0, place: homePlace) }
         case .escape: return escape.map { WeatherMix.orbs(for: $0.conditions, place: $0.place) }
         case .atmosphere: return atmosphere.flatMap { a in atmosphereConditions.map { a.mix(in: $0) } }
@@ -1015,14 +1049,61 @@ final class Mixer {
         return out.filter { $0.1 >= 0.03 }
     }
 
-    /// Puts the current place back to how it sounds by default, following the weather.
+    /// Puts what's playing back to how it sounds by default: a place or scene following its
+    /// weather, a mix as it was made.
     func resetCurrentPlace() {
         if let key = tweakKey {
             tweaks[key] = nil
             persistTweaks()
         }
+        if mode == .mix, let p = activePreset {
+            glide(to: p.orbs, duration: 1.5)
+            return
+        }
         traveling = true
         applyWeather(to: mode, animated: true)
+    }
+
+    /// Once, for fields from before each kind had its own: a Library mix played in a place's field
+    /// moves to the mix's, and a field that broke away as "Your mix" is kept in Yours, the place
+    /// going back to following its weather.
+    private func migrateToOwnSlots() {
+        guard defaults.integer(forKey: "migratedIA") < 1 else { return }
+        defaults.set(1, forKey: "migratedIA")
+        if let p = activePreset, mode != .mix {
+            fields[.mix] = fields[mode]
+            titles[.mix] = p.name
+            defaults.set(p.name, forKey: "title.mix")
+            following[mode] = true
+            defaults.set(true, forKey: "following.\(mode.rawValue)")
+            mode = .mix
+            defaults.set(Mode.mix.rawValue, forKey: "mode")
+        }
+        var kept = 0
+        for m in [Mode.match, .escape, .atmosphere] where titles[m] == "Your mix" || following[m] == false {
+            let orbs = (fields[m] ?? []).filter { $0.volume > 0.01 }
+            if !orbs.isEmpty {
+                kept += 1
+                let mix = SavedMix(name: kept == 1 ? "Your mix (kept)" : "Your mix (kept) \(kept)",
+                                   origin: "Kept from before, \(Date().formatted(.dateTime.month(.abbreviated).day()))",
+                                   orbs: orbs)
+                savedMixes.insert(mix, at: 0)
+                if m == mode {
+                    activePreset = mix.preset
+                    defaults.set(mix.preset.id, forKey: "activePreset")
+                    fields[.mix] = orbs
+                    titles[.mix] = mix.name
+                    defaults.set(mix.name, forKey: "title.mix")
+                    mode = .mix
+                    defaults.set(Mode.mix.rawValue, forKey: "mode")
+                }
+            }
+            titles[m] = ""
+            defaults.set("", forKey: "title.\(m.rawValue)")
+            following[m] = true
+            defaults.set(true, forKey: "following.\(m.rawValue)")
+        }
+        if kept > 0 { persistSaved() }
     }
 
     private func persistTweaks() { defaults.set(tweaks, forKey: "placeTweaks") }
@@ -1143,6 +1224,8 @@ final class Mixer {
         case .atmosphere:
             guard let a = atmosphere, let c = atmosphereConditions else { return nil }
             return Self.applying(tweaks[a.tweakKey], to: a.mix(in: c))
+        case .mix:
+            return nil
         }
     }
 
@@ -1430,6 +1513,7 @@ final class Mixer {
         let target: [(SoundKind, Double)]
         let name: String
         switch mode {
+        case .mix: return
         case .match:
             guard let home else { return }
             target = Self.applying(tweaks["home"], to: WeatherMix.orbs(for: home, place: homePlace))
