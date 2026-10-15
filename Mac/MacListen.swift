@@ -15,7 +15,7 @@ struct MacListen: View {
 
     private static let hints = [
         "Swipe with two fingers, or press → to travel",
-        "Click the light to see its layers",
+        "Click the light to tune it  ⌘E",
         "Click the name to teleport",
         "Drag the light to turn it",
         "↑ ↓ turn the wheel",
@@ -26,7 +26,7 @@ struct MacListen: View {
             // What swiping goes through, as on the phone. (Outside on it, or ⇧⌘H, is your own weather.)
             ModeWheel()
 
-            Carousel(dragX: $dragX, openMixer: { navigation.tab = .layers }, teleport: { navigation.tab = .teleport })
+            Carousel(dragX: $dragX, openMixer: { navigation.tuning.toggle() }, teleport: { navigation.tab = .teleport })
                 .frame(minHeight: 340, maxHeight: .infinity)
                 .overlay { TravelArrows() }
 
@@ -35,7 +35,7 @@ struct MacListen: View {
                 .padding(.top, 6)
 
             HStack(spacing: 14) {
-                LayersLink(orbs: mixer.byVolume) { navigation.tab = .layers }
+                LayersLink(orbs: mixer.byVolume) { navigation.tuning = true }
                 ResetTuning()
                 TimerMenu()
                 MacPlayButton()
@@ -129,8 +129,8 @@ private struct LayersLink: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help("Layers  ⌘3")
-        .accessibilityHint("Opens Layers")
+        .help("Tune  ⌘E")
+        .accessibilityHint("Opens Tune")
     }
 }
 

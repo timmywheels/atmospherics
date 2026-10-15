@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The window: the scene's colors filling it, the four parts as pills in the toolbar with a way
+/// The window: the scene's colors filling it, the three parts as pills in the toolbar with a way
 /// back beside the window buttons, and the part you're in below.
 struct MacWindow: View {
     @Environment(Mixer.self) private var mixer
@@ -13,10 +13,15 @@ struct MacWindow: View {
         @Bindable var navigation = navigation
         Group {
             switch navigation.tab {
-            case .listen: MacListen()
+            case .listen:
+                // Tune beside what's playing, never over it.
+                MacListen()
+                    .inspector(isPresented: $navigation.tuning) {
+                        MacLayers()
+                            .inspectorColumnWidth(min: 300, ideal: 340, max: 440)
+                    }
             case .teleport:
                 TeleportView(start: mixer.mode == .atmosphere ? mixer.atmosphere : nil) { navigation.tab = .listen }
-            case .layers: MacLayers()
             case .library: LibraryView(current: mixer.activePreset) { navigation.tab = .listen }
             }
         }
@@ -24,13 +29,13 @@ struct MacWindow: View {
         .transition(.opacity)
         .modifier(WindowBar(selection: $navigation.tab))
         .background {
-            // Listening and Layers sit in the scene's colors; Teleport and the Library have their own.
+            // Listening sits in the scene's colors; Teleport and the Library have their own.
             SceneWash(orbs: mixer.byVolume)
-                .opacity(navigation.tab == .listen || navigation.tab == .layers ? 1 : 0)
+                .opacity(navigation.tab == .listen ? 1 : 0)
                 .background(Theme.background)
                 .ignoresSafeArea()
         }
-        // Wide enough for the toolbar's one piece (back and the four tabs) beside the window buttons.
+        // Wide enough for the toolbar's one piece (back and the three tabs) beside the window buttons.
         .frame(minWidth: 480, minHeight: 640)
         .foregroundStyle(Theme.text)
         .tint(Theme.text)
@@ -52,7 +57,7 @@ struct MacWindow: View {
     }
 }
 
-/// The toolbar, as tall as a Mac's (the window buttons centered in it): a way back and the four
+/// The toolbar, as tall as a Mac's (the window buttons centered in it): a way back and the three
 /// parts as pills, as one piece in the middle. One piece, so the toolbar never has to fit two
 /// side by side and tuck one into an overflow menu when the window is narrow. Plain, without the
 /// glass a toolbar item gets by default.
@@ -81,7 +86,7 @@ private struct WindowBar: ViewModifier {
     }
 }
 
-/// The four parts in one capsule, the one you're in lit by a pill that slides between them.
+/// The three parts in one capsule, the one you're in lit by a pill that slides between them.
 private struct TabPills: View {
     @Binding var selection: MacNavigation.Tab
     @State private var hovered: MacNavigation.Tab?
@@ -120,7 +125,7 @@ private struct TabPills: View {
     }
 }
 
-/// From Teleport, Layers or the Library, back to listening. One job: while listening it's out of
+/// From Teleport or the Library, back to listening. One job: while listening it's out of
 /// sight (traveling back is ←, ⌘← and the arrow over the halo), but keeps its place, so the tabs
 /// never shift.
 private struct BackButton: View {

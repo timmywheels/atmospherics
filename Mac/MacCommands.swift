@@ -39,6 +39,11 @@ private struct TabCommands: View {
             // Teleport's ⌘K is in the Playback menu.
             .keyboardShortcut(tab == .teleport ? nil : KeyboardShortcut(tab.key, modifiers: .command))
         }
+        Button(navigation.tuning && navigation.tab == .listen ? "Hide Tune" : "Show Tune") {
+            if navigation.tab == .listen { navigation.tuning.toggle() } else { navigation.tab = .listen; navigation.tuning = true }
+            openWindow(id: MacNavigation.mainWindow)
+        }
+        .keyboardShortcut("e")
         Divider()
     }
 }
