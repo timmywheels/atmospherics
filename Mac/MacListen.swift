@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Listening: the wheel, the halo and the scene's name, with the ones before and after beside it.
 /// Swipe with two fingers or press ← → to travel, ↑ ↓ to turn the wheel, click the light for its
-/// layers or drag it to turn it, click the name to teleport. Along the bottom, what's playing
+/// layers or drag it to turn it, click the name to search. Along the bottom, what's playing
 /// (click it for its layers), the sleep timer and play.
 struct MacListen: View {
     @Environment(Mixer.self) private var mixer
@@ -16,7 +16,7 @@ struct MacListen: View {
     private static let hints = [
         "Swipe with two fingers, or press → to travel",
         "Click the light to tune it  ⌘E",
-        "Click the name to teleport",
+        "Click the name to search  ⌘K",
         "Drag the light to turn it",
         "↑ ↓ turn the wheel",
     ]
@@ -26,7 +26,7 @@ struct MacListen: View {
             // What swiping goes through, as on the phone. (Outside on it, or ⇧⌘H, is your own weather.)
             ModeWheel()
 
-            Carousel(dragX: $dragX, openMixer: { navigation.tuning.toggle() }, teleport: { navigation.tab = .teleport })
+            Carousel(dragX: $dragX, openMixer: { navigation.tuning.toggle() }, search: { navigation.search() })
                 .frame(minHeight: 340, maxHeight: .infinity)
                 .overlay { TravelArrows() }
 

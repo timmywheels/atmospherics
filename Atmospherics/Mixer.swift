@@ -677,10 +677,10 @@ final class Mixer {
     func toggleFavorite(_ key: String) {
         if let i = favorites.firstIndex(of: key) {
             favorites.remove(at: i)
-            announce("Removed from Favorites")
+            announce("Taken out of Yours")
         } else {
             favorites.insert(key, at: 0)
-            announce("Added to Favorites in your Library")
+            announce("Saved to Yours, in the Library")
         }
         defaults.set(favorites, forKey: "favorites")
     }

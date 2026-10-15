@@ -36,8 +36,7 @@ private struct TabCommands: View {
                 navigation.tab = tab
                 openWindow(id: MacNavigation.mainWindow)
             }
-            // Teleport's ⌘K is in the Playback menu.
-            .keyboardShortcut(tab == .teleport ? nil : KeyboardShortcut(tab.key, modifiers: .command))
+            .keyboardShortcut(tab.key, modifiers: .command)
         }
         Button(navigation.tuning && navigation.tab == .listen ? "Hide Tune" : "Show Tune") {
             if navigation.tab == .listen { navigation.tuning.toggle() } else { navigation.tab = .listen; navigation.tuning = true }
@@ -82,8 +81,8 @@ private struct PlaybackCommands: View {
             Button("Back to \(mixer.lastPlaceName)") { mixer.backToPlace() }
                 .keyboardShortcut("b", modifiers: [.command, .shift])
         }
-        Button("Teleport…") {
-            navigation.tab = .teleport
+        Button("Search…") {
+            navigation.search()
             openWindow(id: MacNavigation.mainWindow)
         }
         .keyboardShortcut("k")

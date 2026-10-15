@@ -427,7 +427,7 @@ final class SceneReader {
     static let shared = SceneReader()
     private var ready: LanguageModelSession?
 
-    /// Loads the model now, so it's ready for a description: when Teleport opens.
+    /// Loads the model now, so it's ready for a description: when search opens.
     func prewarm() {
         guard SystemLanguageModel.default.isAvailable, ready == nil else { return }
         let session = Self.session()

@@ -2,9 +2,10 @@ import SwiftUI
 
 /// Everything the app can play, on shelves: Places (where you are first, then the real places,
 /// in their live weather), Mixes by mood, Scenes by mood, every Sound, Yours (all you've kept, in
-/// your order) and Recent. The field at the top, Where to?, finds anything on any shelf. A card
-/// plays and closes the Library; a sound's pill adds it to what's playing and stays. It opens on
-/// the shelf of what's playing, scrolled to it.
+/// your order) and Recent. The field at the top, Where to?, finds anything on any shelf, best match
+/// first, and its last answer is always to imagine what you typed: a scene made from your words.
+/// A card plays and closes the Library; a sound's pill adds it to what's playing and stays. It
+/// opens on the shelf of what's playing, scrolled to it, or ready to type (`focus`).
 struct LibraryView: View {
     /// Where to go once something is chosen, when the Library is part of a window (on the Mac)
     /// rather than a sheet.
@@ -19,14 +20,21 @@ struct LibraryView: View {
     @State private var newName = ""
     @State private var deletes = 0
     @State private var showingScience = false
+    /// Imagining what was typed: a moment, or a few the first time the model loads.
+    @State private var imagining: Task<Void, Never>?
+    @State private var notUnderstood = false
+    @State private var recentPhrases = Vibe.recent
+    @State private var suggestions = Vibe.suggestions()
     private let current: Preset?
+    private let focus: Bool
 
     private enum Shelf: String, CaseIterable, Hashable {
         case places = "Places", mixes = "Mixes", scenes = "Scenes", sounds = "Sounds", yours = "Yours", recent = "Recent"
     }
 
-    init(current: Preset? = nil, done: (() -> Void)? = nil) {
+    init(current: Preset? = nil, focus: Bool = false, done: (() -> Void)? = nil) {
         self.current = current
+        self.focus = focus
         self.done = done
         _shelf = State(initialValue: current?.isSaved == true ? .yours : current != nil ? .mixes : .places)
         _mood = State(initialValue: current?.tag)
@@ -60,7 +68,7 @@ struct LibraryView: View {
             } else {
                 ScrollViewReader { proxy in
                     List {
-                        if finding { results } else { shelfContent }
+                        if finding { results } else if searching { startingPoints } else { shelfContent }
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
@@ -94,6 +102,20 @@ struct LibraryView: View {
                 .frame(width: 540, height: 680)
                 #endif
         }
+        .task {
+            Vibe.prepare()
+            // Ready to type once a sheet has finished coming up; sooner, the keyboard doesn't show.
+            // (On the Mac there's no sheet: at once.)
+            guard focus else { return }
+            #if os(iOS)
+            try? await Task.sleep(for: .milliseconds(450))
+            #else
+            try? await Task.sleep(for: .milliseconds(30))
+            #endif
+            searching = true
+        }
+        .onDisappear { imagining?.cancel() }
+        .onChange(of: query) { _, _ in notUnderstood = false }
         .onAppear {
             // Open where what's playing is: a scene among the scenes.
             if current == nil, mixer.mode == .atmosphere, let a = mixer.atmosphere {
@@ -125,10 +147,13 @@ struct LibraryView: View {
                 .textFieldStyle(.plain)
                 .font(Theme.label(16))
                 .focused($searching)
-                .submitLabel(.search)
+                .submitLabel(.go)
+                .onSubmit(submit)
                 .autocorrectionDisabled()
                 .accessibilityLabel("Search the Library")
-            if finding {
+            if imagining != nil {
+                ProgressView().controlSize(.small)
+            } else if finding {
                 Button {
                     query = ""
                 } label: {
@@ -235,43 +260,225 @@ struct LibraryView: View {
 
     // MARK: Search
 
-    /// Anything on any shelf whose name, or what it's made of, has every word typed.
+    /// What a search found, best first within each kind, the kinds in order of their best.
+    private struct Found {
+        var places: [(Place, Int)] = []
+        var mixes: [(Preset, Int)] = []
+        var scenes: [(Atmosphere, Int)] = []
+        var sounds: [(SoundKind, Int)] = []
+        var yours: [(SavedMix, Int)] = []
+        var isEmpty: Bool { places.isEmpty && mixes.isEmpty && scenes.isEmpty && sounds.isEmpty && yours.isEmpty }
+    }
+
+    /// How well `query` matches: 5 the whole name, 4 the start of it, 3 the start of a word in it,
+    /// 2 every word in it, 1 every word somewhere in what it's made of; 0 not at all.
+    private static func score(_ query: String, name: String, more: String) -> Int {
+        let q = query.lowercased().trimmingCharacters(in: .whitespaces)
+        let n = name.lowercased()
+        let words = q.split(separator: " ").map(String.init)
+        if n == q { return 5 }
+        if n.hasPrefix(q) { return 4 }
+        if n.split(separator: " ").contains(where: { $0.hasPrefix(q) }) { return 3 }
+        if words.allSatisfy(n.contains) { return 2 }
+        let all = n + " " + more.lowercased()
+        return words.allSatisfy(all.contains) ? 1 : 0
+    }
+
+    private func find(_ q: String) -> Found {
+        func best<T>(_ items: [T], name: (T) -> String, more: (T) -> String) -> [(T, Int)] {
+            items.map { ($0, Self.score(q, name: name($0), more: more($0))) }.filter { $0.1 > 0 }.sorted { $0.1 > $1.1 }
+        }
+        var f = Found()
+        f.places = best(Place.all, name: \.name) { "\($0.country) \($0.region.rawValue)" }
+        // A place named within more ("Tokyo in the rain"): it, live, first, with Imagine under it.
+        let lower = q.lowercased()
+        for p in Place.all where !f.places.contains(where: { $0.0.name == p.name }) && lower.contains(p.name.lowercased()) {
+            f.places.insert((p, 3), at: 0)
+        }
+        f.mixes = best(Preset.all, name: \.name) { p in "\(p.tag?.rawValue ?? "") \(p.description) " + p.mix.map(\.0.name).joined(separator: " ") }
+        f.scenes = best(Atmosphere.curated, name: { mixer.page(for: .atmosphere($0)).title }) {
+            "\($0.setting.info.name) \($0.sky.name) \($0.time.name) \($0.mood.rawValue)"
+        }
+        f.sounds = best(SoundKind.available, name: \.name) { "\($0.short) \($0.shelf.rawValue) " + $0.aliases.joined(separator: " ") }
+        f.yours = best(mixer.savedMixes, name: \.name, more: \.origin)
+        return f
+    }
+
     @ViewBuilder private var results: some View {
-        let words = query.lowercased().split(separator: " ").map(String.init)
-        let has = { (text: String) in words.allSatisfy { text.lowercased().contains($0) } }
-        let places = Place.all.filter { has("\($0.name) \($0.country) \($0.region.rawValue)") }
-        let mixes = Preset.all.filter { p in has("\(p.name) \(p.tag?.rawValue ?? "") \(p.description) " + p.mix.map(\.0.name).joined(separator: " ")) }
-        let scenes = Atmosphere.curated.filter { a in
-            has("\(mixer.page(for: .atmosphere(a)).title) \(a.setting.info.name) \(a.sky.name) \(a.mood.rawValue)")
+        let q = query.trimmingCharacters(in: .whitespaces)
+        let f = find(q)
+        let groups: [(Int, AnyView)] = [
+            (f.places.first?.1 ?? 0, AnyView(Group {
+                header("Places")
+                ForEach(f.places, id: \.0.name) { place($0.0) }
+                // A real place with more asked of it ("Tokyo in the rain"): it, live, then imagined so.
+                if let top = f.places.first, top.1 < 5, q.lowercased() != top.0.name.lowercased() { imagine(q) }
+            })),
+            (f.mixes.first?.1 ?? 0, AnyView(Group { header("Mixes"); ForEach(f.mixes, id: \.0.id) { item($0.0) } })),
+            (f.scenes.first?.1 ?? 0, AnyView(Group { header("Scenes"); ForEach(f.scenes, id: \.0) { scene($0.0) } })),
+            (f.sounds.first?.1 ?? 0, AnyView(Group {
+                header("Sounds · tap to add to what's playing")
+                SoundPills(kinds: f.sounds.map(\.0))
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            })),
+            (f.yours.first?.1 ?? 0, AnyView(Group { header("Yours"); ForEach(f.yours, id: \.0.id) { item($0.0.preset) } })),
+        ]
+        // Kinds in order of their best match; on a tie, as listed.
+        ForEach(Array(groups.enumerated().filter { $0.element.0 > 0 }.sorted { $0.element.0 > $1.element.0 }), id: \.offset) { _, group in
+            group.1
         }
-        let sounds = SoundKind.available.filter { has("\($0.name) \($0.short) \($0.shelf.rawValue)") }
-        let saved = mixer.savedMixes.filter { has("\($0.name) \($0.origin)") }
-        if !places.isEmpty {
-            header("Places")
-            ForEach(places, id: \.name) { place($0) }
+        if f.isEmpty {
+            note("Nothing by that name. Imagine it instead:")
+                .padding(.top, 8)
         }
-        if !mixes.isEmpty {
-            header("Mixes")
-            ForEach(mixes) { item($0) }
+        // Under a place it's already offered, right beneath it.
+        if !(f.places.first.map { $0.1 < 5 && q.lowercased() != $0.0.name.lowercased() } ?? false) {
+            imagine(q)
         }
-        if !scenes.isEmpty {
-            header("Scenes")
-            ForEach(scenes, id: \.self) { scene($0) }
+        if notUnderstood {
+            note("Try a place and some weather, like “a cabin in the snow, no wind”.")
         }
-        if !sounds.isEmpty {
-            header("Sounds · tap to add to what's playing")
-            SoundPills(kinds: sounds)
-                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0))
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
+    }
+
+    /// The last answer to any search: a scene made from the words.
+    private func imagine(_ q: String) -> some View {
+        Button { imagineIt(q) } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 16))
+                    .frame(width: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Imagine “\(q)”")
+                        .font(Theme.label(15, .medium))
+                        .lineLimit(2)
+                    Text("A scene made from your words")
+                        .font(Theme.label(11))
+                        .foregroundStyle(Theme.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 14)
+            .padding(.horizontal, 16)
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(0.06)))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
+            .contentShape(Rectangle())
         }
-        if !saved.isEmpty {
-            header("Yours")
-            ForEach(saved) { item($0.preset) }
+        .buttonStyle(.plain)
+        .disabled(imagining != nil)
+        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+    }
+
+    /// Reads the words into a scene, then goes there.
+    private func imagineIt(_ text: String) {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, imagining == nil else { return }
+        notUnderstood = false
+        imagining = Task {
+            let vibe = await Vibe.read(text, draft: mixer.atmosphere ?? Atmosphere.curated[0])
+            imagining = nil
+            guard !Task.isCancelled else { return }
+            guard let vibe else {
+                notUnderstood = true
+                return
+            }
+            Vibe.remember(text)
+            Haptics.play(.thud)
+            mixer.go(to: vibe)
+            close()
         }
-        if places.isEmpty && mixes.isEmpty && scenes.isEmpty && sounds.isEmpty && saved.isEmpty {
-            note("Nothing by that name yet. Try a place, a mood or a sound: Tokyo, sleep, rain.")
+    }
+
+    /// Return: the one it is, if the name was typed whole; otherwise imagine it.
+    private func submit() {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return }
+        let f = find(q)
+        if let p = f.places.first, p.1 == 5 { Haptics.play(.thud); mixer.revisit(.place(p.0)); return close() }
+        if let m = f.mixes.first, m.1 == 5 { Haptics.play(.thud); mixer.load(m.0); return close() }
+        if let a = f.scenes.first, a.1 == 5 { Haptics.play(.thud); mixer.revisit(.scene(a.0)); return close() }
+        imagineIt(q)
+    }
+
+    /// With the field empty and ready: what you've asked for before, a few to try, and a surprise.
+    @ViewBuilder private var startingPoints: some View {
+        if !recentPhrases.isEmpty {
+            HStack {
+                header("Recent")
+                Spacer()
+                Button {
+                    Haptics.play(.tap)
+                    Vibe.forgetRecent()
+                    withAnimation(.smooth(duration: 0.25)) { recentPhrases = [] }
+                } label: {
+                    Text("CLEAR").font(Theme.caps(10)).tracking(1.2).foregroundStyle(Theme.muted)
+                        .padding(.top, 14)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear recent searches")
+            }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            phrases(Array(recentPhrases.prefix(4)), yours: true)
         }
+        header("Try")
+        phrases(Array(suggestions.prefix(recentPhrases.isEmpty ? 4 : 3)), yours: false)
+        Button {
+            Haptics.play(.thud)
+            surprise()
+        } label: {
+            Label("Surprise me", systemImage: Theme.Symbol.surprise)
+                .font(Theme.body(14, .medium))
+                .padding(.vertical, 10)
+                .padding(.horizontal, 16)
+                .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 10)
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+    }
+
+    /// Phrases to tap, yours brighter than ours: one tap imagines it.
+    private func phrases(_ list: [String], yours: Bool) -> some View {
+        FlowLayout(spacing: 6) {
+            ForEach(list, id: \.self) { phrase in
+                Button {
+                    Haptics.play(.tick)
+                    query = phrase
+                    imagineIt(phrase)
+                } label: {
+                    Text(phrase)
+                        .font(Theme.body(13))
+                        .foregroundStyle(yours ? Theme.text : Theme.secondary)
+                        .lineLimit(1)
+                        .padding(.vertical, 7)
+                        .padding(.horizontal, 12)
+                        .background(Capsule().fill(.white.opacity(yours ? 0.06 : 0)))
+                        .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+    }
+
+    /// A scene or a real place, chosen for you, and straight there.
+    private func surprise() {
+        if Bool.random() {
+            var next = Atmosphere.random()
+            while next == mixer.atmosphere { next = Atmosphere.random() }
+            mixer.revisit(.scene(next))
+        } else if let p = Place.all.filter({ $0.name != mixer.escape?.place.name }).randomElement() {
+            mixer.revisit(.place(p))
+        }
+        close()
     }
 
     // MARK: Cards

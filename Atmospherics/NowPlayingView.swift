@@ -12,9 +12,8 @@ struct NowPlayingView: View {
     @State private var layersDetent = MixerView.opening
     /// The whole screen's height, for where Layers comes up to.
     @State private var screenHeight: CGFloat = 0
-    @State private var showTeleport = false
-    /// Teleport opened from Describe the vibe… starts with the keyboard up.
-    @State private var teleportTyping = false
+    /// The Library opened to search (from the name or Where to?): ready to type.
+    @State private var searchFirst = false
     @State private var hint: String?
     /// How many of the one-time hints have been shown.
     @AppStorage("hintStep") private var hintStep = 0
@@ -24,7 +23,7 @@ struct NowPlayingView: View {
         "Tap the light to see its layers",
         "Swipe up for your library",
         "Hold play for a sleep timer",
-        "Tap the name to teleport",
+        "Tap the name to search",
         "Hold the light, then drag to move it",
     ]
 
@@ -40,10 +39,10 @@ struct NowPlayingView: View {
         }
     }
 
-    /// Teleport as the sentence to change, or (from Describe the vibe…) ready to type.
-    private func openTeleport(typing: Bool) {
-        teleportTyping = typing
-        showTeleport = true
+    /// The Library, ready to type where to.
+    private func openSearch() {
+        searchFirst = true
+        showLibrary = true
     }
 
     /// Layers, coming up halfway so the form stays in view above it.
@@ -79,7 +78,7 @@ struct NowPlayingView: View {
             ModeWheel()
                 .padding(.horizontal, -28)
 
-            Carousel(dragX: $dragX, openMixer: toggleLayers, teleport: { openTeleport(typing: false) }, drawerTop: layersTop)
+            Carousel(dragX: $dragX, openMixer: toggleLayers, search: openSearch, drawerTop: layersTop)
                 .animation(.smooth(duration: 0.5), value: layersTop)
                 .frame(minHeight: 400, maxHeight: .infinity)
 
@@ -115,7 +114,7 @@ struct NowPlayingView: View {
 
                 // Where to go next, and play, in reach of a thumb.
                 HStack(spacing: 12) {
-                    WhereToBar { openTeleport(typing: true) }
+                    WhereToBar(search: openSearch)
                     PlayButton()
                 }
                 .padding(.top, 10)
@@ -148,7 +147,7 @@ struct NowPlayingView: View {
             }
         )
         .accessibilityAction(named: "Library") { showLibrary = true }
-        .accessibilityAction(named: "Teleport") { openTeleport(typing: false) }
+        .accessibilityAction(named: "Search") { openSearch() }
         .accessibilityAction(named: "Other skies", otherSkies)
         .accessibilityAction(named: "Layers") { openLayers() }
         .sheet(isPresented: $showMixer) {
@@ -163,16 +162,13 @@ struct NowPlayingView: View {
         }
         .task { await runHints() }
         .sheet(isPresented: $showLibrary) {
-            LibraryView(current: mixer.activePreset)
-        }
-        .sheet(isPresented: $showTeleport) {
-            TeleportView(start: mixer.mode == .atmosphere ? mixer.atmosphere : nil, typing: teleportTyping)
+            LibraryView(current: mixer.activePreset, focus: searchFirst)
+                .onDisappear { searchFirst = false }
         }
         .haptic(.thud, trigger: mixer.shuffleCount)
         .haptic(.tap, trigger: mixer.atmosphere?.sky)
-        // A tap as Layers, Teleport or the Library opens, however it was asked for.
+        // A tap as Layers or the Library opens, however it was asked for.
         .haptic(.tap, trigger: showMixer) { _, now in now }
-        .haptic(.tap, trigger: showTeleport) { _, now in now }
         .haptic(.tap, trigger: showLibrary) { _, now in now }
     }
 
@@ -192,8 +188,8 @@ struct Carousel: View {
     /// How far the finger has gone: only a nudge of the names where there's nowhere to go.
     @Binding var dragX: CGFloat
     let openMixer: () -> Void
-    /// Tapping the name: Teleport.
-    let teleport: () -> Void
+    /// Tapping the name: search.
+    let search: () -> Void
     /// Where on the screen the top of a drawer over the place is, while there's one up.
     var drawerTop: CGFloat? = nil
     @State private var pastThreshold = false
@@ -267,7 +263,7 @@ struct Carousel: View {
             MorphView(from: pair?.from ?? live, to: pair?.to ?? live, forward: pair?.forward ?? true, t: pair == nil ? 0 : blend,
                       still: pair == nil, nudge: pair == nil ? dragX * 0.4 : 0, room: room, favorite: mixer.favoriteKey,
                       lift: lift, held: held,
-                      formSize: $formSize, openMixer: tapForm, teleport: teleport)
+                      formSize: $formSize, openMixer: tapForm, search: search)
                 .frame(width: w, height: proxy.size.height, alignment: .topLeading)
                 .contentShape(Rectangle())
                 .gesture(drag(width: w))
@@ -399,7 +395,7 @@ struct Carousel: View {
 /// One place turning into another, `t` of the way from `from` to `to`: the form with each sound
 /// at its level that far between them (sounds only one of them has fade out or in), and the names
 /// cross-fading, drifting the way it goes. Still (`from` and `to` both where you are), the name
-/// opens Teleport, and more on a long press. Given `room` (with a drawer up below), the form fits
+/// opens search. Given `room` (with a drawer up below), the form fits
 /// in that much at the top, and the names, under the drawer, fade away.
 private struct MorphView: View, Animatable {
     let from: Mixer.Page
@@ -415,7 +411,7 @@ private struct MorphView: View, Animatable {
     var held = false
     @Binding var formSize: CGSize
     let openMixer: () -> Void
-    let teleport: () -> Void
+    let search: () -> Void
 
     var animatableData: Double {
         get { t }
@@ -484,11 +480,11 @@ private struct MorphView: View, Animatable {
 
     private func names(_ page: Mixer.Page, live: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button { teleport() } label: {
+            Button { search() } label: {
                 PageTitle(lines: page.lines ?? [page.title], chevron: true)
             }
             .buttonStyle(.plain)
-            .accessibilityHint("Teleport somewhere")
+            .accessibilityHint("Search the Library")
             PageLines(line: page.line)
         }
         .allowsHitTesting(live)
@@ -522,7 +518,7 @@ private struct MorphView: View, Animatable {
 }
 
 /// The page's name, large: an atmosphere's over two lines ("A log cabin / in a snowstorm"),
-/// with a chevron after the last line to say it opens Teleport (kept, hidden, on neighbouring
+/// with a chevron after the last line to say it opens search (kept, hidden, on neighbouring
 /// pages so their titles sit the same).
 private struct PageTitle: View {
     let lines: [String]
@@ -777,12 +773,12 @@ private struct ConfirmReset: ViewModifier {
     }
 }
 
-/// Where to? Somewhere new in your own words: opens Teleport ready to type.
+/// Where to? The Library, ready to type: anything in it, or somewhere new in your own words.
 private struct WhereToBar: View {
-    let describe: () -> Void
+    let search: () -> Void
 
     var body: some View {
-        Button(action: describe) {
+        Button(action: search) {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 15))
