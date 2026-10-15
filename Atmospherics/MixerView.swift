@@ -266,7 +266,8 @@ private struct LevelRow: View {
                                      startPoint: .leading, endPoint: .trailing))
                 .background(Theme.background.opacity(0.3))
                 .frame(width: filled)
-            HStack(alignment: .firstTextBaseline) {
+            // The name, and its level and pace centered on the row beside it.
+            HStack(alignment: .center) {
                 Text(orb.kind.short)
                     .font(Theme.display(height > 64 ? 32 : 24))
                     .lineLimit(1)
