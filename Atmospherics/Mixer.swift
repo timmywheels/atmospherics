@@ -819,9 +819,61 @@ final class Mixer {
         }
     }
 
-    func moveSavedMixes(from source: IndexSet, to destination: Int) {
-        savedMixes.move(fromOffsets: source, toOffset: destination)
-        persistSaved()
+    // MARK: Yours
+
+    /// Everything you've kept, as one list: your own mixes (saved as new) and the places, scenes
+    /// and mixes you bookmarked.
+    enum YoursItem: Identifiable {
+        case saved(SavedMix), kept(Favorite)
+        var id: String {
+            switch self {
+            case .saved(let m): "saved:\(m.id.uuidString)"
+            case .kept(let f): f.id
+            }
+        }
+    }
+
+    /// Yours in your own order; anything kept since it was last arranged comes first.
+    private(set) var yoursOrder: [String] = UserDefaults.standard.stringArray(forKey: "yoursOrder") ?? []
+
+    var yoursItems: [YoursItem] {
+        var all: [String: YoursItem] = [:]
+        var newest: [String] = []
+        for m in savedMixes {
+            let item = YoursItem.saved(m)
+            all[item.id] = item
+            newest.append(item.id)
+        }
+        // A bookmark on one of your own mixes is the mix itself.
+        for f in favoriteItems {
+            if case .mix(let p) = f, p.isSaved { continue }
+            all[f.id] = .kept(f)
+            newest.append(f.id)
+        }
+        let arranged = yoursOrder.filter { all[$0] != nil }
+        let fresh = newest.filter { !arranged.contains($0) }
+        return (fresh + arranged).compactMap { all[$0] }
+    }
+
+    func moveYours(from source: IndexSet, to destination: Int) {
+        var ids = yoursItems.map(\.id)
+        ids.move(fromOffsets: source, toOffset: destination)
+        yoursOrder = ids
+        defaults.set(ids, forKey: "yoursOrder")
+    }
+
+    /// Takes something out of Yours: one of your own mixes is deleted, a bookmark lifted.
+    func removeFromYours(_ item: YoursItem) {
+        switch item {
+        case .saved(let m): delete(m)
+        case .kept(let f): if isFavorite(f.id) { toggleFavorite(f.id) }
+        }
+    }
+
+    /// Where you are, chosen: its weather, playing.
+    func playHere() {
+        goHome()
+        if !isPlaying { play() }
     }
 
     private func persistSaved() {

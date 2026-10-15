@@ -409,9 +409,9 @@ private struct AddLayer: View {
 /// adds it or takes it away. Pills keep their places, so nothing jumps when you tap.
 struct SoundSections: View {
     @Environment(Mixer.self) private var mixer
-    /// How much of them shows at least.
+    /// How much of them shows at least (nil: as tall as there's room for, as in the Library).
     static let height: CGFloat = 252
-    var height: CGFloat = Self.height
+    var height: CGFloat? = Self.height
 
     var body: some View {
         let playing = Set(mixer.orbs.map(\.kind))
