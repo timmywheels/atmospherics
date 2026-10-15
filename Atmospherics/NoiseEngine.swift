@@ -92,7 +92,15 @@ final class NoiseEngine {
         targets[index] = gain * Float(kind.calibration)
     }
 
-    private lazy var samples = SampleBank(engine: engine)
+    /// How often a sound that comes and goes comes (1 as its rhythm has it).
+    func setPace(_ pace: Double, for kind: SoundKind) { samples.setPace(pace, for: kind) }
+
+    private lazy var samples: SampleBank = {
+        let bank = SampleBank(engine: engine)
+        // The synthesized sounds go under a strike with the recorded ones.
+        bank.onDuck = { [weak self] duck in self?.source.volume = duck }
+        return bank
+    }()
 
     /// The most recent slice of output, as peak levels, for the waveform.
     let scope = Scope()

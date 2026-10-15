@@ -59,7 +59,7 @@ struct Preset: Identifiable, Equatable {
         Preset(name: "Low Tide", tag: .relax, length: "45 min", description: "Ocean, green noise",
                mix: [(.ocean, 0.8), (.green, 0.4)]),
         Preset(name: "Thursday’s Storm", tag: .sleep, length: "8 h", description: "Rain, wind, thunder, lightning",
-               mix: [(.rain, 0.9), (.wind, 0.6), (.thunder, 0.4), (.lightning, 0.35), (.brown, 0.3)]),
+               mix: [(.rain, 0.85), (.wind, 0.55), (.thunder, 0.6), (.lightning, 0.55), (.brown, 0.3)]),
         Preset(name: "Fog Bank", tag: .focus, length: "2 h", description: "White noise, ocean",
                mix: [(.white, 0.5), (.ocean, 0.5)]),
         Preset(name: "Ember", tag: .relax, length: "30 min", description: "Fire, brown noise, birds",

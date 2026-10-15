@@ -239,6 +239,10 @@ final class Mixer {
         skyOverride = defaults.string(forKey: "skyOverride").flatMap(SkyOverride.init(rawValue:)) ?? .live
         timeOverride = defaults.string(forKey: "timeOverride").flatMap(TimeOverride.init(rawValue:)) ?? .live
         tweaks = defaults.dictionary(forKey: "placeTweaks") as? [String: [String: Double]] ?? [:]
+        paces = (defaults.dictionary(forKey: "paces") as? [String: String] ?? [:]).reduce(into: [:]) { all, entry in
+            if let kind = SoundKind(rawValue: entry.key), let pace = Pace(rawValue: entry.value) { all[kind] = pace }
+        }
+        for (kind, pace) in paces { engine.setPace(pace.rate, for: kind) }
         if let data = defaults.data(forKey: "savedMixes"), let saved = try? JSONDecoder().decode([SavedMix].self, from: data) {
             // Layers was the mixer once, and Topology for a while.
             savedMixes = saved.map { saved in
@@ -603,6 +607,36 @@ final class Mixer {
         let (ux, uy) = d < 0.001 ? (0.0, 1.0) : (dx / d, dy / d)
         let r = (1 - target) * 0.5
         update(id) { $0.x = 0.5 + ux * r; $0.y = 0.5 + uy * r }
+    }
+
+    // MARK: Pace
+
+    /// How often a sound that comes and goes comes, wherever it plays: thunder rarely for a calm
+    /// night, constantly for a storm to get lost in.
+    enum Pace: String, CaseIterable {
+        case rarely = "Rarely", sometimes = "Now and then", often = "Often", constantly = "Constantly"
+
+        var rate: Double {
+            switch self {
+            case .rarely: 0.4
+            case .sometimes: 1
+            case .often: 2
+            case .constantly: 4
+            }
+        }
+    }
+
+    private(set) var paces: [SoundKind: Pace] = [:]
+
+    func pace(of kind: SoundKind) -> Pace { paces[kind] ?? .sometimes }
+
+    /// The next pace round, for a tap.
+    func cyclePace(of kind: SoundKind) {
+        let all = Pace.allCases
+        let next = all[((all.firstIndex(of: pace(of: kind)) ?? 1) + 1) % all.count]
+        paces[kind] = next == .sometimes ? nil : next
+        engine.setPace(next.rate, for: kind)
+        defaults.set(Dictionary(uniqueKeysWithValues: paces.map { ($0.key.rawValue, $0.value.rawValue) }), forKey: "paces")
     }
 
     func remove(_ id: Orb.ID) {

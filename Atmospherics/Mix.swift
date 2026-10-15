@@ -12,9 +12,11 @@ enum Mix {
     /// However much is stacked up, never louder than this (LUFS).
     static let ceiling = -18.0
 
-    /// Roughly how loud sounds are together (LUFS), as independent sources.
+    /// Roughly how loud sounds are together (LUFS), as independent sources. A sound that comes and
+    /// goes is quiet most of the time, so it counts for a quarter of its power: a storm's thunder
+    /// shouldn't turn its rain down.
     static func loudness(_ levels: [(SoundKind, Double)]) -> Double {
-        let power = levels.reduce(0) { $0 + pow($1.1 * $1.0.presence, 2) }
+        let power = levels.reduce(0) { $0 + pow($1.1 * $1.0.presence, 2) * ($1.0.rhythm == .bed ? 1 : 0.25) }
         return power > 0 ? reference + 10 * log10(power) : -70
     }
 
@@ -45,8 +47,10 @@ extension SoundKind {
     var presenceDB: Double {
         switch self {
         // Weather and water: the air of a scene.
-        case .heavyRain, .brown: 0
-        case .rain, .thunder, .waterfall, .cabin, .fan, .pink, .green: -1
+        // A strike is a moment, mastered with its long tail: at its fullest it has to stand
+        // above the rain (and SampleBank lifts it further, and pulls the rain down under it).
+        case .heavyRain, .brown, .thunder, .lightning: 0
+        case .rain, .waterfall, .cabin, .fan, .pink, .green: -1
         case .ocean, .rocks, .rainyStreet, .cityHum, .cityNight, .grey: -2
         case .tentRain, .tinRoof, .wind, .treeWind, .gusts: -3
         case .howl: -5
@@ -61,7 +65,7 @@ extension SoundKind {
         case .birds, .winterBirds: -3
         case .parrots, .frogs: -4
         case .crickets, .treeFrogs: -5
-        case .cicadas, .peepers, .howlers, .loons, .gulls, .geese, .whales, .bells, .drone, .lightning, .palms, .tram, .motorbikes, .fountain: -6
+        case .cicadas, .peepers, .howlers, .loons, .gulls, .geese, .whales, .bells, .drone, .palms, .tram, .motorbikes, .fountain: -6
         case .halyards, .templeBell: -7
         case .owls: -7
         case .wolves, .foghorn, .library, .planes: -8

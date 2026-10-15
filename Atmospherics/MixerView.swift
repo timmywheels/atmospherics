@@ -220,11 +220,12 @@ private struct LevelRow: View {
         .haptic(.tick, trigger: percent / 10) { _, _ in sliding }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(orb.kind.name)
-        .accessibilityValue("\(percent) percent")
+        .accessibilityValue(orb.kind.rhythm == .bed ? "\(percent) percent" : "\(percent) percent, \(mixer.pace(of: orb.kind).rawValue.lowercased())")
         .accessibilityAdjustableAction { direction in
             mixer.adjustVolume(orb.id, by: direction == .increment ? 0.1 : -0.1)
         }
         .accessibilityAction(named: "Remove") { mixer.remove(orb.id) }
+        .accessibilityAction(named: "More or less often") { mixer.cyclePace(of: orb.kind) }
     }
 
     private func slide(to x: CGFloat, of width: CGFloat) {
@@ -268,6 +269,24 @@ private struct LevelRow: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Spacer(minLength: 12)
+                if orb.kind.rhythm != .bed && !removing {
+                    // How often it comes: tap for the next.
+                    Button {
+                        Haptics.play(.tick)
+                        mixer.cyclePace(of: orb.kind)
+                    } label: {
+                        Text(mixer.pace(of: orb.kind).rawValue.uppercased())
+                            .font(Theme.caps(11))
+                            .foregroundStyle(Theme.text.opacity(0.85))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(.black.opacity(0.22)))
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("How often: \(mixer.pace(of: orb.kind).rawValue)")
+                    .accessibilityHint("Tap for more or less often")
+                }
                 Text(removing ? "LET GO TO REMOVE" : "\(percent)%")
                     .font(Theme.caps(11))
                     .foregroundStyle(Theme.text.opacity(0.85))
