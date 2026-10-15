@@ -64,8 +64,11 @@ extension SoundKind {
         case .jungleBirds, .canopy: -2
         case .birds, .winterBirds: -3
         case .parrots, .frogs: -4
-        case .crickets, .treeFrogs: -5
-        case .cicadas, .peepers, .howlers, .loons, .gulls, .geese, .whales, .bells, .drone, .palms, .tram, .motorbikes, .fountain: -6
+        case .treeFrogs: -5
+        // A wall of shrill, unbroken song that the ear never stops hearing: well back.
+        case .crickets: -11
+        case .cicadas: -9
+        case .peepers, .howlers, .loons, .gulls, .geese, .whales, .bells, .drone, .palms, .tram, .motorbikes, .fountain: -6
         case .halyards, .templeBell: -7
         case .owls: -7
         case .wolves, .foghorn, .library, .planes: -8

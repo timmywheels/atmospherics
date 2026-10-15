@@ -23,25 +23,10 @@ struct NowPlayingView: View {
         "Swipe left or right to travel",
         "Tap the light to see its layers",
         "Swipe up for your library",
-        "Swipe down to change the weather",
         "Hold play for a sleep timer",
         "Tap the name to teleport",
         "Hold the light, then drag to move it",
     ]
-
-    @State private var weatherToastTask: Task<Void, Never>?
-
-    private func showWeatherToast() {
-        weatherToastTask?.cancel()
-        let label = inAtmosphere ? (mixer.atmosphere?.sky.name ?? "")
-            : mixer.skyOverride == .live ? "Live weather" : mixer.skyOverride.rawValue
-        withAnimation(.smooth(duration: 0.25)) { hint = label }
-        weatherToastTask = Task {
-            try? await Task.sleep(for: .seconds(1.4))
-            guard !Task.isCancelled else { return }
-            withAnimation(.smooth(duration: 0.4)) { hint = nil }
-        }
-    }
 
     /// Shows each hint once, a few seconds apart, the first times you open the app.
     private func runHints() async {
@@ -153,11 +138,8 @@ struct NowPlayingView: View {
                     if up > 0 { layersDetent = .large } else { showMixer = false }
                 } else if up > 0 {
                     showLibrary = true
-                } else {
-                    // Swipe down: change the weather (an atmosphere's own, or the place's).
-                    withAnimation(.smooth) { inAtmosphere ? mixer.cycleAtmosphereSky() : mixer.cycleSky() }
-                    showWeatherToast()
                 }
+                // Down does nothing: it came too easily by accident.
             }
         )
         .accessibilityAction(named: "Library") { showLibrary = true }

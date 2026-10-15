@@ -89,7 +89,7 @@ Citations are relative to `/Users/timothy.wheeler/dev/ai/atmospherics/`. The rep
 |---|---|---|
 | Swipe ←/→ on the form | Next or previous in the current ring | tick at threshold, thud on arrival |
 | Swipe up | Library, on the playing item's shelf | soft |
-| **Swipe down** | **Opens Tune**, replacing weather cycling (`:145-162`) | soft |
+| ~~Swipe down~~ | **Nothing.** Decided 2026-10-14: it fired by accident too easily. Tune opens from the form and the pills only. | — |
 | Tap form or pills | Tune | tap |
 | Tap title | Search | tap |
 | Long-press Play | Sleep timer | thud, then tick on choice |
