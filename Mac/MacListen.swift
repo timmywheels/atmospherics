@@ -16,7 +16,7 @@ struct MacListen: View {
     private static let hints = [
         "Swipe with two fingers, or press → to travel",
         "Click the light to tune it  ⌘E",
-        "Click the name to search  ⌘K",
+        "Click the name for the Library, ⌘K to search",
         "Drag the light to turn it",
         "↑ ↓ turn the wheel",
     ]
@@ -26,7 +26,7 @@ struct MacListen: View {
             // What swiping goes through, as on the phone. (Outside on it, or ⇧⌘H, is your own weather.)
             ModeWheel()
 
-            Carousel(dragX: $dragX, openMixer: { navigation.tuning.toggle() }, search: { navigation.search() })
+            Carousel(dragX: $dragX, openMixer: { navigation.tuning.toggle() }, search: { navigation.tab = .library })
                 .frame(minHeight: 340, maxHeight: .infinity)
                 .overlay { TravelArrows() }
 

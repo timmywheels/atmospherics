@@ -12,8 +12,6 @@ struct NowPlayingView: View {
     @State private var layersDetent = MixerView.opening
     /// The whole screen's height, for where Layers comes up to.
     @State private var screenHeight: CGFloat = 0
-    /// The Library opened to search (from the name or Where to?): ready to type.
-    @State private var searchFirst = false
     @State private var hint: String?
     /// How many of the one-time hints have been shown.
     @AppStorage("hintStep") private var hintStep = 0
@@ -44,9 +42,8 @@ struct NowPlayingView: View {
         }
     }
 
-    /// The Library, ready to type where to.
+    /// The Library, its cards all there first; the field is a tap away, not up with the keyboard.
     private func openSearch() {
-        searchFirst = true
         showLibrary = true
     }
 
@@ -175,8 +172,7 @@ struct NowPlayingView: View {
             }
         }
         .sheet(isPresented: $showLibrary) {
-            LibraryView(current: mixer.activePreset, focus: searchFirst)
-                .onDisappear { searchFirst = false }
+            LibraryView(current: mixer.activePreset)
         }
         .haptic(.thud, trigger: mixer.shuffleCount)
         .haptic(.tap, trigger: mixer.atmosphere?.sky)
