@@ -163,6 +163,14 @@ struct NowPlayingView: View {
             .animation(.smooth(duration: 0.3), value: mixer.notice)
         }
         .task { await runHints() }
+        #if DEBUG
+        // `-openTune`: Tune up at launch, to look at it.
+        .task {
+            guard ProcessInfo.processInfo.arguments.contains("-openTune") else { return }
+            try? await Task.sleep(for: .seconds(1))
+            openLayers()
+        }
+        #endif
         // A new mix from scratch: Tune, all the way up, once the Library has gone.
         .onChange(of: mixer.tuneRequests) { _, _ in
             Task { @MainActor in
